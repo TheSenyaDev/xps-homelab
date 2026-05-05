@@ -1,0 +1,120 @@
+services:
+  homarr:
+    image: ghcr.io/ajnart/homarr:latest
+    container_name: homarr
+    ports:
+      - 3000:7575
+    volumes:
+      - ./homarr/configs:/app/data/configs
+      - ./homarr/icons:/app/public/icons
+      - ./homarr/data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TZ=${TZ}
+    restart: unless-stopped
+
+  glances:
+    image: nicolargo/glances:latest
+    container_name: glances
+    ports:
+      - 61208:61208
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - GLANCES_OPT=-w
+    pid: host
+    restart: unless-stopped
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    ports:
+      - 9000:9000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer/data:/data
+    restart: unless-stopped
+
+  power-api:
+    image: python:3.12-alpine
+    container_name: power-api
+    ports:
+      - 8081:8081
+    volumes:
+      - ./power-api/server.py:/server.py:ro
+      - /sys:/sys:ro
+    privileged: true
+    command: python /server.py
+    restart: unless-stopped
+
+  nvidia-api:
+    image: python:3.12-slim
+    container_name: nvidia-api
+    ports:
+      - 8083:8083
+    volumes:
+      - ./nvidia-api/server.py:/server.py:ro
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
+      - /lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+    command: python /server.py
+    restart: unless-stopped
+
+  tailscale-api:
+    image: python:3.12-alpine
+    container_name: tailscale-api
+    ports:
+      - 8082:8082
+    volumes:
+      - ./tailscale-api/server.py:/server.py:ro
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
+    command: python /server.py
+    restart: unless-stopped
+
+  obsidian-remote:
+    image: ghcr.io/sytone/obsidian-remote:latest
+    container_name: obsidian-remote
+    ports:
+      - 8080:8080
+    volumes:
+      - ./obsidian/vaults:/vaults
+      - ./obsidian/config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    restart: unless-stopped
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    ports:
+      - 3001:3001
+    volumes:
+      - ./uptime-kuma/data:/app/data
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - 3002:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/grafana-dashboards:ro
+    environment:
+      - TZ=${TZ}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource
+    restart: unless-stopped
+
+volumes:
+  grafana-data:

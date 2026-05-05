@@ -1,0 +1,38 @@
+# Secrets
+.env
+
+# Private keys
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+
+# Log files
+*.log
+*.log.old
+
+# Portainer — runtime data and keys
+portainer/data/
+
+# Homarr — runtime database and generated config
+homarr/data/
+
+# Uptime Kuma — runtime database
+uptime-kuma/data/
+
+# Obsidian — entire runtime config (cookies, session, cache, certs)
+obsidian/config/
+obsidian/vaults/
+
+# Grafana — persistent data volume (managed by Docker)
+grafana/data/

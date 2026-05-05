@@ -1,0 +1,22 @@
+services:
+  obsidian-remote:
+    image: ghcr.io/sytone/obsidian-remote:latest
+    container_name: obsidian-remote
+    ports:
+      - 8080:8080
+    volumes:
+      - ./vaults:/vaults
+      - ./config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+    labels:
+      - "gethomepage.dev/enabled=true"
+      - "gethomepage.dev/name=Obsidian"
+      - "gethomepage.dev/group=Docker Containers"
+      - "gethomepage.dev/icon=obsidian.png"
+      - "gethomepage.dev/description=Notes"
+      - "gethomepage.dev/showStats=true"
+      - "gethomepage.dev/href=http://192.168.2.100:8080"
+    restart: unless-stopped

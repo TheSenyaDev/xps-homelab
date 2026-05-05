@@ -1,0 +1,17 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    ports:
+      - 3001:3001
+    volumes:
+      - ./data:/app/data
+    labels:
+      - "gethomepage.dev/enabled=true"
+      - "gethomepage.dev/name=Uptime Kuma"
+      - "gethomepage.dev/group=Docker Containers"
+      - "gethomepage.dev/icon=uptime-kuma.png"
+      - "gethomepage.dev/description=Uptime monitor"
+      - "gethomepage.dev/showStats=true"
+      - "gethomepage.dev/href=http://192.168.2.100:3001"
+    restart: unless-stopped

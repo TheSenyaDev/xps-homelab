@@ -1,0 +1,20 @@
+---
+# For configuration options and examples, please see:
+# https://gethomepage.dev/configs/info-widgets/
+
+- resources:
+    cpu: true
+    memory: true
+    disk: /
+    cputemp: true
+    battery: true
+    tempmin: 0
+    tempmax: 100
+    units: celsius
+    refresh: 3000
+    glances:
+      url: http://192.168.2.100:61208
+
+- search:
+    provider: duckduckgo
+    target: _blank

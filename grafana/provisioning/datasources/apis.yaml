@@ -1,0 +1,42 @@
+apiVersion: 1
+
+datasources:
+  - name: PowerAPI
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    uid: power-api
+    url: http://power-api:8081
+    jsonData:
+      allowedHosts:
+        - http://power-api:8081
+    editable: true
+
+  - name: TailscaleAPI
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    uid: tailscale-api
+    url: http://tailscale-api:8082
+    jsonData:
+      allowedHosts:
+        - http://tailscale-api:8082
+    editable: true
+
+  - name: NvidiaAPI
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    uid: nvidia-api
+    url: http://nvidia-api:8083
+    jsonData:
+      allowedHosts:
+        - http://nvidia-api:8083
+    editable: true
+
+  - name: Glances
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    uid: glances
+    url: http://glances:61208
+    jsonData:
+      allowedHosts:
+        - http://glances:61208
+    editable: true

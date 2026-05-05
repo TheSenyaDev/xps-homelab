@@ -1,0 +1,12 @@
+services:
+  power-api:
+    image: python:3.12-alpine
+    container_name: power-api
+    ports:
+      - 8081:8081
+    volumes:
+      - ./server.py:/server.py:ro
+      - /sys:/sys:ro
+    privileged: true
+    command: python /server.py
+    restart: unless-stopped

@@ -1,0 +1,11 @@
+services:
+  tailscale-api:
+    image: python:3.12-alpine
+    container_name: tailscale-api
+    ports:
+      - 8082:8082
+    volumes:
+      - ./server.py:/server.py:ro
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
+    command: python /server.py
+    restart: unless-stopped

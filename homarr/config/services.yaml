@@ -1,0 +1,71 @@
+---
+- Services:
+    - Homepage:
+        href: http://192.168.2.100:3000
+        description: Dashboard
+        server: my-docker
+        container: homepage
+
+    - Glances:
+        href: http://192.168.2.100:61208
+        description: System monitor
+        server: my-docker
+        container: glances
+
+    - Uptime Kuma:
+        href: http://192.168.2.100:3001
+        description: Uptime monitor
+        server: my-docker
+        container: uptime-kuma
+
+    - Obsidian:
+        href: http://192.168.2.100:8080
+        description: Notes
+        server: my-docker
+        container: obsidian-remote
+
+    - Tailscale:
+        description: VPN network
+        href: https://login.tailscale.com/admin
+        widget:
+          type: customapi
+          url: http://192.168.2.100:8082
+          refreshInterval: 10000
+          mappings:
+            - field: state
+              label: State
+            - field: ip
+              label: IP
+            - field: online_peers
+              label: Peers Online
+              format: number
+            - field: total_peers
+              label: Total Peers
+              format: number
+
+    - Power:
+        description: Battery & power
+        widget:
+          type: customapi
+          url: http://192.168.2.100:8081
+          refreshInterval: 5000
+          mappings:
+            - field: power_w
+              label: Power
+              format: float
+              suffix: " W"
+            - field: capacity
+              label: Battery
+              format: number
+              suffix: "%"
+
+    - Portainer:
+        href: http://192.168.2.100:9000
+        description: Container manager
+        server: my-docker
+        container: portainer
+        widget:
+          type: portainer
+          url: http://192.168.2.100:9000
+          env: 1
+          key: {{HOMEPAGE_VAR_PORTAINER_API_KEY}}

@@ -1,0 +1,75 @@
+/* Square service blocks */
+#services ul {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+#services ul li {
+  width: auto !important;
+}
+
+#services ul li > div {
+  min-height: 150px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+#services ul li > div .service-title {
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+  margin-bottom: 4px !important;
+}
+
+#services ul li > div .service-description {
+  font-size: 0.75rem !important;
+  opacity: 0.7 !important;
+}
+
+/* Widget cards — left-align data rows and remove fixed height */
+#services ul li > div:has(> div > div > dl) {
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  min-height: unset !important;
+  height: auto !important;
+}
+
+/* Widget data rows */
+#services ul li dl {
+  width: 100% !important;
+  margin-top: 10px !important;
+}
+
+#services ul li dl > div {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 6px 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+}
+
+#services ul li dl > div:last-child {
+  border-bottom: none !important;
+}
+
+#services ul li dl dt {
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  opacity: 0.5 !important;
+}
+
+#services ul li dl dd {
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
