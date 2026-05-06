@@ -40,3 +40,12 @@ datasources:
       allowedHosts:
         - http://glances:61208
     editable: true
+
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    uid: prometheus
+    url: http://prometheus:9090
+    jsonData:
+      timeInterval: "15s"
+    editable: true

@@ -9,8 +9,12 @@ services:
       - ./homarr/icons:/app/public/icons
       - ./homarr/data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./homarr/init.js:/init.js:ro
     environment:
       - TZ=${TZ}
+      - HOMARR_USER=${HOMARR_USER}
+      - HOMARR_PASSWORD=${HOMARR_PASSWORD}
+    entrypoint: ["sh", "-c", "node /init.js && sh ./scripts/run.sh"]
     restart: unless-stopped
 
   glances:
@@ -45,6 +49,31 @@ services:
       - /sys:/sys:ro
     privileged: true
     command: python /server.py
+    restart: unless-stopped
+
+  claude:
+    image: lscr.io/linuxserver/chromium:latest
+    container_name: claude
+    ports:
+      - 3003:3000
+    volumes:
+      - ./claude-code/config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TZ}
+      - CUSTOM_USER=${CLAUDE_USER}
+      - PASSWORD=${CLAUDE_PASSWORD}
+      - CHROME_CLI=https://claude.ai
+    shm_size: 1gb
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.11.1
+    container_name: cloudflared
+    command: tunnel --no-autoupdate --protocol http2 run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     restart: unless-stopped
 
   nvidia-api:
@@ -100,6 +129,29 @@ services:
       - ./uptime-kuma/data:/app/data
     restart: unless-stopped
 
+  prometheus-exporter:
+    image: python:3.12-alpine
+    container_name: prometheus-exporter
+    ports:
+      - 9091:9091
+    volumes:
+      - ./prometheus-exporter/server.py:/server.py:ro
+    command: python /server.py
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -118,3 +170,4 @@ services:
 
 volumes:
   grafana-data:
+  prometheus-data:

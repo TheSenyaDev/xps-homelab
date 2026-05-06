@@ -14,18 +14,21 @@ def gpu_stats():
         text=True,
         timeout=5,
     )
-    gpus = []
-    for line in result.stdout.strip().splitlines():
-        name, util, temp, mem_used, mem_total = [x.strip() for x in line.split(",")]
-        gpus.append({
-            "name": name,
-            "utilization_pct": int(util),
-            "temp_c": int(temp),
-            "mem_used_mb": int(mem_used),
-            "mem_total_mb": int(mem_total),
-            "mem_pct": round(int(mem_used) / int(mem_total) * 100, 1),
-        })
-    return gpus
+    # Return first GPU as a single object (Infinity datasource requires non-array root)
+    line = result.stdout.strip().splitlines()[0]
+    name, util, temp, mem_used, mem_total = [x.strip() for x in line.split(",")]
+    mem_used_mb = int(mem_used)
+    mem_total_mb = int(mem_total)
+    return {
+        "name": name,
+        "utilization_pct": int(util),
+        "temp_c": int(temp),
+        "mem_used_mb": mem_used_mb,
+        "mem_total_mb": mem_total_mb,
+        "mem_pct": round(mem_used_mb / mem_total_mb * 100, 1),
+        "mem_used_bytes": mem_used_mb * 1024 * 1024,
+        "mem_total_bytes": mem_total_mb * 1024 * 1024,
+    }
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):

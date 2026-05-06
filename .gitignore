@@ -36,3 +36,6 @@ obsidian/vaults/
 
 # Grafana — persistent data volume (managed by Docker)
 grafana/data/
+
+# Claude desktop — browser profile and session data
+claude-code/config/

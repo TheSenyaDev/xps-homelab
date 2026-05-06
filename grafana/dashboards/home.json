@@ -2,448 +2,2152 @@
   "title": "Home Server",
   "uid": "home-server",
   "schemaVersion": 39,
-  "refresh": "10s",
+  "refresh": "15s",
   "panels": [
-
-    { "type": "text", "id": 20, "title": "System",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
-      "options": { "mode": "markdown", "content": "" } },
-
     {
-      "type": "gauge", "title": "CPU Usage", "id": 1,
-      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 5 },
+      "type": "text",
+      "id": 20,
+      "title": "System",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^total$/", "values": false },
-        "minVizWidth": 75, "minVizHeight": 75, "orientation": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent", "min": 0, "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green", "value": null },
-            { "color": "yellow", "value": 60 },
-            { "color": "red", "value": 85 }
-          ]}
-        }, "overrides": []
-      },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "glances" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "/api/4/cpu", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "total",   "text": "total",   "type": "number" },
-          { "selector": "user",    "text": "user",    "type": "number" },
-          { "selector": "system",  "text": "system",  "type": "number" },
-          { "selector": "cpucore", "text": "cpucore", "type": "number" }
-        ]
-      }]
+        "mode": "markdown",
+        "content": ""
+      }
     },
-
     {
-      "type": "gauge", "title": "CPU Temp", "id": 2,
-      "gridPos": { "x": 6, "y": 1, "w": 6, "h": 5 },
+      "type": "gauge",
+      "title": "CPU Usage",
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^cpu_temp_c$/", "values": false },
-        "minVizWidth": 75, "minVizHeight": 75, "orientation": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "celsius", "min": 0, "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "blue",   "value": null },
-            { "color": "green",  "value": 30 },
-            { "color": "yellow", "value": 70 },
-            { "color": "red",    "value": 90 }
-          ]}
-        }, "overrides": []
-      },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "power-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "power_w",    "text": "power_w",    "type": "number" },
-          { "selector": "cpu_temp_c", "text": "cpu_temp_c", "type": "number" },
-          { "selector": "capacity",   "text": "capacity",   "type": "number" },
-          { "selector": "status",     "text": "status",     "type": "string" }
-        ]
-      }]
-    },
-
-    {
-      "type": "gauge", "title": "RAM Usage", "id": 3,
-      "gridPos": { "x": 12, "y": 1, "w": 6, "h": 5 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^percent$/", "values": false },
-        "minVizWidth": 75, "minVizHeight": 75, "orientation": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent", "min": 0, "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green",  "value": null },
-            { "color": "yellow", "value": 70 },
-            { "color": "red",    "value": 90 }
-          ]}
-        }, "overrides": []
-      },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "glances" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "/api/4/mem", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "percent", "text": "percent", "type": "number" },
-          { "selector": "used",    "text": "used",    "type": "number" },
-          { "selector": "total",   "text": "total",   "type": "number" }
-        ]
-      }]
-    },
-
-    {
-      "type": "gauge", "title": "SSD Usage", "id": 4,
-      "gridPos": { "x": 18, "y": 1, "w": 6, "h": 5 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^percent$/", "values": false },
-        "minVizWidth": 75, "minVizHeight": 75, "orientation": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent", "min": 0, "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green",  "value": null },
-            { "color": "yellow", "value": 75 },
-            { "color": "red",    "value": 90 }
-          ]}
-        }, "overrides": []
-      },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "glances" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "/api/4/fs", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "filter_expression": "device_name == \"/dev/nvme0n1p2\"",
-        "columns": [
-          { "selector": "device_name", "text": "device_name", "type": "string" },
-          { "selector": "percent",     "text": "percent",     "type": "number" },
-          { "selector": "used",        "text": "used",        "type": "number" },
-          { "selector": "size",        "text": "size",        "type": "number" }
-        ]
-      }]
-    },
-
-    { "type": "text", "id": 21, "title": "GPU",
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 1 },
-      "options": { "mode": "markdown", "content": "" } },
-
-    {
-      "type": "gauge", "title": "GPU Usage (GTX 1050)", "id": 5,
-      "gridPos": { "x": 0, "y": 7, "w": 6, "h": 5 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^utilization_pct$/", "values": false },
-        "minVizWidth": 75, "minVizHeight": 75, "orientation": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent", "min": 0, "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green",  "value": null },
-            { "color": "yellow", "value": 60 },
-            { "color": "red",    "value": 85 }
-          ]}
-        }, "overrides": []
-      },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "nvidia-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "name",            "text": "name",            "type": "string" },
-          { "selector": "utilization_pct", "text": "utilization_pct", "type": "number" },
-          { "selector": "temp_c",          "text": "temp_c",          "type": "number" },
-          { "selector": "mem_used_mb",     "text": "mem_used_mb",     "type": "number" },
-          { "selector": "mem_total_mb",    "text": "mem_total_mb",    "type": "number" },
-          { "selector": "mem_pct",         "text": "mem_pct",         "type": "number" }
-        ]
-      }]
-    },
-
-    {
-      "type": "gauge", "title": "GPU Temp (GTX 1050)", "id": 6,
-      "gridPos": { "x": 6, "y": 7, "w": 6, "h": 5 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^temp_c$/", "values": false },
-        "minVizWidth": 75, "minVizHeight": 75, "orientation": "auto"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "celsius", "min": 0, "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "blue",   "value": null },
-            { "color": "green",  "value": 30 },
-            { "color": "yellow", "value": 75 },
-            { "color": "red",    "value": 90 }
-          ]}
-        }, "overrides": []
-      },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "nvidia-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "name",            "text": "name",            "type": "string" },
-          { "selector": "utilization_pct", "text": "utilization_pct", "type": "number" },
-          { "selector": "temp_c",          "text": "temp_c",          "type": "number" },
-          { "selector": "mem_used_mb",     "text": "mem_used_mb",     "type": "number" },
-          { "selector": "mem_total_mb",    "text": "mem_total_mb",    "type": "number" },
-          { "selector": "mem_pct",         "text": "mem_pct",         "type": "number" }
-        ]
-      }]
-    },
-
-    {
-      "type": "stat", "title": "GPU VRAM", "id": 24,
-      "gridPos": { "x": 12, "y": 7, "w": 4, "h": 5 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^mem_pct$/", "values": false },
-        "colorMode": "background", "graphMode": "none", "textMode": "auto", "orientation": "auto"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^total$/",
+          "values": false
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto"
       },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green",  "value": null },
-            { "color": "yellow", "value": 70 },
-            { "color": "red",    "value": 90 }
-          ]}
-        }, "overrides": []
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "nvidia-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "name",            "text": "name",            "type": "string" },
-          { "selector": "utilization_pct", "text": "utilization_pct", "type": "number" },
-          { "selector": "temp_c",          "text": "temp_c",          "type": "number" },
-          { "selector": "mem_used_mb",     "text": "mem_used_mb",     "type": "number" },
-          { "selector": "mem_total_mb",    "text": "mem_total_mb",    "type": "number" },
-          { "selector": "mem_pct",         "text": "mem_pct",         "type": "number" }
-        ]
-      }]
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "glances"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "/api/4/cpu",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "total",
+              "text": "total",
+              "type": "number"
+            },
+            {
+              "selector": "user",
+              "text": "user",
+              "type": "number"
+            },
+            {
+              "selector": "system",
+              "text": "system",
+              "type": "number"
+            }
+          ]
+        }
+      ]
     },
-
-    { "type": "text", "id": 22, "title": "Power & Battery",
-      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 1 },
-      "options": { "mode": "markdown", "content": "" } },
-
     {
-      "type": "stat", "title": "CPU Power", "id": 7,
-      "gridPos": { "x": 12, "y": 7, "w": 4, "h": 5 },
+      "type": "gauge",
+      "title": "CPU Temp",
+      "id": 2,
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^power_w$/", "values": false },
-        "colorMode": "background", "graphMode": "none", "textMode": "auto", "orientation": "auto"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^cpu_temp_c$/",
+          "values": false
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "watt",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green",  "value": null },
-            { "color": "yellow", "value": 15 },
-            { "color": "red",    "value": 30 }
-          ]}
-        }, "overrides": []
+          "unit": "celsius",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "power-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "power_w",    "text": "power_w",    "type": "number" },
-          { "selector": "cpu_temp_c", "text": "cpu_temp_c", "type": "number" },
-          { "selector": "capacity",   "text": "capacity",   "type": "number" },
-          { "selector": "status",     "text": "status",     "type": "string" }
-        ]
-      }]
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "power-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "cpu_temp_c",
+              "text": "cpu_temp_c",
+              "type": "number"
+            }
+          ]
+        }
+      ]
     },
-
     {
-      "type": "stat", "title": "Battery", "id": 8,
-      "gridPos": { "x": 16, "y": 7, "w": 4, "h": 5 },
+      "type": "gauge",
+      "title": "RAM Usage",
+      "id": 3,
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 5
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^capacity$/", "values": false },
-        "colorMode": "background", "graphMode": "none", "textMode": "auto", "orientation": "auto"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^percent$/",
+          "values": false
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto"
       },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red",    "value": null },
-            { "color": "yellow", "value": 20 },
-            { "color": "green",  "value": 50 }
-          ]}
-        }, "overrides": []
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "power-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "power_w",    "text": "power_w",    "type": "number" },
-          { "selector": "cpu_temp_c", "text": "cpu_temp_c", "type": "number" },
-          { "selector": "capacity",   "text": "capacity",   "type": "number" },
-          { "selector": "status",     "text": "status",     "type": "string" }
-        ]
-      }]
-    },
-
-    {
-      "type": "stat", "title": "Battery Status", "id": 9,
-      "gridPos": { "x": 20, "y": 7, "w": 4, "h": 5 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^status$/", "values": false },
-        "colorMode": "background", "graphMode": "none", "textMode": "auto", "orientation": "auto"
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "glances"
       },
-      "fieldConfig": { "defaults": { "unit": "string" }, "overrides": [] },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "power-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "power_w",    "text": "power_w",    "type": "number" },
-          { "selector": "cpu_temp_c", "text": "cpu_temp_c", "type": "number" },
-          { "selector": "capacity",   "text": "capacity",   "type": "number" },
-          { "selector": "status",     "text": "status",     "type": "string" }
-        ]
-      }]
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "/api/4/mem",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "percent",
+              "text": "percent",
+              "type": "number"
+            },
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "total",
+              "type": "number"
+            }
+          ]
+        }
+      ]
     },
-
-    { "type": "text", "id": 23, "title": "Tailscale",
-      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 1 },
-      "options": { "mode": "markdown", "content": "" } },
-
     {
-      "type": "stat", "title": "State", "id": 10,
-      "gridPos": { "x": 0, "y": 13, "w": 6, "h": 4 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^state$/", "values": false },
-        "colorMode": "background", "graphMode": "none", "textMode": "auto", "orientation": "auto"
+      "type": "gauge",
+      "title": "SSD Usage",
+      "id": 4,
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 5
       },
-      "fieldConfig": { "defaults": { "unit": "string" }, "overrides": [] },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "tailscale-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "state",        "text": "state",        "type": "string" },
-          { "selector": "ip",           "text": "ip",           "type": "string" },
-          { "selector": "dns",          "text": "dns",          "type": "string" },
-          { "selector": "online_peers", "text": "online_peers", "type": "number" },
-          { "selector": "total_peers",  "text": "total_peers",  "type": "number" }
-        ]
-      }]
-    },
-
-    {
-      "type": "stat", "title": "Tailscale IP", "id": 11,
-      "gridPos": { "x": 6, "y": 13, "w": 6, "h": 4 },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^ip$/", "values": false },
-        "colorMode": "none", "graphMode": "none", "textMode": "auto", "orientation": "auto"
-      },
-      "fieldConfig": { "defaults": { "unit": "string" }, "overrides": [] },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "tailscale-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "state",        "text": "state",        "type": "string" },
-          { "selector": "ip",           "text": "ip",           "type": "string" },
-          { "selector": "dns",          "text": "dns",          "type": "string" },
-          { "selector": "online_peers", "text": "online_peers", "type": "number" },
-          { "selector": "total_peers",  "text": "total_peers",  "type": "number" }
-        ]
-      }]
-    },
-
-    {
-      "type": "stat", "title": "Peers Online", "id": 12,
-      "gridPos": { "x": 12, "y": 13, "w": 6, "h": 4 },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^online_peers$/", "values": false },
-        "colorMode": "background", "graphMode": "none", "textMode": "auto", "orientation": "auto"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^percent$/",
+          "values": false
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red",   "value": null },
-            { "color": "green", "value": 1 }
-          ]}
-        }, "overrides": []
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "tailscale-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "",
-        "columns": [
-          { "selector": "state",        "text": "state",        "type": "string" },
-          { "selector": "ip",           "text": "ip",           "type": "string" },
-          { "selector": "dns",          "text": "dns",          "type": "string" },
-          { "selector": "online_peers", "text": "online_peers", "type": "number" },
-          { "selector": "total_peers",  "text": "total_peers",  "type": "number" }
-        ]
-      }]
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "glances"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "/api/4/fs",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "filter_expression": "device_name == \"/dev/nvme0n1p2\"",
+          "columns": [
+            {
+              "selector": "device_name",
+              "text": "device_name",
+              "type": "string"
+            },
+            {
+              "selector": "percent",
+              "text": "percent",
+              "type": "number"
+            },
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            },
+            {
+              "selector": "size",
+              "text": "size",
+              "type": "number"
+            }
+          ]
+        }
+      ]
     },
-
     {
-      "type": "table", "title": "Tailscale Peers", "id": 13,
-      "gridPos": { "x": 0, "y": 17, "w": 24, "h": 7 },
-      "options": { "cellHeight": "sm", "footer": { "show": false }, "showHeader": true },
+      "type": "stat",
+      "title": "RAM Used",
+      "id": 30,
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 6,
+        "h": 3
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^used$/",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "glances"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "/api/4/mem",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "total",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "RAM Total",
+      "id": 31,
+      "gridPos": {
+        "x": 6,
+        "y": 6,
+        "w": 6,
+        "h": 3
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^total$/",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "glances"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "/api/4/mem",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            },
+            {
+              "selector": "total",
+              "text": "total",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "SSD Used",
+      "id": 32,
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 6,
+        "h": 3
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^used$/",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "glances"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "/api/4/fs",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "filter_expression": "device_name == \"/dev/nvme0n1p2\"",
+          "columns": [
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            },
+            {
+              "selector": "size",
+              "text": "size",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "SSD Total",
+      "id": 33,
+      "gridPos": {
+        "x": 18,
+        "y": 6,
+        "w": 6,
+        "h": 3
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^size$/",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "glances"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "/api/4/fs",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "filter_expression": "device_name == \"/dev/nvme0n1p2\"",
+          "columns": [
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            },
+            {
+              "selector": "size",
+              "text": "size",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU Usage History",
+      "id": 40,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_cpu_usage_percent{type=\"total\"}",
+          "legendFormat": "Total"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_cpu_usage_percent{type=\"user\"}",
+          "legendFormat": "User"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_cpu_usage_percent{type=\"system\"}",
+          "legendFormat": "System"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "RAM Usage History",
+      "id": 41,
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_ram_usage_percent",
+          "legendFormat": "RAM %"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_ram_used_bytes",
+          "legendFormat": "Used"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "online" },
+            "matcher": {
+              "id": "byName",
+              "options": "RAM %"
+            },
             "properties": [
-              { "id": "custom.displayMode", "value": "color-background" },
-              { "id": "thresholds", "value": { "mode": "absolute", "steps": [
-                { "color": "red", "value": null },
-                { "color": "green", "value": 1 }
-              ]}},
-              { "id": "mappings", "value": [
-                { "type": "value", "options": {
-                  "true":  { "text": "Online",  "index": 0 },
-                  "false": { "text": "Offline", "index": 1 }
-                }}
-              ]}
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
             ]
           }
         ]
       },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "tailscale-api" },
-      "targets": [{
-        "refId": "A", "type": "json", "source": "url",
-        "url": "", "url_options": { "method": "GET" },
-        "parser": "backend", "root_selector": "peers",
-        "columns": [
-          { "selector": "hostname", "text": "hostname", "type": "string" },
-          { "selector": "ip",       "text": "ip",       "type": "string" },
-          { "selector": "os",       "text": "os",       "type": "string" },
-          { "selector": "online",   "text": "online",   "type": "string" }
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU Temp History",
+      "id": 42,
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_cpu_temp_celsius",
+          "legendFormat": "CPU Temp"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "SSD Used History",
+      "id": 43,
+      "gridPos": {
+        "x": 8,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_disk_used_bytes{device=\"/dev/nvme0n1p2\"}",
+          "legendFormat": "Used"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_disk_size_bytes{device=\"/dev/nvme0n1p2\"}",
+          "legendFormat": "Total"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU Power History",
+      "id": 44,
+      "gridPos": {
+        "x": 16,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_cpu_power_watts",
+          "legendFormat": "CPU Power"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "text",
+      "id": 21,
+      "title": "GPU",
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 1
+      },
+      "options": {
+        "mode": "markdown",
+        "content": ""
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "GPU Usage (GTX 1050)",
+      "id": 5,
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 6,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^utilization_pct$/",
+          "values": false
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "nvidia-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "utilization_pct",
+              "text": "utilization_pct",
+              "type": "number"
+            },
+            {
+              "selector": "temp_c",
+              "text": "temp_c",
+              "type": "number"
+            },
+            {
+              "selector": "mem_pct",
+              "text": "mem_pct",
+              "type": "number"
+            },
+            {
+              "selector": "mem_used_bytes",
+              "text": "mem_used_bytes",
+              "type": "number"
+            },
+            {
+              "selector": "mem_total_bytes",
+              "text": "mem_total_bytes",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "GPU Temp (GTX 1050)",
+      "id": 6,
+      "gridPos": {
+        "x": 6,
+        "y": 26,
+        "w": 6,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^temp_c$/",
+          "values": false
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 30
+              },
+              {
+                "color": "yellow",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "nvidia-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "utilization_pct",
+              "text": "utilization_pct",
+              "type": "number"
+            },
+            {
+              "selector": "temp_c",
+              "text": "temp_c",
+              "type": "number"
+            },
+            {
+              "selector": "mem_pct",
+              "text": "mem_pct",
+              "type": "number"
+            },
+            {
+              "selector": "mem_used_bytes",
+              "text": "mem_used_bytes",
+              "type": "number"
+            },
+            {
+              "selector": "mem_total_bytes",
+              "text": "mem_total_bytes",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "GPU VRAM",
+      "id": 25,
+      "gridPos": {
+        "x": 12,
+        "y": 26,
+        "w": 6,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^mem_pct$/",
+          "values": false
+        },
+        "minVizWidth": 75,
+        "minVizHeight": 75,
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "nvidia-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "utilization_pct",
+              "text": "utilization_pct",
+              "type": "number"
+            },
+            {
+              "selector": "temp_c",
+              "text": "temp_c",
+              "type": "number"
+            },
+            {
+              "selector": "mem_pct",
+              "text": "mem_pct",
+              "type": "number"
+            },
+            {
+              "selector": "mem_used_bytes",
+              "text": "mem_used_bytes",
+              "type": "number"
+            },
+            {
+              "selector": "mem_total_bytes",
+              "text": "mem_total_bytes",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "GPU VRAM Used",
+      "id": 26,
+      "gridPos": {
+        "x": 18,
+        "y": 26,
+        "w": 6,
+        "h": 5
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^mem_used_bytes$/",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "nvidia-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "mem_used_bytes",
+              "text": "mem_used_bytes",
+              "type": "number"
+            },
+            {
+              "selector": "mem_total_bytes",
+              "text": "mem_total_bytes",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GPU Usage History",
+      "id": 51,
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_gpu_usage_percent",
+          "legendFormat": "GPU %"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_gpu_vram_percent",
+          "legendFormat": "VRAM %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "GPU Temp History",
+      "id": 52,
+      "gridPos": {
+        "x": 12,
+        "y": 31,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_gpu_temp_celsius",
+          "legendFormat": "GPU Temp"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "text",
+      "id": 60,
+      "title": "Fan Speed",
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 1
+      },
+      "options": {
+        "mode": "markdown",
+        "content": ""
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Fan Speed History",
+      "id": 61,
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_fan_speed_rpm",
+          "legendFormat": "{{fan}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "rotrpm",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "text",
+      "id": 22,
+      "title": "Power & Battery",
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 24,
+        "h": 1
+      },
+      "options": {
+        "mode": "markdown",
+        "content": ""
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CPU Power",
+      "id": 7,
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 8,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^power_w$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 15
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "power-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "power_w",
+              "text": "power_w",
+              "type": "number"
+            },
+            {
+              "selector": "capacity",
+              "text": "capacity",
+              "type": "number"
+            },
+            {
+              "selector": "status",
+              "text": "status",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Battery",
+      "id": 8,
+      "gridPos": {
+        "x": 8,
+        "y": 53,
+        "w": 8,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^capacity$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "power-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "power_w",
+              "text": "power_w",
+              "type": "number"
+            },
+            {
+              "selector": "capacity",
+              "text": "capacity",
+              "type": "number"
+            },
+            {
+              "selector": "status",
+              "text": "status",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Battery Status",
+      "id": 9,
+      "gridPos": {
+        "x": 16,
+        "y": 53,
+        "w": 8,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^status$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "power-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "power_w",
+              "text": "power_w",
+              "type": "number"
+            },
+            {
+              "selector": "capacity",
+              "text": "capacity",
+              "type": "number"
+            },
+            {
+              "selector": "status",
+              "text": "status",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": 23,
+      "title": "Tailscale",
+      "gridPos": {
+        "x": 0,
+        "y": 57,
+        "w": 24,
+        "h": 1
+      },
+      "options": {
+        "mode": "markdown",
+        "content": ""
+      }
+    },
+    {
+      "type": "stat",
+      "title": "State",
+      "id": 10,
+      "gridPos": {
+        "x": 0,
+        "y": 58,
+        "w": 6,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^state$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "tailscale-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "state",
+              "text": "state",
+              "type": "string"
+            },
+            {
+              "selector": "ip",
+              "text": "ip",
+              "type": "string"
+            },
+            {
+              "selector": "online_peers",
+              "text": "online_peers",
+              "type": "number"
+            },
+            {
+              "selector": "total_peers",
+              "text": "total_peers",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Tailscale IP",
+      "id": 11,
+      "gridPos": {
+        "x": 6,
+        "y": 58,
+        "w": 6,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^ip$/",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string"
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "tailscale-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "state",
+              "text": "state",
+              "type": "string"
+            },
+            {
+              "selector": "ip",
+              "text": "ip",
+              "type": "string"
+            },
+            {
+              "selector": "online_peers",
+              "text": "online_peers",
+              "type": "number"
+            },
+            {
+              "selector": "total_peers",
+              "text": "total_peers",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Peers Online",
+      "id": 12,
+      "gridPos": {
+        "x": 12,
+        "y": 58,
+        "w": 6,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^online_peers$/",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "tailscale-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "state",
+              "text": "state",
+              "type": "string"
+            },
+            {
+              "selector": "ip",
+              "text": "ip",
+              "type": "string"
+            },
+            {
+              "selector": "online_peers",
+              "text": "online_peers",
+              "type": "number"
+            },
+            {
+              "selector": "total_peers",
+              "text": "total_peers",
+              "type": "number"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Tailscale Peers",
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 24,
+        "h": 7
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "online"
+            },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "true": {
+                        "text": "Online",
+                        "index": 0
+                      },
+                      "false": {
+                        "text": "Offline",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
         ]
-      }]
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "tailscale-api"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "",
+          "url_options": {
+            "method": "GET"
+          },
+          "parser": "backend",
+          "root_selector": "peers",
+          "columns": [
+            {
+              "selector": "hostname",
+              "text": "hostname",
+              "type": "string"
+            },
+            {
+              "selector": "ip",
+              "text": "ip",
+              "type": "string"
+            },
+            {
+              "selector": "os",
+              "text": "os",
+              "type": "string"
+            },
+            {
+              "selector": "online",
+              "text": "online",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "id": 62,
+      "title": "Fan Speed (RPM)",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "rotrpm",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 500
+              },
+              {
+                "color": "yellow",
+                "value": 3500
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "homelab_fan_speed_rpm",
+          "instant": true,
+          "legendFormat": "{{fan}}",
+          "refId": "A"
+        }
+      ],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
     }
   ]
 }
