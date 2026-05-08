@@ -129,6 +129,27 @@ services:
       - ./uptime-kuma/data:/app/data
     restart: unless-stopped
 
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    ports:
+      - 4000:8080
+    volumes:
+      - ./searxng:/etc/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://${SERVER_IP}:4000/
+    restart: unless-stopped
+
+  baikal:
+    image: ckulka/baikal:nginx
+    container_name: baikal
+    ports:
+      - 5232:80
+    volumes:
+      - ./baikal/config:/var/www/baikal/config
+      - ./baikal/data:/var/www/baikal/Specific
+    restart: unless-stopped
+
   prometheus-exporter:
     image: python:3.12-alpine
     container_name: prometheus-exporter
