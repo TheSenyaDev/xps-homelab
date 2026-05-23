@@ -194,6 +194,20 @@ services:
       - ./memos/data:/var/opt/memos
     restart: unless-stopped
 
+  vikunja:
+    image: vikunja/vikunja:latest
+    container_name: vikunja
+    ports:
+      - 3456:3456
+    volumes:
+      - ./vikunja/files:/app/vikunja/files
+      - ./vikunja/db:/db
+    environment:
+      - VIKUNJA_SERVICE_PUBLICURL=http://${SERVER_IP}:3456
+      - VIKUNJA_DATABASE_TYPE=sqlite
+      - VIKUNJA_DATABASE_PATH=/db/vikunja.db
+    restart: unless-stopped
+
 volumes:
   grafana-data:
   prometheus-data:

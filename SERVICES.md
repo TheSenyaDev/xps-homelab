@@ -12,6 +12,8 @@
 | Obsidian           | http://192.168.2.100:8080             | http://100.121.230.17:8080              |
 | Claude (Chromium)  | http://192.168.2.100:3003             | http://100.121.230.17:3003              |
 | Baikal (CalDAV)    | http://192.168.2.100:5232             | http://100.121.230.17:5232              |
+| Memos              | http://192.168.2.100:5230             | http://100.121.230.17:5230              |
+| Vikunja            | http://192.168.2.100:3456             | http://100.121.230.17:3456              |
 
 ## Internal / API (not user-facing)
 
@@ -32,3 +34,4 @@
 
 | Service           | URL                          |
 |-------------------|------------------------------|
+| Glances           | https://glances.senya.ca     |
