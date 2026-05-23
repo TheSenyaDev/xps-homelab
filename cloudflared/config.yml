@@ -1,0 +1,6 @@
+ingress:
+  - hostname: glances.senya.ca
+    service: http://glances:61208
+
+  # Catch-all: required by cloudflared — returns 404 for unmatched hostnames
+  - service: http_status:404
