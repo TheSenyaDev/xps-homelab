@@ -1,0 +1,53 @@
+- Services:
+    - Grafana:
+        href: http://192.168.2.100:3002
+        description: Monitoring dashboards
+        icon: grafana
+    - Uptime Kuma:
+        href: http://192.168.2.100:3001
+        description: Service uptime monitoring
+        icon: uptime-kuma
+    - Portainer:
+        href: http://192.168.2.100:9000
+        description: Docker management
+        icon: portainer
+    - Prometheus:
+        href: http://192.168.2.100:9090
+        description: Metrics collection
+        icon: prometheus
+
+- Apps:
+    - Memos:
+        href: http://192.168.2.100:5230
+        description: Notes and memos
+        icon: memos
+    - Vikunja:
+        href: http://192.168.2.100:3456
+        description: Task management
+        icon: vikunja
+    - Obsidian:
+        href: http://192.168.2.100:8080
+        description: Obsidian Remote
+        icon: obsidian
+    - SearXNG:
+        href: http://192.168.2.100:4000
+        description: Search engine
+        icon: searxng
+
+- Tools:
+    - Glances:
+        href: http://192.168.2.100:61208
+        description: System monitoring
+        icon: glances
+    - Homarr:
+        href: http://192.168.2.100:3000
+        description: Dashboard
+        icon: homarr
+    - Claude:
+        href: http://192.168.2.100:3003
+        description: Claude AI (Chromium)
+        icon: google-chrome
+    - Baikal:
+        href: http://192.168.2.100:5232
+        description: CalDAV server
+        icon: baikal

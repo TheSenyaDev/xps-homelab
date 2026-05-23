@@ -208,6 +208,19 @@ services:
       - VIKUNJA_DATABASE_PATH=/db/vikunja.db
     restart: unless-stopped
 
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    ports:
+      - 3010:3000
+    volumes:
+      - ./homepage/config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TZ=${TZ}
+      - HOMEPAGE_ALLOWED_HOSTS=192.168.2.100:3010,100.121.230.17:3010
+    restart: unless-stopped
+
 volumes:
   grafana-data:
   prometheus-data:
