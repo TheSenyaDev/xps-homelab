@@ -75,6 +75,9 @@ body {
   margin-bottom: 18px; flex-wrap: wrap; gap: 12px;
 }
 .content-head h2 { margin: 0; font-size: 24px; }
+.controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sort { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.sort select { padding: 7px 10px; font-size: 13px; }
 .filters { display: flex; gap: 4px; background: var(--panel); padding: 4px; border-radius: 10px; }
 .filters button {
   border: none; background: none; color: var(--muted);

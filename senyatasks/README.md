@@ -1,6 +1,6 @@
-# Task Tracker
+# SenyaTasks
 
-A small self-contained task tracker: **Flask + SQLite** backend, vanilla-JS frontend,
+A small self-contained task tracker for the senya homelab: **Flask + SQLite** backend, vanilla-JS frontend,
 tasks grouped by **category**, packaged into a single **Docker** image with a
 mountable volume for the database.
 
@@ -41,8 +41,8 @@ Then open <http://localhost:8000>. The database lives in `./data/tasks.db` on th
 ## Run with plain Docker
 
 ```bash
-docker build -t task-tracker .
-docker run -d --name task-tracker -p 8000:8000 -v "$PWD/data:/data" task-tracker
+docker build -t senyatasks .
+docker run -d --name senyatasks -p 8000:8000 -v "$PWD/data:/data" senyatasks
 ```
 
 ## Run locally without Docker

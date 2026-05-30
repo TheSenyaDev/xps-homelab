@@ -17,6 +17,10 @@
         icon: prometheus
 
 - Apps:
+    - SenyaTasks:
+        href: http://192.168.2.100:8000
+        description: Task tracker (Obsidian-synced)
+        icon: mdi-clipboard-check-outline
     - Memos:
         href: http://192.168.2.100:5230
         description: Notes and memos

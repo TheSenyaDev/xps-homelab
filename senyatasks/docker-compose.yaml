@@ -1,8 +1,8 @@
 services:
-  task-tracker:
+  senyatasks:
     build: .
-    image: task-tracker:latest
-    container_name: task-tracker
+    image: senyatasks:latest
+    container_name: senyatasks
     ports:
       - "8000:8000"
     volumes:

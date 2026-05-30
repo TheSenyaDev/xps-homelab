@@ -19,6 +19,21 @@ let categories = [];
 let tasks = [];
 let activeCategory = "all"; // "all" | "none" | <id>
 let filter = "all"; // "all" | "active" | "done"
+let sortBy = "created"; // "created" | "priority" | "title"
+
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+
+// Sort within a category group: done tasks always sink, then by chosen key.
+function sortTasks(arr) {
+  const key = {
+    created: (a, b) => b.created_at.localeCompare(a.created_at),
+    priority: (a, b) =>
+      PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+      b.created_at.localeCompare(a.created_at),
+    title: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+  }[sortBy];
+  return [...arr].sort((a, b) => a.done - b.done || key(a, b));
+}
 
 async function load() {
   [categories, tasks] = await Promise.all([
@@ -170,7 +185,7 @@ function renderTasks() {
     group.style.marginLeft = `${depth * 16}px`;
     group.innerHTML =
       `<div class="group-head"><span class="dot" style="background:${color}"></span>${name}</div>`;
-    for (const t of items) group.appendChild(taskRow(t));
+    for (const t of sortTasks(items)) group.appendChild(taskRow(t));
     container.appendChild(group);
   };
 
@@ -275,5 +290,10 @@ for (const btn of document.querySelectorAll(".filters button")) {
     render();
   };
 }
+
+document.getElementById("sort-by").onchange = (e) => {
+  sortBy = e.target.value;
+  renderTasks();
+};
 
 load();

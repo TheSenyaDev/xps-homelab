@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Task Tracker</title>
+  <title>SenyaTasks</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
-      <h1>📋 Tasks</h1>
+      <h1>📋 SenyaTasks</h1>
       <nav id="category-list"></nav>
       <form id="category-form" class="add-category">
         <div class="row">
@@ -26,10 +26,20 @@
     <main class="content">
       <header class="content-head">
         <h2 id="current-title">All tasks</h2>
-        <div class="filters">
-          <button data-filter="all" class="active">All</button>
-          <button data-filter="active">Active</button>
-          <button data-filter="done">Done</button>
+        <div class="controls">
+          <div class="filters">
+            <button data-filter="all" class="active">All</button>
+            <button data-filter="active">Active</button>
+            <button data-filter="done">Done</button>
+          </div>
+          <label class="sort">
+            Sort
+            <select id="sort-by">
+              <option value="created">Newest</option>
+              <option value="priority">Priority</option>
+              <option value="title">Title (A–Z)</option>
+            </select>
+          </label>
         </div>
       </header>
 
