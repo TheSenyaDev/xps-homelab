@@ -1,0 +1,10 @@
+services:
+  task-tracker:
+    build: .
+    image: task-tracker:latest
+    container_name: task-tracker
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

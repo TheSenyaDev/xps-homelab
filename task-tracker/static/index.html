@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Tracker</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>📋 Tasks</h1>
+      <nav id="category-list"></nav>
+      <form id="category-form" class="add-category">
+        <div class="row">
+          <input id="category-name" type="text" placeholder="New category…" maxlength="40" />
+          <input id="category-color" type="color" value="#6366f1" title="Category color" />
+          <button type="submit">+</button>
+        </div>
+        <select id="category-parent" title="Parent category">
+          <option value="">— top level —</option>
+        </select>
+      </form>
+    </aside>
+
+    <main class="content">
+      <header class="content-head">
+        <h2 id="current-title">All tasks</h2>
+        <div class="filters">
+          <button data-filter="all" class="active">All</button>
+          <button data-filter="active">Active</button>
+          <button data-filter="done">Done</button>
+        </div>
+      </header>
+
+      <form id="task-form" class="add-task">
+        <input id="task-title" type="text" placeholder="Add a task and press Enter…" autocomplete="off" />
+        <select id="task-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+        <button type="submit">Add</button>
+      </form>
+
+      <div id="task-groups"></div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
