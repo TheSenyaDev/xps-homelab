@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Senya</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <header class="top">
+      <h1>🚀 Senya</h1>
+      <p id="clock" class="clock"></p>
+    </header>
+
+    <form id="search" class="search">
+      <div class="engines">
+        <label data-engine="google"><input type="radio" name="engine" value="google" checked /> Google</label>
+        <label data-engine="searxng"><input type="radio" name="engine" value="searxng" /> SearXNG</label>
+      </div>
+      <div class="search-row">
+        <input id="q" type="text" placeholder="Search the web…" autocomplete="off" autofocus />
+        <button type="submit">Search</button>
+      </div>
+    </form>
+
+    <section>
+      <h2>Bookmarks</h2>
+      <div id="bookmarks" class="grid"></div>
+    </section>
+
+    <section id="services-section">
+      <h2>Services <span class="hint">· local / tailscale</span></h2>
+      <div id="services" class="services"></div>
+    </section>
+  </main>
+
+  <!-- services.js is gated by nginx to LAN/Tailscale; on public it 404s and the
+       Services section is removed. It must load before app.js. -->
+  <script src="services.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

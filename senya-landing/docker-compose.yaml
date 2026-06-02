@@ -1,0 +1,23 @@
+services:
+  senya-landing:
+    build: .
+    image: senya-landing:latest
+    container_name: senya-landing
+    ports:
+      - "8090:80"
+    # Hardening: nothing on disk should ever change at runtime.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+# Join the shared homelab network so cloudflared can route to it by name
+# (tunnel target: http://senya-landing:80).
+networks:
+  default:
+    external: true
+    name: homelab_default
