@@ -18,6 +18,8 @@ body.compact {
   --wx-temp: 26px;
   --wx-day-pad: 7px 4px;
   --wx-dicon: 18px;
+  --wx-hour-w: 50px;
+  --wx-hicon: 17px;
 
   /* system */
   --sys-min: 190px;

@@ -67,6 +67,27 @@ function currentCard(cur, d) {
       wxStat("Sun", `${hhmm(d.sunrise[0])}–${hhmm(d.sunset[0])}`)));
 }
 
+// Horizontally-scrollable next-24-hours breakdown, starting at the current hour.
+function hourlyStrip(h) {
+  if (!h || !Array.isArray(h.time)) return null;
+  const fromHour = Date.now() - 3600 * 1000; // keep the current hour in view
+  let start = h.time.findIndex((t) => new Date(t).getTime() >= fromHour);
+  if (start < 0) start = 0;
+  const end = Math.min(start + 24, h.time.length);
+
+  const track = el("div", { class: "wx-hours-track" });
+  for (let i = start; i < end; i++) {
+    const hh = wmo(h.weather_code[i], h.is_day[i] === 1);
+    const label = i === start ? "Now" : new Date(h.time[i]).toLocaleTimeString([], { hour: "numeric" });
+    track.append(el("div", { class: "wx-hour" },
+      el("div", { class: "wx-htime", text: label }),
+      el("div", { class: "wx-hicon", title: hh.label, text: hh.icon }),
+      el("div", { class: "wx-htemp", text: `${Math.round(h.temperature_2m[i])}°` }),
+      el("div", { class: "wx-hpp", text: `💧${h.precipitation_probability[i] ?? 0}%` })));
+  }
+  return el("div", { class: "wx-hours" }, track);
+}
+
 function forecastStrip(d) {
   const strip = el("div", { class: "wx-days" });
   for (let i = 0; i < d.time.length; i++) {
@@ -87,7 +108,12 @@ async function load(loc, wrap) {
   wrap.replaceChildren(el("div", { class: "offline-msg", text: "Loading weather…" }));
   try {
     const data = await fetchJSON(weatherURL(loc));
-    wrap.replaceChildren(currentCard(data.current, data.daily), forecastStrip(data.daily));
+    const parts = [
+      currentCard(data.current, data.daily),
+      hourlyStrip(data.hourly),
+      forecastStrip(data.daily),
+    ].filter(Boolean);
+    wrap.replaceChildren(...parts);
   } catch (e) {
     console.error("[senya] weather load failed:", e);
     wrap.replaceChildren(el("div", { class: "offline-msg", text: "Weather unavailable" }));

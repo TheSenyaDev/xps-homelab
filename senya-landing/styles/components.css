@@ -55,6 +55,32 @@
 .wx-stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .wx-stat-val { font-size: 14px; font-variant-numeric: tabular-nums; }
 
+/* Hourly breakdown — horizontally scrollable strip for the next 24h. */
+.wx-hours {
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.wx-hours::-webkit-scrollbar { height: 7px; }
+.wx-hours::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.wx-hours::-webkit-scrollbar-track { background: transparent; }
+.wx-hours-track { display: flex; gap: 2px; width: max-content; }
+.wx-hour {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  min-width: var(--wx-hour-w, 58px); padding: 4px 8px;
+  border-radius: 9px;
+}
+.wx-hour:hover { background: var(--panel-2); }
+.wx-htime { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.wx-hicon { font-size: var(--wx-hicon, 20px); line-height: 1; }
+.wx-htemp { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wx-hpp { font-size: 10px; color: var(--muted); white-space: nowrap; }
+
 .wx-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--gap, 8px); }
 .wx-day {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
