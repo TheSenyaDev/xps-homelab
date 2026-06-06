@@ -1,0 +1,48 @@
+/* Compact view: denser spacing + smaller type so more fits on screen. Most of it
+   is just retuning the density variables defined in base/components; a few extra
+   rules trim things the variables don't cover. Toggled by body.compact (views.js). */
+
+body.compact {
+  /* shell */
+  --maxw: 1180px;       /* wider canvas → more columns fit */
+  --pad-y: 24px;
+  --section-gap: 18px;
+  --gap: 8px;
+
+  /* bookmarks */
+  --bm-min: 112px;
+  --card-pad: 9px 8px;
+
+  /* weather */
+  --wx-icon: 34px;
+  --wx-temp: 26px;
+  --wx-day-pad: 7px 4px;
+  --wx-dicon: 18px;
+
+  /* system */
+  --sys-min: 190px;
+  --host-pad: 10px 12px;
+  --metric-gap: 6px;
+  --bar-h: 5px;
+
+  /* services */
+  --svc-min: 165px;
+  --svc-pad: 8px 10px;
+}
+
+body.compact .top { margin-bottom: 18px; }
+body.compact .top h1 { font-size: 22px; }
+body.compact h2 { font-size: 12px; margin-bottom: 9px; }
+
+body.compact .search { margin-bottom: 22px; }
+body.compact .search input[type="text"] { font-size: 14px; padding: 10px 14px; }
+body.compact .search button { padding: 0 16px; font-size: 14px; }
+
+body.compact .card { font-size: 13px; gap: 6px; }
+body.compact .ico { width: 18px; height: 18px; }
+
+body.compact .wx-now { padding: 10px 14px; gap: 14px; }
+body.compact .wx-cond { font-size: 12px; }
+body.compact .host-name { margin-bottom: 8px; font-size: 14px; }
+body.compact .svc-name { font-size: 13px; }
+body.compact .pill { font-size: 11px; padding: 3px 8px; }

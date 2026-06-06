@@ -4,13 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Senya</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="styles/base.css" />
+  <link rel="stylesheet" href="styles/components.css" />
+  <link rel="stylesheet" href="styles/compact.css" />
 </head>
 <body>
   <main>
     <header class="top">
       <h1>🚀 Senya</h1>
-      <p id="clock" class="clock"></p>
+      <div class="top-right">
+        <div id="view-toggle" class="view-toggle" role="group" aria-label="View density">
+          <button type="button" data-view="comfortable">Comfortable</button>
+          <button type="button" data-view="compact">Compact</button>
+        </div>
+        <p id="clock" class="clock"></p>
+      </div>
     </header>
 
     <form id="search" class="search">
@@ -34,7 +42,12 @@
       <div id="system" class="system"></div>
     </section>
 
-    <section>
+    <section id="public-section">
+      <h2>Public <span class="hint">· senya.ca</span></h2>
+      <div id="public" class="grid"></div>
+    </section>
+
+    <section id="bookmarks-section">
       <h2>Bookmarks</h2>
       <div id="bookmarks" class="grid"></div>
     </section>
@@ -45,9 +58,11 @@
     </section>
   </main>
 
-  <!-- services.js is gated by nginx to LAN/Tailscale; on public it 404s and the
-       Services section is removed. It must load before app.js. -->
+  <!-- services.js is a classic script gated by nginx to LAN/Tailscale: on public
+       it 404s, window.SENYA_INTERNAL stays undefined, and the internal-only
+       sections remove themselves. It must run before the module below; deferred
+       scripts (classic defer + modules) execute in document order. -->
   <script src="services.js" defer></script>
-  <script src="app.js" defer></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

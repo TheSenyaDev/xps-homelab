@@ -16,8 +16,10 @@ window.SENYA_INTERNAL = {
   // to LAN/Tailscale only. `key` must match the proxy location in nginx.conf.
   // Adding a host: install Glances on it, add a matching /stats/<key>/ block in
   // nginx.conf pointing at its address, then add an entry here.
+  // `power: true` → host also exposes the power-api (proxied at /stats/<key>/power)
+  // for RAPL CPU watts and the accurate x86_pkg_temp CPU temperature.
   HOSTS: [
-    { name: "XPS", key: "xps", icon: "dell" },
+    { name: "XPS", key: "xps", icon: "dell", power: true },
     { name: "TrueNAS", key: "truenas", icon: "truenas" },
   ],
   // `icon` = filename (without .png) in /icons, sourced from dashboardicons.com
