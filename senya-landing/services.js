@@ -8,20 +8,34 @@ window.SENYA_INTERNAL = {
   LOCAL_IP: "192.168.2.100",
   TAILSCALE_IP: "100.121.230.17",
   SEARXNG: "http://192.168.2.100:4000/search?q=",
+  // Live system stats. Each host runs Glances (`-w`, port 61208); nginx
+  // reverse-proxies it same-origin under /stats/<key>/ (see nginx.conf), gated
+  // to LAN/Tailscale only. `key` must match the proxy location in nginx.conf.
+  // Adding a host: install Glances on it, add a matching /stats/<key>/ block in
+  // nginx.conf pointing at its address, then add an entry here.
+  HOSTS: [
+    { name: "XPS", key: "xps", icon: "dell" },
+    { name: "TrueNAS", key: "truenas", icon: "truenas" },
+  ],
+  // `icon` = filename (without .png) in /icons, sourced from dashboardicons.com
+  // via fetch-icons.sh. Omit `icon` (or point to a missing file) → _default.svg.
   SERVICES: [
-    { name: "Homepage", port: 3010 },
-    { name: "Homarr", port: 3000 },
-    { name: "Grafana", port: 3002 },
-    { name: "Portainer", port: 9000 },
-    { name: "Glances", port: 61208 },
-    { name: "Uptime Kuma", port: 3001 },
-    { name: "Prometheus", port: 9090 },
-    { name: "SearXNG", port: 4000 },
-    { name: "Obsidian", port: 8080 },
-    { name: "Claude (Chromium)", port: 3003 },
-    { name: "Baikal", port: 5232 },
-    { name: "Memos", port: 5230 },
-    { name: "Vikunja", port: 3456 },
+    { name: "Homepage", port: 3010, icon: "homepage" },
+    { name: "Homarr", port: 3000, icon: "homarr" },
+    { name: "Grafana", port: 3002, icon: "grafana" },
+    { name: "Portainer", port: 9000, icon: "portainer" },
+    { name: "Glances", port: 61208, icon: "glances" },
+    { name: "Uptime Kuma", port: 3001, icon: "uptime-kuma" },
+    { name: "Prometheus", port: 9090, icon: "prometheus" },
+    { name: "SearXNG", port: 4000, icon: "searxng" },
+    { name: "Obsidian", port: 8080, icon: "obsidian" },
+    { name: "Claude (Chromium)", port: 3003, icon: "claude-ai" },
+    { name: "Baikal", port: 5232, icon: "baikal" },
+    { name: "Memos", port: 5230, icon: "memos" },
+    { name: "Vikunja", port: 3456, icon: "vikunja" },
+    { name: "Firefly III", port: 3005, icon: "firefly-iii" },
+    { name: "Firefly Importer", port: 3006, icon: "firefly-iii" },
+    { name: "Miniflux", port: 3007, icon: "miniflux" },
     { name: "SenyaTasks", port: 8000 },
   ],
 };

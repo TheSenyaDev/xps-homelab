@@ -46,3 +46,14 @@ Prometheus
 - [ ]
 
 Self Hosted Calendar App
+
+TrueNAS
+- [ ] set up the rest of the TrueNAS config to view its stats on Senya Landing (install Glances on TrueNAS, set its IP in the /stats/truenas/ block in nginx.conf)
+
+Authentication
+- [ ] create self-hosted authentication (Authelia or similar) to protect services
+
+Senya Landing
+- [ ] rework into more of a full-stack web app with proper folder structure and a backend
+- [ ] add a way to view notes from Senya Landing
+- [ ] make it more minimal and optimized for the screen to fit more info — add a normal view and a compact view toggle

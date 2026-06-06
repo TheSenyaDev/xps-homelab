@@ -17,10 +17,22 @@
         icon: prometheus
 
 - Apps:
+    - Senya Landing:
+        href: http://192.168.2.100:8090
+        description: Homelab landing page
+        icon: mdi-rocket-launch-outline
     - SenyaTasks:
         href: http://192.168.2.100:8000
         description: Task tracker (Obsidian-synced)
         icon: mdi-clipboard-check-outline
+    - Firefly III:
+        href: http://192.168.2.100:3005
+        description: Personal finance manager
+        icon: firefly-iii
+    - Miniflux:
+        href: http://192.168.2.100:3007
+        description: RSS feed reader
+        icon: miniflux
     - Memos:
         href: http://192.168.2.100:5230
         description: Notes and memos
@@ -55,3 +67,7 @@
         href: http://192.168.2.100:5232
         description: CalDAV server
         icon: baikal
+    - Firefly Importer:
+        href: http://192.168.2.100:3006
+        description: Firefly III data importer
+        icon: firefly-iii

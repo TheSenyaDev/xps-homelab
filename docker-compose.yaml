@@ -208,6 +208,91 @@ services:
       - VIKUNJA_DATABASE_PATH=/db/vikunja.db
     restart: unless-stopped
 
+  firefly:
+    image: fireflyiii/core:latest
+    container_name: firefly
+    ports:
+      - 3005:8080
+    volumes:
+      - firefly-upload:/var/www/html/storage/upload
+    environment:
+      - TZ=${TZ}
+      - APP_KEY=${FIREFLY_APP_KEY}
+      - APP_URL=http://${SERVER_IP}:3005
+      - TRUSTED_PROXIES=**
+      - DB_CONNECTION=mysql
+      - DB_HOST=firefly-db
+      - DB_PORT=3306
+      - DB_DATABASE=firefly
+      - DB_USERNAME=firefly
+      - DB_PASSWORD=${FIREFLY_DB_PASSWORD}
+    depends_on:
+      - firefly-db
+    restart: unless-stopped
+
+  firefly-importer:
+    image: fireflyiii/data-importer:latest
+    container_name: firefly-importer
+    ports:
+      - 3006:8080
+    environment:
+      - TZ=${TZ}
+      - FIREFLY_III_URL=http://firefly:8080
+      - VANITY_URL=http://${SERVER_IP}:3005
+      - FIREFLY_III_ACCESS_TOKEN=${FIREFLY_IMPORTER_TOKEN}
+      - TRUSTED_PROXIES=**
+    depends_on:
+      - firefly
+    restart: unless-stopped
+
+  firefly-db:
+    image: mariadb:11
+    container_name: firefly-db
+    volumes:
+      - firefly-db:/var/lib/mysql
+    environment:
+      - TZ=${TZ}
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+      - MYSQL_DATABASE=firefly
+      - MYSQL_USER=firefly
+      - MYSQL_PASSWORD=${FIREFLY_DB_PASSWORD}
+    restart: unless-stopped
+
+  miniflux:
+    image: miniflux/miniflux:latest
+    container_name: miniflux
+    ports:
+      - 3007:8080
+    environment:
+      - TZ=${TZ}
+      - DATABASE_URL=postgres://miniflux:${MINIFLUX_DB_PASSWORD}@miniflux-db/miniflux?sslmode=disable
+      - RUN_MIGRATIONS=1
+      - CREATE_ADMIN=1
+      - ADMIN_USERNAME=${MINIFLUX_ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${MINIFLUX_ADMIN_PASSWORD}
+      - BASE_URL=http://${SERVER_IP}:3007/
+    depends_on:
+      miniflux-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  miniflux-db:
+    image: postgres:16-alpine
+    container_name: miniflux-db
+    volumes:
+      - miniflux-db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=miniflux
+      - POSTGRES_PASSWORD=${MINIFLUX_DB_PASSWORD}
+      - POSTGRES_DB=miniflux
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "miniflux"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   homepage:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
@@ -221,11 +306,43 @@ services:
       - HOMEPAGE_ALLOWED_HOSTS=192.168.2.100:3010,100.121.230.17:3010
     restart: unless-stopped
 
+  # Custom-built Senya apps (built from local source, not pulled images).
+  senya-landing:
+    build: ./senya-landing
+    image: senya-landing:latest
+    container_name: senya-landing
+    ports:
+      - "8090:80"
+    # Static site: nothing on disk should ever change at runtime.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  senyatasks:
+    build: ./senyatasks
+    image: senyatasks:latest
+    container_name: senyatasks
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./senyatasks/data:/data
+    restart: unless-stopped
+
 volumes:
   grafana-data:
   prometheus-data:
+  firefly-db:
+  firefly-upload:
+  miniflux-db:
 
+# Single self-managed network so `docker compose up` works from scratch with no
+# pre-created network. Keeps the stable name so cloudflared/homepage routing and
+# any standalone per-service compose files attach to the same network by name.
 networks:
   default:
-    external: true
     name: homelab_default

@@ -15,14 +15,19 @@
 
     <form id="search" class="search">
       <div class="engines">
-        <label data-engine="google"><input type="radio" name="engine" value="google" checked /> Google</label>
-        <label data-engine="searxng"><input type="radio" name="engine" value="searxng" /> SearXNG</label>
+        <label data-engine="google"><input type="radio" name="engine" value="google" /> Google</label>
+        <label data-engine="searxng"><input type="radio" name="engine" value="searxng" checked /> SearXNG</label>
       </div>
       <div class="search-row">
         <input id="q" type="text" placeholder="Search the web…" autocomplete="off" autofocus />
         <button type="submit">Search</button>
       </div>
     </form>
+
+    <section id="system-section">
+      <h2>System <span class="hint">· live</span></h2>
+      <div id="system" class="system"></div>
+    </section>
 
     <section>
       <h2>Bookmarks</h2>
