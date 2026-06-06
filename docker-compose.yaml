@@ -333,6 +333,16 @@ services:
       - ./senyatasks/data:/data
     restart: unless-stopped
 
+  senya-daily:
+    build: ./senya-daily
+    image: senya-daily:latest
+    container_name: senya-daily
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./senya-daily/data:/data
+    restart: unless-stopped
+
 volumes:
   grafana-data:
   prometheus-data:

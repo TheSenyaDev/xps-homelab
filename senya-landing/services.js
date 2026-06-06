@@ -37,5 +37,6 @@ window.SENYA_INTERNAL = {
     { name: "Firefly Importer", port: 3006, icon: "firefly-iii" },
     { name: "Miniflux", port: 3007, icon: "miniflux" },
     { name: "SenyaTasks", port: 8000 },
+    { name: "SenyaDaily", port: 8001 },
   ],
 };

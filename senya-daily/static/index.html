@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SenyaDaily</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>🗓️ SenyaDaily</h1>
+      <div class="views">
+        <button id="view-day" class="view-btn active" data-view="day">Day</button>
+        <button id="view-cal" class="view-btn" data-view="calendar">Calendar</button>
+      </div>
+      <button id="manage-btn" class="ghost" title="Manage trackers">⚙ Trackers</button>
+    </header>
+
+    <!-- ===== Day view ===== -->
+    <main id="day-view" class="view">
+      <div class="date-nav">
+        <button id="prev-day" class="nav" aria-label="Previous day">‹</button>
+        <div class="date-label">
+          <span id="day-weekday" class="weekday"></span>
+          <input id="day-picker" type="date" />
+        </div>
+        <button id="next-day" class="nav" aria-label="Next day">›</button>
+        <button id="today-btn" class="ghost small">Today</button>
+        <span id="save-state" class="save-state"></span>
+      </div>
+
+      <section class="card note-card">
+        <label class="card-label">Note</label>
+        <textarea id="note" placeholder="How was your day? Markdown welcome…"></textarea>
+      </section>
+
+      <section class="trackers" id="trackers"></section>
+    </main>
+
+    <!-- ===== Calendar view ===== -->
+    <main id="cal-view" class="view hidden">
+      <div class="cal-nav">
+        <button id="cal-prev" class="nav" aria-label="Previous month">‹</button>
+        <h2 id="cal-title"></h2>
+        <button id="cal-next" class="nav" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-weekdays" id="cal-weekdays"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </main>
+  </div>
+
+  <!-- ===== Manage trackers panel ===== -->
+  <div id="manage" class="overlay hidden">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Trackers</h2>
+        <button id="manage-close" class="ghost" aria-label="Close">✕</button>
+      </div>
+      <p class="hint">
+        Anything you want to log daily — pushups, food, mood, custom categories.
+        Add one and it appears on every day.
+      </p>
+      <div id="tracker-list" class="tracker-list"></div>
+
+      <form id="tracker-form" class="tracker-form">
+        <div class="row">
+          <input id="tf-icon" type="text" maxlength="2" placeholder="🙂" class="icon-in" title="Emoji" />
+          <input id="tf-name" type="text" placeholder="Name (e.g. Pushups)" maxlength="40" required />
+        </div>
+        <div class="row">
+          <select id="tf-type" title="Type">
+            <option value="number">Number</option>
+            <option value="text">Text</option>
+            <option value="check">Checkbox</option>
+            <option value="rating">Rating (1–5)</option>
+          </select>
+          <input id="tf-unit" type="text" placeholder="unit (reps, g…)" maxlength="16" class="unit-in" />
+          <input id="tf-color" type="color" value="#6366f1" title="Color" />
+          <button type="submit">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
