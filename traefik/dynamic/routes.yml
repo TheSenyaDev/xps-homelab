@@ -1,0 +1,61 @@
+# Traefik DYNAMIC routing — THIS is the file you edit to expose a service.
+#
+# For each service you want reachable through the tunnel, add:
+#   - a router under `routers:` (matches the hostname, points at a service)
+#   - a service under `services:` (the container's internal address)
+# To put it behind the login portal, give the router:
+#       middlewares: ['authelia@file']
+# Leave that line out to serve it openly (no auth). That single line is the
+# per-service on/off switch for Authelia.
+#
+# Don't forget the matching public hostname in Cloudflare (→ http://traefik:80).
+# Changes here are picked up live (provider watch); no Traefik restart needed.
+
+http:
+  routers:
+    # The Authelia login portal itself — never behind auth (you must reach it to log in).
+    authelia:
+      rule: 'Host(`auth.senya.ca`)'
+      entryPoints: ['web']
+      service: 'authelia'
+
+    # Example PROTECTED service: the authelia@file middleware forces login.
+    whoami:
+      rule: 'Host(`whoami.senya.ca`)'
+      entryPoints: ['web']
+      service: 'whoami'
+      middlewares: ['authelia@file']
+
+    # ── Templates: copy one of these to expose a real service ──────────────
+    # Protected (requires login):
+    # grafana:
+    #   rule: 'Host(`grafana.senya.ca`)'
+    #   entryPoints: ['web']
+    #   service: 'grafana'
+    #   middlewares: ['authelia@file']
+    #
+    # Open (no auth):
+    # status:
+    #   rule: 'Host(`status.senya.ca`)'
+    #   entryPoints: ['web']
+    #   service: 'uptime-kuma'
+
+  services:
+    authelia:
+      loadBalancer:
+        servers:
+          - url: 'http://authelia:9091'
+    whoami:
+      loadBalancer:
+        servers:
+          - url: 'http://whoami:80'
+
+    # Point at any container by its compose name + internal port:
+    # grafana:
+    #   loadBalancer:
+    #     servers:
+    #       - url: 'http://grafana:3000'
+    # uptime-kuma:
+    #   loadBalancer:
+    #     servers:
+    #       - url: 'http://uptime-kuma:3001'

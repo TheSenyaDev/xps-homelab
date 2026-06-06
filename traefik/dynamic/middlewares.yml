@@ -1,0 +1,21 @@
+# Traefik DYNAMIC configuration: the reusable Authelia forward-auth middleware.
+#
+# Attach it to any router to put that service behind the login portal:
+#   labels:
+#     - traefik.http.routers.<name>.middlewares=authelia@file
+#
+# Omit it and the service is served straight through Traefik with no auth.
+http:
+  middlewares:
+    authelia:
+      forwardAuth:
+        # Traefik asks this endpoint whether each request is authorized.
+        address: 'http://authelia:9091/api/authz/forward-auth'
+        trustForwardHeader: true
+        # Headers Authelia returns about the logged-in user, passed to the
+        # backend app (apps that support header auth can auto-login from these).
+        authResponseHeaders:
+          - 'Remote-User'
+          - 'Remote-Groups'
+          - 'Remote-Name'
+          - 'Remote-Email'

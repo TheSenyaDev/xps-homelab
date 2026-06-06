@@ -1,0 +1,21 @@
+---
+###############################################################################
+# Authelia users. Passwords are argon2id hashes — NEVER plaintext.
+#
+# Generate a new hash:
+#   docker run --rm authelia/authelia:4.38 \
+#     authelia crypto hash generate argon2 --password 'your-new-password'
+# Paste the "Digest:" value as `password:` below, then restart: docker compose restart authelia
+#
+# ⚠️  The seeded account is  admin / authelia  — CHANGE THE PASSWORD before you
+#     expose anything publicly.
+###############################################################################
+users:
+  admin:
+    disabled: false
+    displayname: 'Admin'
+    # Default password: 'authelia'  (CHANGE ME)
+    password: '$argon2id$v=19$m=65536,t=3,p=4$zotWHnx4EZV+i4Idd8qZtQ$Ry8IAwFRn58MpnOL+vDD3FD/m0VJEtnzneAPHUM3YXY'
+    email: 'admin@senya.ca'
+    groups:
+      - 'admins'

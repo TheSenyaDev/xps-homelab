@@ -37,6 +37,7 @@
 | Tailscale API        | http://192.168.2.100:8082             | http://100.121.230.17:8082            |
 | Nvidia API           | http://192.168.2.100:8083             | http://100.121.230.17:8083            |
 | Prometheus Exporter  | http://192.168.2.100:9091/metrics     | http://100.121.230.17:9091/metrics    |
+| Traefik dashboard    | http://192.168.2.100:8096             | http://100.121.230.17:8096            |
 
 ## CalDAV / CardDAV (Baikal)
 
@@ -46,8 +47,14 @@
 
 ## Public (Cloudflare Tunnel)
 
-| Service           | URL                          |
-|-------------------|------------------------------|
-| Glances           | https://glances.senya.ca     |
+| Service           | URL                          | Auth           |
+|-------------------|------------------------------|----------------|
+| Glances           | https://glances.senya.ca     | none (direct)  |
+| Authelia portal   | https://auth.senya.ca        | login portal   |
+| whoami (demo)     | https://whoami.senya.ca      | Authelia       |
+
+Public services route through Traefik (`http://traefik:80`) and are protected
+selectively via the `authelia@file` middleware in `traefik/dynamic/routes.yml`.
+See [authelia/README.md](authelia/README.md).
 </content>
 </invoke>

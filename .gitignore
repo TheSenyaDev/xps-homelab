@@ -42,4 +42,8 @@ grafana/data/
 claude-code/config/
 
 # Daily notes
-senya-daily/data/
+senya-daily/data
+
+# Authelia — runtime state (the config files themselves are kept in git)
+authelia/db.sqlite3
+authelia/notification.txt

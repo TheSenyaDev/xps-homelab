@@ -1,0 +1,35 @@
+# Traefik STATIC configuration (read once at startup).
+#  - Dynamic routing per service lives in docker-compose labels.
+#  - The reusable Authelia middleware lives in ./dynamic/middlewares.yml.
+# See authelia/README.md for the big picture.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+api:
+  dashboard: true
+  # Dashboard on :8080 (published to the LAN/Tailscale only — it is never given a
+  # Cloudflare public hostname, so it is not reachable from the internet).
+  insecure: true
+
+entryPoints:
+  web:
+    address: ':80'
+    # cloudflared is the only client of this entrypoint (private docker network),
+    # and Cloudflare sets X-Forwarded-Proto: https at the edge. Trusting it lets
+    # Authelia build correct https:// redirect URLs after login.
+    forwardedHeaders:
+      insecure: true
+
+providers:
+  # All routing is defined in ./dynamic (routes.yml + middlewares.yml). We use the
+  # file provider rather than the docker-labels provider so Traefik does NOT need
+  # the docker socket (a big security win — socket access ≈ root on the host), and
+  # to avoid the API-version handshake issues with newer Docker Engines.
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true

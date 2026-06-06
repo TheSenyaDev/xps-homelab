@@ -8,6 +8,9 @@ window.SENYA_INTERNAL = {
   LOCAL_IP: "192.168.2.100",
   TAILSCALE_IP: "100.121.230.17",
   SEARXNG: "http://192.168.2.100:4000/search?q=",
+  // Parent domain for services exposed through the Cloudflare tunnel. A service
+  // with an `ext` field below gets an extra "ext" link to https://<ext>.<domain>.
+  PUBLIC_DOMAIN: "senya.ca",
   // Live system stats. Each host runs Glances (`-w`, port 61208); nginx
   // reverse-proxies it same-origin under /stats/<key>/ (see nginx.conf), gated
   // to LAN/Tailscale only. `key` must match the proxy location in nginx.conf.
@@ -19,12 +22,14 @@ window.SENYA_INTERNAL = {
   ],
   // `icon` = filename (without .png) in /icons, sourced from dashboardicons.com
   // via fetch-icons.sh. Omit `icon` (or point to a missing file) → _default.svg.
+  // `ext` = the Cloudflare subdomain if the service is exposed publicly; adds an
+  // "ext" link to https://<ext>.<PUBLIC_DOMAIN>. Omit it for LAN/TS-only services.
   SERVICES: [
     { name: "Homepage", port: 3010, icon: "homepage" },
     { name: "Homarr", port: 3000, icon: "homarr" },
     { name: "Grafana", port: 3002, icon: "grafana" },
     { name: "Portainer", port: 9000, icon: "portainer" },
-    { name: "Glances", port: 61208, icon: "glances" },
+    { name: "Glances", port: 61208, icon: "glances", ext: "glances" },
     { name: "Uptime Kuma", port: 3001, icon: "uptime-kuma" },
     { name: "Prometheus", port: 9090, icon: "prometheus" },
     { name: "SearXNG", port: 4000, icon: "searxng" },

@@ -51,7 +51,10 @@ TrueNAS
 - [ ] set up the rest of the TrueNAS config to view its stats on Senya Landing (install Glances on TrueNAS, set its IP in the /stats/truenas/ block in nginx.conf)
 
 Authentication
-- [ ] create self-hosted authentication (Authelia or similar) to protect services
+- [x] create self-hosted authentication (Authelia + Traefik forward-auth) to protect services — see authelia/README.md
+- [ ] change the default admin/authelia password before exposing publicly
+- [ ] add auth.senya.ca + any protected subdomains in the Cloudflare dashboard (→ http://traefik:80)
+- [ ] (optional) enable two_factor / TOTP for sensitive services
 
 Senya Landing
 - [ ] rework into more of a full-stack web app with proper folder structure and a backend

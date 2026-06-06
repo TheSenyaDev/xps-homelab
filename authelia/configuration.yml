@@ -1,0 +1,82 @@
+---
+###############################################################################
+# Authelia configuration for the senya homelab.
+#
+# How this fits together (full write-up in authelia/README.md):
+#   Cloudflare tunnel ──▶ Traefik ──▶ your service
+#                                  └─▶ (optional) Authelia forward-auth
+#   Traefik asks Authelia "is this request allowed?" ONLY for routes that carry
+#   the `authelia@file` middleware. Routes without it are served directly and
+#   never touch Authelia — that's how auth stays per-service / opt-in.
+#
+# Secrets are NOT stored here. They come from environment variables defined in
+# the root .env and injected by docker-compose:
+#   AUTHELIA_SESSION_SECRET                            -> session.secret
+#   AUTHELIA_STORAGE_ENCRYPTION_KEY                    -> storage.encryption_key
+#   AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET -> reset-password JWT
+###############################################################################
+
+theme: 'dark'
+
+server:
+  address: 'tcp://:9091'
+
+log:
+  level: 'info'
+
+totp:
+  issuer: 'senya.ca'
+
+authentication_backend:
+  # File-based users (authelia/users_database.yml). Simple and perfect for a
+  # personal homelab; swap for LDAP later without touching the rest of the stack.
+  file:
+    path: '/config/users_database.yml'
+    password:
+      algorithm: 'argon2'
+
+access_control:
+  # Deny by default; only the rules below let traffic through. Remember: this is
+  # only consulted for requests Traefik forwards here (routes with the middleware).
+  default_policy: 'deny'
+  rules:
+    # The login portal must always be reachable without being logged in.
+    - domain: 'auth.senya.ca'
+      policy: 'bypass'
+    # Everything else behind the middleware needs a logged-in user. Change to
+    # 'two_factor' (per-rule or as default_policy) to require TOTP as well.
+    - domain: '*.senya.ca'
+      policy: 'one_factor'
+
+session:
+  name: 'authelia_session'
+  # secret <- AUTHELIA_SESSION_SECRET
+  expiration: '1h'      # session lifetime
+  inactivity: '5m'      # logged out after this much idle time
+  remember_me: '1M'     # "remember me" duration
+  cookies:
+    # The cookie is scoped to the parent domain so a single login covers every
+    # *.senya.ca service. authelia_url is where users get redirected to log in.
+    - domain: 'senya.ca'
+      authelia_url: 'https://auth.senya.ca'
+      default_redirection_url: 'https://senya.ca'
+
+regulation:
+  # Throttle brute-force: ban an identity after too many failures.
+  max_retries: 4
+  find_time: '2m'
+  ban_time: '5m'
+
+storage:
+  # encryption_key <- AUTHELIA_STORAGE_ENCRYPTION_KEY
+  local:
+    path: '/config/db.sqlite3'
+
+notifier:
+  # Homelab-friendly: no SMTP server needed. Password-reset and 2FA-registration
+  # links are written to a file inside the container instead of emailed:
+  #   docker exec authelia cat /config/notification.txt
+  # Switch to the `smtp:` notifier if you want real emails.
+  filesystem:
+    filename: '/config/notification.txt'
+...

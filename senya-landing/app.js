@@ -18,6 +18,14 @@ const BOOKMARKS = [
   { name: "Hacker News", url: "https://news.ycombinator.com", icon: "hacker-news" },
 ];
 
+// Weather locations (public-safe — shown on/off network). Edit this list; the
+// first is the default. Find coordinates for a city at https://open-meteo.com.
+const WEATHER_LOCATIONS = [
+  { name: "Toronto", lat: 43.6532, lon: -79.3832 },
+  { name: "Montreal", lat: 45.5019, lon: -73.5674 },
+  { name: "Vancouver", lat: 49.2827, lon: -123.1207 },
+];
+
 // Present only when services.js loaded (i.e. we're on LAN / Tailscale).
 const internal = window.SENYA_INTERNAL || null;
 
@@ -83,6 +91,10 @@ function renderServices() {
     links.className = "svc-links";
     links.appendChild(link("local", `http://${internal.LOCAL_IP}:${s.port}`, "pill"));
     links.appendChild(link("ts", `http://${internal.TAILSCALE_IP}:${s.port}`, "pill ts"));
+    // External (Cloudflare tunnel) link, only when the service is exposed publicly.
+    if (s.ext && internal.PUBLIC_DOMAIN) {
+      links.appendChild(link("ext", `https://${s.ext}.${internal.PUBLIC_DOMAIN}`, "pill ext"));
+    }
     card.append(title, links);
     wrap.appendChild(card);
   }
@@ -217,6 +229,159 @@ function renderSystem() {
   setInterval(tick, STATS_REFRESH_MS);
 }
 
+// ------------------------------------------------------------
+//  Weather — Open-Meteo (no API key, CORS-enabled). The CSP connect-src
+//  allows https://api.open-meteo.com. Coordinates come from WEATHER_LOCATIONS.
+// ------------------------------------------------------------
+
+const WEATHER_KEY = "senya.weatherLoc";
+
+// WMO weather code → { icon, label }. `day` picks sun/moon for clear sky.
+function wmo(code, day = true) {
+  const C = (icon, label) => ({ icon, label });
+  switch (code) {
+    case 0: return C(day ? "☀️" : "🌙", "Clear");
+    case 1: return C(day ? "🌤️" : "🌙", "Mainly clear");
+    case 2: return C("⛅", "Partly cloudy");
+    case 3: return C("☁️", "Overcast");
+    case 45: case 48: return C("🌫️", "Fog");
+    case 51: case 53: case 55: return C("🌦️", "Drizzle");
+    case 56: case 57: return C("🌧️", "Freezing drizzle");
+    case 61: case 63: case 65: return C("🌧️", "Rain");
+    case 66: case 67: return C("🌧️", "Freezing rain");
+    case 71: case 73: case 75: return C("🌨️", "Snow");
+    case 77: return C("🌨️", "Snow grains");
+    case 80: case 81: case 82: return C("🌦️", "Showers");
+    case 85: case 86: return C("🌨️", "Snow showers");
+    case 95: return C("⛈️", "Thunderstorm");
+    case 96: case 99: return C("⛈️", "Thunderstorm, hail");
+    default: return C("❓", "—");
+  }
+}
+
+function weatherURL(loc) {
+  const p = new URLSearchParams({
+    latitude: loc.lat,
+    longitude: loc.lon,
+    current: "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max",
+    timezone: "auto",
+    forecast_days: "7",
+  });
+  return `https://api.open-meteo.com/v1/forecast?${p}`;
+}
+
+function wxStat(label, value) {
+  const c = document.createElement("div");
+  c.className = "wx-stat";
+  const l = document.createElement("span"); l.className = "wx-stat-label"; l.textContent = label;
+  const v = document.createElement("span"); v.className = "wx-stat-val"; v.textContent = value;
+  c.append(l, v);
+  return c;
+}
+
+const hhmm = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+async function loadWeather(loc, wrap) {
+  wrap.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "offline-msg";
+  loading.textContent = "Loading weather…";
+  wrap.appendChild(loading);
+  try {
+    const data = await fetchJSON(weatherURL(loc));
+    const cur = data.current;
+    const d = data.daily;
+    const w = wmo(cur.weather_code, cur.is_day === 1);
+    wrap.replaceChildren();
+
+    // Current conditions
+    const now = document.createElement("div");
+    now.className = "wx-now";
+    const main = document.createElement("div");
+    main.className = "wx-main";
+    const icon = document.createElement("div"); icon.className = "wx-icon"; icon.textContent = w.icon;
+    const tw = document.createElement("div");
+    const temp = document.createElement("div"); temp.className = "wx-temp"; temp.textContent = `${Math.round(cur.temperature_2m)}°`;
+    const cond = document.createElement("div"); cond.className = "wx-cond";
+    cond.textContent = `${w.label} · feels ${Math.round(cur.apparent_temperature)}°`;
+    tw.append(temp, cond);
+    main.append(icon, tw);
+
+    const stats = document.createElement("div");
+    stats.className = "wx-stats";
+    stats.append(
+      wxStat("Humidity", `${cur.relative_humidity_2m}%`),
+      wxStat("Wind", `${Math.round(cur.wind_speed_10m)} km/h`),
+      wxStat("Gusts", `${Math.round(cur.wind_gusts_10m)} km/h`),
+      wxStat("Rain today", `${d.precipitation_probability_max[0] ?? 0}%`),
+      wxStat("UV", `${Math.round(d.uv_index_max[0])}`),
+      wxStat("Sun", `${hhmm(d.sunrise[0])}–${hhmm(d.sunset[0])}`),
+    );
+    now.append(main, stats);
+
+    // 7-day forecast strip
+    const days = document.createElement("div");
+    days.className = "wx-days";
+    for (let i = 0; i < d.time.length; i++) {
+      const dd = wmo(d.weather_code[i], true);
+      const cell = document.createElement("div");
+      cell.className = "wx-day";
+      const dow = document.createElement("div"); dow.className = "wx-dow";
+      dow.textContent = i === 0 ? "Today" : new Date(d.time[i] + "T00:00").toLocaleDateString([], { weekday: "short" });
+      const di = document.createElement("div"); di.className = "wx-dicon"; di.textContent = dd.icon; di.title = dd.label;
+      const hl = document.createElement("div"); hl.className = "wx-hl";
+      const hi = document.createElement("span"); hi.className = "hi"; hi.textContent = `${Math.round(d.temperature_2m_max[i])}°`;
+      const lo = document.createElement("span"); lo.className = "lo"; lo.textContent = `${Math.round(d.temperature_2m_min[i])}°`;
+      hl.append(hi, lo);
+      const pp = document.createElement("div"); pp.className = "wx-pp"; pp.textContent = `💧${d.precipitation_probability_max[i] ?? 0}%`;
+      cell.append(dow, di, hl, pp);
+      days.append(cell);
+    }
+
+    wrap.append(now, days);
+  } catch (e) {
+    wrap.replaceChildren();
+    const msg = document.createElement("div");
+    msg.className = "offline-msg";
+    msg.textContent = "Weather unavailable";
+    wrap.appendChild(msg);
+  }
+}
+
+function renderWeather() {
+  if (!Array.isArray(WEATHER_LOCATIONS) || !WEATHER_LOCATIONS.length) {
+    document.getElementById("weather-section").remove();
+    return;
+  }
+  const wrap = document.getElementById("weather");
+  const locsEl = document.getElementById("weather-locs");
+  let current = localStorage.getItem(WEATHER_KEY) || WEATHER_LOCATIONS[0].name;
+  if (!WEATHER_LOCATIONS.some((l) => l.name === current)) current = WEATHER_LOCATIONS[0].name;
+
+  const locOf = (name) => WEATHER_LOCATIONS.find((l) => l.name === name);
+  const select = (name) => {
+    current = name;
+    localStorage.setItem(WEATHER_KEY, name);
+    locsEl.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.textContent === name));
+    loadWeather(locOf(name), wrap);
+  };
+
+  // Location selector pills (only when there's more than one).
+  if (WEATHER_LOCATIONS.length > 1) {
+    for (const loc of WEATHER_LOCATIONS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "wx-loc" + (loc.name === current ? " active" : "");
+      b.textContent = loc.name;
+      b.addEventListener("click", () => select(loc.name));
+      locsEl.appendChild(b);
+    }
+  }
+  loadWeather(locOf(current), wrap);
+  setInterval(() => loadWeather(locOf(current), wrap), 15 * 60 * 1000); // refresh every 15 min
+}
+
 function setupEngines() {
   // SearXNG is internal-only; drop the option when off-network.
   if (!internal) {
@@ -243,6 +408,7 @@ function tickClock() {
 }
 
 renderBookmarks();
+renderWeather();
 renderSystem();
 renderServices();
 setupEngines();

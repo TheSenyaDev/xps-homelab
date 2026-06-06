@@ -72,6 +72,46 @@ services:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
     restart: unless-stopped
 
+  # Reverse proxy. cloudflared sends public traffic here; Traefik routes by
+  # hostname (see traefik/dynamic/routes.yml) and selectively enforces Authelia
+  # login. Routing is file-based, so Traefik needs no docker socket. See
+  # authelia/README.md.
+  traefik:
+    image: traefik:v3.5
+    container_name: traefik
+    ports:
+      - "8095:80"     # proxy entry — local testing; cloudflared uses http://traefik:80 internally
+      - "8096:8080"   # Traefik dashboard (LAN/Tailscale only; never given a public hostname)
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+    restart: unless-stopped
+
+  # Authentication portal + forward-auth backend. Traefik consults it only for
+  # routes carrying the `authelia@file` middleware (opt-in per service).
+  authelia:
+    image: authelia/authelia:4.38
+    container_name: authelia
+    # Run as the host user so the bind-mounted ./authelia (config + sqlite db)
+    # stays editable on the host instead of being chowned to root.
+    user: "${PUID}:${PGID}"
+    volumes:
+      - ./authelia:/config
+    environment:
+      - TZ=${TZ}
+      - AUTHELIA_SESSION_SECRET=${AUTHELIA_SESSION_SECRET}
+      - AUTHELIA_STORAGE_ENCRYPTION_KEY=${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+      - AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET=${AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET}
+    restart: unless-stopped
+
+  # Demo service proving the whole chain works (login → forward-auth → app).
+  # It is protected via the authelia@file middleware in routes.yml.
+  # Delete this service (and its entries in routes.yml) once verified.
+  whoami:
+    image: traefik/whoami:latest
+    container_name: whoami
+    restart: unless-stopped
+
   nvidia-api:
     image: python:3.12-slim
     container_name: nvidia-api

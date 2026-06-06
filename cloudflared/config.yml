@@ -1,6 +1,28 @@
+# NOTE: this tunnel runs in TOKEN mode (`tunnel run --token …`), so the LIVE
+# public hostnames are configured in the Cloudflare Zero Trust dashboard
+# (Networks → Tunnels → your tunnel → Public Hostnames), NOT in this file.
+# This file is kept as the source-of-truth template and only takes effect if you
+# switch the tunnel to locally-managed (credentials-file) mode.
+#
+# To expose a service publicly behind Traefik (and optionally Authelia):
+#   1. Dashboard: add public hostname  <name>.senya.ca  ->  http://traefik:80
+#   2. Add Traefik labels to the service in docker-compose.yaml (see whoami for a
+#      protected example, or omit the authelia@file middleware to leave it open).
+# The Authelia login portal lives at auth.senya.ca -> http://traefik:80.
+# Full guide: authelia/README.md.
+
 ingress:
+  # Login portal + any service routed through Traefik.
+  - hostname: auth.senya.ca
+    service: http://traefik:80
+  # Example service protected by Authelia (remove once you've seen it work).
+  - hostname: whoami.senya.ca
+    service: http://traefik:80
+
+  # Existing public service, kept pointing straight at the container. Move it to
+  # `service: http://traefik:80` (and add Traefik labels) to protect it too.
   - hostname: glances.senya.ca
     service: http://glances:61208
 
-  # Catch-all: required by cloudflared — returns 404 for unmatched hostnames
+  # Catch-all: required by cloudflared — returns 404 for unmatched hostnames.
   - service: http_status:404
