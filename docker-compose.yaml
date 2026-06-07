@@ -156,6 +156,29 @@ services:
       - TZ=${TZ}
     restart: unless-stopped
 
+  # CouchDB backend for Obsidian "Self-hosted LiveSync": sync one vault across all
+  # your devices (desktop, phone, the browser instance above). Install the
+  # Self-hosted LiveSync community plugin on each device and point it here.
+  # Config (auth + CORS + sizes) is in obsidian-couchdb/local.ini. See its README.
+  obsidian-couchdb:
+    image: couchdb:3
+    container_name: obsidian-couchdb
+    ports:
+      - "5984:5984"
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+    volumes:
+      - ./obsidian-couchdb/data:/opt/couchdb/data
+      # Mounted (read-write) as 00-livesync.ini for two reasons:
+      #  - rw: the entrypoint chown/chmods everything under /opt/couchdb/etc on
+      #    boot; a :ro mount makes that fail and aborts startup.
+      #  - 00- prefix: sorts before the image's docker.ini, so CouchDB's runtime
+      #    config write-target is docker.ini (in-container, admin re-seeded from
+      #    env each boot) — keeping secrets OUT of this versioned file.
+      - ./obsidian-couchdb/local.ini:/opt/couchdb/etc/local.d/00-livesync.ini
+    restart: unless-stopped
+
   uptime-kuma:
     image: louislam/uptime-kuma:latest
     container_name: uptime-kuma

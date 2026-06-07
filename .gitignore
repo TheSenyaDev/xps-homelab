@@ -49,3 +49,6 @@ authelia/db.sqlite3
 authelia/notification.txt
 # Vaultwarden — vault database, attachments, keys (NEVER commit)
 vaultwarden/data/
+
+# Obsidian LiveSync CouchDB — database files
+obsidian-couchdb/data/

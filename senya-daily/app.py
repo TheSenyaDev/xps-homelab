@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS trackers (
     color      TEXT NOT NULL DEFAULT '#6366f1',
     position   INTEGER NOT NULL DEFAULT 0,
     archived   INTEGER NOT NULL DEFAULT 0,
+    calendar   INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -103,6 +104,10 @@ def close_db(_exc):
 def init_db():
     conn = connect()
     conn.executescript(SCHEMA)
+    # Migrate older DBs that predate the per-tracker `calendar` flag.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(trackers)").fetchall()}
+    if "calendar" not in cols:
+        conn.execute("ALTER TABLE trackers ADD COLUMN calendar INTEGER NOT NULL DEFAULT 1")
     if conn.execute("SELECT COUNT(*) FROM trackers").fetchone()[0] == 0:
         for pos, (name, typ, unit, icon, color) in enumerate(DEFAULT_TRACKERS):
             conn.execute(
@@ -237,12 +242,13 @@ def create_tracker():
     unit = (data.get("unit") or "").strip()
     icon = (data.get("icon") or "").strip()
     color = (data.get("color") or "#6366f1").strip()
+    calendar = 0 if data.get("calendar") is False else 1  # default: shown on calendar
     db = get_db()
     nextpos = db.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM trackers").fetchone()[0]
     cur = db.execute(
-        "INSERT INTO trackers (name, type, unit, icon, color, position) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (name, typ, unit, icon, color, nextpos),
+        "INSERT INTO trackers (name, type, unit, icon, color, position, calendar) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (name, typ, unit, icon, color, nextpos, calendar),
     )
     db.commit()
     row = db.execute("SELECT * FROM trackers WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -270,6 +276,8 @@ def update_tracker(tid):
         fields.append("position = ?"); values.append(int(data["position"]))
     if "archived" in data:
         fields.append("archived = ?"); values.append(1 if data["archived"] else 0)
+    if "calendar" in data:
+        fields.append("calendar = ?"); values.append(1 if data["calendar"] else 0)
     if not fields:
         return jsonify({"error": "nothing to update"}), 400
     values.append(tid)
@@ -336,6 +344,7 @@ def put_day(day):
             db.execute("DELETE FROM notes WHERE day = ?", (day,))
 
     if "entries" in data and isinstance(data["entries"], dict):
+        valid_ids = {r["id"] for r in db.execute("SELECT id FROM trackers").fetchall()}
         for tid_str, value in data["entries"].items():
             try:
                 tid = int(tid_str)
@@ -346,7 +355,7 @@ def put_day(day):
                 db.execute(
                     "DELETE FROM entries WHERE day = ? AND tracker_id = ?", (day, tid)
                 )
-            else:
+            elif tid in valid_ids:  # skip unknown trackers rather than FK-crash
                 db.execute(
                     "INSERT INTO entries (day, tracker_id, value, updated_at) "
                     "VALUES (?, ?, ?, datetime('now')) "
@@ -361,8 +370,10 @@ def put_day(day):
 
 @app.get("/api/calendar")
 def calendar():
-    """Per-day summary for a month: which days have a note / how many entries.
+    """Per-day summary for a month: note flag + which trackers were logged.
 
+    Each day is {note: bool, trackers: [tracker_id, …], entries: count}, so the
+    calendar can show the icons of the trackers completed that day.
     Query: ?year=YYYY&month=M  (defaults to the current month).
     """
     today = date.today()
@@ -379,17 +390,29 @@ def calendar():
     db = get_db()
     summary = {}
 
+    def slot(day):
+        return summary.setdefault(day, {"note": False, "trackers": [], "entries": 0})
+
+    # Trackers logged per day (only those flagged to show on the calendar), in
+    # stable tracker order, with each entry's value so the UI can show numbers.
     for r in db.execute(
-        "SELECT day, COUNT(*) AS n FROM entries WHERE day BETWEEN ? AND ? GROUP BY day",
+        """
+        SELECT e.day AS day, e.tracker_id AS tid, e.value AS value
+          FROM entries e JOIN trackers t ON t.id = e.tracker_id
+         WHERE e.day BETWEEN ? AND ? AND t.calendar = 1
+         ORDER BY t.position, t.id
+        """,
         (start, end),
     ).fetchall():
-        summary.setdefault(r["day"], {"note": False, "entries": 0})["entries"] = r["n"]
+        s = slot(r["day"])
+        s["trackers"].append({"id": r["tid"], "value": r["value"]})
+        s["entries"] = len(s["trackers"])
 
     for r in db.execute(
         "SELECT day FROM notes WHERE day BETWEEN ? AND ? AND text != ''",
         (start, end),
     ).fetchall():
-        summary.setdefault(r["day"], {"note": False, "entries": 0})["note"] = True
+        slot(r["day"])["note"] = True
 
     return jsonify({"year": year, "month": month, "days": summary})
 

@@ -44,6 +44,16 @@
         <button id="cal-prev" class="nav" aria-label="Previous month">‹</button>
         <h2 id="cal-title"></h2>
         <button id="cal-next" class="nav" aria-label="Next month">›</button>
+        <div class="cal-settings">
+          <button id="cal-settings-btn" class="ghost small" title="Calendar view settings">⚙ View</button>
+          <div id="cal-settings-menu" class="cal-settings-menu hidden">
+            <p class="menu-title">Show on calendar</p>
+            <div class="opt"><input type="checkbox" id="cs-trackers" data-set="trackers" /><label for="cs-trackers">Tracker icons</label></div>
+            <div class="opt"><input type="checkbox" id="cs-values" data-set="values" /><label for="cs-values">Values / numbers</label></div>
+            <div class="opt"><input type="checkbox" id="cs-notes" data-set="notes" /><label for="cs-notes">Note indicator</label></div>
+            <p class="menu-hint">Tip: choose which trackers are eligible in ⚙ Trackers.</p>
+          </div>
+        </div>
       </div>
       <div class="cal-weekdays" id="cal-weekdays"></div>
       <div class="cal-grid" id="cal-grid"></div>
@@ -79,6 +89,7 @@
           <input id="tf-color" type="color" value="#6366f1" title="Color" />
           <button type="submit">Add</button>
         </div>
+        <label class="tf-cal"><input id="tf-calendar" type="checkbox" checked /> Show on calendar view</label>
       </form>
     </div>
   </div>

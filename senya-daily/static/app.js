@@ -56,6 +56,27 @@ let dayData = { date: currentDate, note: "", entries: {} };
 let saveTimer = null;
 let calYear, calMonth; // 1-based month
 
+// Calendar view settings (what to render in each day cell), persisted locally.
+const CAL_SETTINGS_KEY = "senyadaily.calSettings";
+const DEFAULT_CAL_SETTINGS = { trackers: true, values: false, notes: true };
+let calSettings = (() => {
+  try {
+    return { ...DEFAULT_CAL_SETTINGS, ...JSON.parse(localStorage.getItem(CAL_SETTINGS_KEY) || "{}") };
+  } catch {
+    return { ...DEFAULT_CAL_SETTINGS };
+  }
+})();
+function saveCalSettings() {
+  try { localStorage.setItem(CAL_SETTINGS_KEY, JSON.stringify(calSettings)); } catch { /* ignore */ }
+}
+
+// Compact value to show next to a tracker icon on the calendar (numbers/ratings
+// only; checks are implied by the icon and text is too long for a cell).
+function calValue(t, value) {
+  if (t.type === "number" || t.type === "rating") return value;
+  return "";
+}
+
 // ---------- save (debounced) ----------
 function setEntry(id, value) {
   if (value === "" || value == null) delete dayData.entries[String(id)];
@@ -204,18 +225,45 @@ async function renderCalendar() {
   const daysInMonth = new Date(calYear, calMonth, 0).getDate();
   const todayIso = isoOf(new Date());
 
+  const byId = new Map(trackers.map((t) => [t.id, t]));
+  const MAX_ICONS = calSettings.values ? 6 : 10; // values take more room
+
   for (let i = 0; i < lead; i++) grid.append(el("div", { class: "cell blank" }));
 
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${calYear}-${String(calMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const info = days[iso];
-    const marks = el("div", { class: "marks" });
-    if (info?.note) marks.append(el("span", { class: "note-dot", title: "Has a note" }));
-    if (info?.entries) marks.append(el("span", { class: "ecount" }, `${info.entries}`));
-    const cell = el("div", { class: "cell" + (iso === todayIso ? " today" : "") },
-      el("span", { class: "num" }, String(d)),
-      marks,
-    );
+
+    const top = el("div", { class: "cell-top" }, el("span", { class: "num" }, String(d)));
+    if (calSettings.notes && info?.note) top.append(el("span", { class: "note-dot", title: "Has a note" }));
+
+    const cell = el("div", { class: "cell" + (iso === todayIso ? " today" : "") }, top);
+
+    // Trackers completed that day (server already filtered to calendar-enabled
+    // ones). Each item is {id, value}; show its icon and, optionally, its value.
+    const items = (info?.trackers || []).filter((it) => byId.has(it.id));
+    if (calSettings.trackers && items.length) {
+      const tk = el("div", { class: "day-trackers" });
+      for (const it of items.slice(0, MAX_ICONS)) {
+        const t = byId.get(it.id);
+        const chip = el("span", { class: "tk", title: t.name });
+        if (t.icon) {
+          chip.append(el("span", { class: "tk-ico" }, t.icon));
+        } else {
+          const dot = el("span", { class: "tk-dot" });
+          dot.style.background = t.color || "var(--accent)";
+          chip.append(dot);
+        }
+        if (calSettings.values) {
+          const v = calValue(t, it.value);
+          if (v) chip.append(el("span", { class: "tk-val" }, v));
+        }
+        tk.append(chip);
+      }
+      if (items.length > MAX_ICONS) tk.append(el("span", { class: "tk tk-more" }, `+${items.length - MAX_ICONS}`));
+      cell.append(tk);
+    }
+
     cell.addEventListener("click", () => { showView("day"); loadDay(iso); });
     grid.append(cell);
   }
@@ -226,6 +274,25 @@ function shiftMonth(n) {
   if (calMonth < 1) { calMonth = 12; calYear--; }
   else if (calMonth > 12) { calMonth = 1; calYear++; }
   renderCalendar();
+}
+
+function initCalSettings() {
+  const btn = $("#cal-settings-btn");
+  const menu = $("#cal-settings-menu");
+  menu.querySelectorAll("input[data-set]").forEach((cb) => {
+    cb.checked = !!calSettings[cb.dataset.set];
+    cb.addEventListener("change", () => {
+      calSettings[cb.dataset.set] = cb.checked;
+      saveCalSettings();
+      renderCalendar();
+    });
+  });
+  btn.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("hidden"); });
+  document.addEventListener("click", (e) => {
+    if (!menu.classList.contains("hidden") && !menu.contains(e.target) && e.target !== btn) {
+      menu.classList.add("hidden");
+    }
+  });
 }
 
 // ---------- trackers management ----------
@@ -242,12 +309,30 @@ function renderTrackerList() {
   }
   const TYPE_LABEL = { number: "Number", text: "Text", check: "Checkbox", rating: "Rating" };
   for (const t of trackers) {
+    // Per-tracker "show on calendar" toggle. Input + label[for] are siblings
+    // (not nested) so a click toggles exactly once across all browsers.
+    const cbId = `cal-tk-${t.id}`;
+    const calCb = el("input", { type: "checkbox", id: cbId });
+    calCb.checked = !!t.calendar;
+    calCb.addEventListener("change", async () => {
+      try {
+        await api("PATCH", `/api/trackers/${t.id}`, { calendar: calCb.checked });
+        t.calendar = calCb.checked ? 1 : 0;
+        if (!$("#cal-view").classList.contains("hidden")) renderCalendar();
+      } catch {
+        calCb.checked = !calCb.checked; // revert on failure
+      }
+    });
+    const calToggle = el("label", { class: "cal-toggle", for: cbId, title: "Show this tracker on the calendar" }, "📅");
+
     const row = el("div", { class: "trow" },
       el("span", { class: "swatch" }),
       el("span", { class: "ico" }, t.icon || "•"),
       el("span", { class: "tname" }, t.name),
       el("span", { class: "ttype" }, `· ${TYPE_LABEL[t.type] || t.type}${t.unit ? " (" + t.unit + ")" : ""}`),
       el("span", { class: "spacer" }),
+      calCb,
+      calToggle,
       el("button", {
         class: "del", title: "Delete tracker",
         onclick: () => deleteTracker(t),
@@ -277,6 +362,7 @@ async function addTracker(e) {
     unit: $("#tf-unit").value.trim(),
     icon: $("#tf-icon").value.trim(),
     color: $("#tf-color").value,
+    calendar: $("#tf-calendar").checked,
   });
   e.target.reset();
   $("#tf-color").value = "#6366f1";
@@ -308,6 +394,7 @@ function wire() {
 
   $("#cal-prev").addEventListener("click", () => shiftMonth(-1));
   $("#cal-next").addEventListener("click", () => shiftMonth(1));
+  initCalSettings();
 
   $("#manage-btn").addEventListener("click", () => { renderTrackerList(); $("#manage").classList.remove("hidden"); });
   $("#manage-close").addEventListener("click", () => $("#manage").classList.add("hidden"));

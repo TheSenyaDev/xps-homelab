@@ -133,8 +133,29 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .star:hover { transform: scale(1.1); }
 
 /* Calendar */
-.cal-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 14px; }
+.cal-nav { position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 14px; }
 .cal-nav h2 { margin: 0; font-size: 20px; min-width: 200px; text-align: center; }
+
+/* Calendar view settings */
+.cal-settings { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+.cal-settings-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 10;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; min-width: 190px; display: flex; flex-direction: column; gap: 9px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .45);
+}
+.cal-settings-menu .opt { display: flex; align-items: center; gap: 8px; }
+.cal-settings-menu .opt label { font-size: 14px; cursor: pointer; }
+.cal-settings-menu input { cursor: pointer; }
+.cal-settings-menu .menu-title { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.cal-settings-menu .menu-hint { margin: 2px 0 0; font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+/* Per-tracker calendar toggle (in the Trackers panel) + add-form checkbox */
+.cal-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 13px; opacity: .85; }
+.cal-toggle:hover { opacity: 1; }
+.cal-toggle input { cursor: pointer; }
+.tf-cal { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.tf-cal input { cursor: pointer; }
 .cal-weekdays, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
 .cal-weekdays { margin-bottom: 8px; }
 .cal-weekdays span { text-align: center; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -147,15 +168,19 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .cell:hover { border-color: var(--accent); }
 .cell:active { transform: translateY(1px); }
 .cell.blank { background: none; border: none; cursor: default; }
+.cell-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .cell .num { font-size: 13px; color: var(--muted); }
 .cell.today { border-color: var(--accent); }
 .cell.today .num { color: var(--accent); font-weight: 700; }
-.cell .marks { display: flex; gap: 4px; flex-wrap: wrap; margin-top: auto; align-items: center; }
-.cell .note-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-.cell .ecount {
-  font-size: 11px; color: var(--muted); background: var(--panel-2);
-  border-radius: 999px; padding: 1px 7px;
-}
+.cell .note-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+
+/* Trackers completed that day */
+.day-trackers { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: auto; }
+.tk { display: inline-flex; align-items: center; gap: 2px; line-height: 1; }
+.tk-ico { font-size: 14px; line-height: 1; }
+.tk-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.tk-val { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tk-more { font-size: 10px; color: var(--muted); }
 
 /* Manage panel */
 .overlay {

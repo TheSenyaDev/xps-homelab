@@ -41,6 +41,7 @@
 | Nvidia API           | http://192.168.2.100:8083             | http://100.121.230.17:8083            |
 | Prometheus Exporter  | http://192.168.2.100:9091/metrics     | http://100.121.230.17:9091/metrics    |
 | Traefik dashboard    | http://192.168.2.100:8096             | http://100.121.230.17:8096            |
+| CouchDB (Obsidian)   | http://192.168.2.100:5984/_utils      | http://100.121.230.17:5984/_utils     |
 
 ## CalDAV / CardDAV (Baikal)
 
