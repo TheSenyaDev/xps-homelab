@@ -9,6 +9,7 @@ import { initBookmarks } from "./sections/bookmarks.js";
 import { initPublic } from "./sections/public.js";
 import { initWeather } from "./sections/weather.js";
 import { initSystem } from "./sections/system.js";
+import { initDaily } from "./sections/daily.js";
 import { initServices } from "./sections/services.js";
 
 function run(name, fn) {
@@ -26,4 +27,5 @@ run("bookmarks", initBookmarks);
 run("public", initPublic);
 run("weather", initWeather);
 run("system", initSystem);
+run("daily", initDaily);
 run("services", initServices);

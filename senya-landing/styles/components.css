@@ -36,20 +36,20 @@
 .wx-loc:hover { color: var(--text); }
 .wx-loc.active { color: var(--accent); border-color: var(--accent); }
 
-.weather { display: flex; flex-direction: column; gap: var(--gap, 10px); }
+.weather { display: flex; flex-direction: column; gap: var(--gap, 8px); }
 .wx-now {
-  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 14px; padding: 16px 18px;
+  border-radius: 12px; padding: 11px 14px;
 }
-.wx-main { display: flex; align-items: center; gap: 14px; }
-.wx-icon { font-size: var(--wx-icon, 46px); line-height: 1; }
-.wx-temp { font-size: var(--wx-temp, 36px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-.wx-cond { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.wx-main { display: flex; align-items: center; gap: 12px; }
+.wx-icon { font-size: var(--wx-icon, 38px); line-height: 1; }
+.wx-temp { font-size: var(--wx-temp, 28px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.wx-cond { color: var(--muted); font-size: 12px; margin-top: 2px; }
 
 .wx-stats {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-  gap: 8px 16px; flex: 1; min-width: 220px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px 14px; flex: 1; min-width: 200px;
 }
 .wx-stat { display: flex; flex-direction: column; gap: 2px; }
 .wx-stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -62,7 +62,7 @@
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px 4px;
+  padding: 8px 4px;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
@@ -83,16 +83,37 @@
 
 .wx-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--gap, 8px); }
 .wx-day {
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; padding: var(--wx-day-pad, 10px 6px);
+  border-radius: 12px; padding: var(--wx-day-pad, 8px 5px);
 }
 .wx-dow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-.wx-dicon { font-size: var(--wx-dicon, 22px); line-height: 1; }
+.wx-dicon { font-size: var(--wx-dicon, 19px); line-height: 1; }
 .wx-hl { font-size: 13px; font-variant-numeric: tabular-nums; }
 .wx-hl .hi { font-weight: 600; }
 .wx-hl .lo { color: var(--muted); margin-left: 3px; }
 .wx-pp { font-size: 11px; color: var(--muted); }
+
+/* ---- Daily (SenyaDaily today widget) ---- */
+.daily-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.daily-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.daily-date { font-weight: 600; }
+.daily-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.daily-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 10px; font-size: 13px;
+}
+.daily-chip-ico { font-size: 14px; }
+.daily-chip-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+.daily-note {
+  color: var(--muted); font-size: 13px; line-height: 1.45;
+  border-top: 1px solid var(--border); padding-top: 8px;
+}
 
 /* ---- System stats ---- */
 .system {
