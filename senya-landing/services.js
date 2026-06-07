@@ -18,14 +18,19 @@ window.SENYA_INTERNAL = {
   // nginx.conf pointing at its address, then add an entry here.
   // `power: true` → host also exposes the power-api (proxied at /stats/<key>/power)
   // for RAPL CPU watts and the accurate x86_pkg_temp CPU temperature.
+  // `allDisks: true` → list every storage pool/drive (e.g. a NAS) instead of
+  // just the largest filesystem. Requires Glances to actually see the pools
+  // (on TrueNAS SCALE: mount the host's /mnt into the Glances app, read-only).
   HOSTS: [
     { name: "XPS", key: "xps", icon: "dell", power: true },
-    { name: "TrueNAS", key: "truenas", icon: "truenas" },
+    { name: "TrueNAS", key: "truenas", icon: "truenas", allDisks: true },
   ],
   // `icon` = filename (without .png) in /icons, sourced from dashboardicons.com
   // via fetch-icons.sh. Omit `icon` (or point to a missing file) → _default.svg.
   // `ext` = the Cloudflare subdomain if the service is exposed publicly; adds an
   // "ext" link to https://<ext>.<PUBLIC_DOMAIN>. Omit it for LAN/TS-only services.
+  // `localIp`/`tsIp` override the default IPs for services on another host;
+  // omit `port` to use the host's default web port (80).
   SERVICES: [
     { name: "Homepage", port: 3010, icon: "homepage" },
     { name: "Homarr", port: 3000, icon: "homarr" },
@@ -38,11 +43,14 @@ window.SENYA_INTERNAL = {
     { name: "Obsidian", port: 8080, icon: "obsidian" },
     { name: "Claude (Chromium)", port: 3003, icon: "claude-ai" },
     { name: "Baikal", port: 5232, icon: "baikal" },
+    { name: "Vaultwarden", port: 8222, icon: "vaultwarden" },
     { name: "Memos", port: 5230, icon: "memos" },
     { name: "Vikunja", port: 3456, icon: "vikunja" },
     { name: "Firefly III", port: 3005, icon: "firefly-iii" },
     { name: "Firefly Importer", port: 3006, icon: "firefly-iii" },
     { name: "Miniflux", port: 3007, icon: "miniflux" },
+    { name: "Jellyfin", port: 30013, icon: "jellyfin", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
+    { name: "TrueNAS", icon: "truenas", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
     { name: "SenyaTasks", port: 8000 },
     { name: "SenyaDaily", port: 8001 },
   ],

@@ -28,6 +28,9 @@
 | Firefly III        | http://192.168.2.100:3005             | http://100.121.230.17:3005              |
 | Firefly Importer   | http://192.168.2.100:3006             | http://100.121.230.17:3006              |
 | Miniflux (RSS)     | http://192.168.2.100:3007             | http://100.121.230.17:3007              |
+| Vaultwarden        | http://192.168.2.100:8222             | http://100.121.230.17:8222              |
+| Jellyfin           | http://192.168.2.82:30013             | http://100.112.73.95:30013              |
+| TrueNAS            | http://192.168.2.82                   | http://100.112.73.95                    |
 
 ## APIs (internal / not user-facing)
 

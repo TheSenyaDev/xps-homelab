@@ -20,6 +20,33 @@ function pickTemp(sensors) {
 // Largest mounted filesystem — the data disk / pool on most boxes.
 const pickDisk = (fs) => (Array.isArray(fs) && fs.length ? fs.reduce((a, b) => (b.size > a.size ? b : a)) : null);
 
+// One row per storage pool — for hosts (e.g. TrueNAS) with multiple pools.
+// TrueNAS pools mount at /mnt/<pool>, with child datasets at /mnt/<pool>/…
+// sharing the pool's free space. ZFS reports each dataset's own `used` and the
+// shared `free`, so true pool usage = Σ(dataset used) + sharedFree. We sum used
+// across a pool's datasets and take the (consistent) free, which avoids the
+// misleading ~0% a pool root shows when its data lives in child datasets.
+// Pseudo/bind mounts (/etc/resolv.conf, …) aren't under /mnt, so they're
+// ignored. Sorted largest-first; returns {label, used, size, percent}.
+function allDisks(fs) {
+  if (!Array.isArray(fs)) return [];
+  const pools = new Map();
+  for (const d of fs) {
+    const m = /^\/mnt\/([^/]+)/.exec(d.mnt_point || "");
+    if (!m || typeof d.used !== "number") continue;
+    const p = pools.get(m[1]) || { label: m[1], used: 0, free: 0 };
+    p.used += d.used;
+    p.free = Math.max(p.free, d.free || 0); // shared pool-free, same across datasets
+    pools.set(m[1], p);
+  }
+  return [...pools.values()]
+    .map((p) => {
+      const size = p.used + p.free;
+      return { ...p, size, percent: size ? (p.used / size) * 100 : 0 };
+    })
+    .sort((a, b) => b.size - a.size);
+}
+
 // `pct` drives the progress bar (0–100). Pass null for values with no natural
 // scale (e.g. watts) to render just the label + value, no bar.
 function metricRow(label, value, pct) {
@@ -49,8 +76,14 @@ async function refreshHost(host, body) {
     body.replaceChildren(metricRow("CPU", `${Math.round(cpu.total)}%`, cpu.total));
     body.append(metricRow("RAM", `${fmtGB(mem.used)} / ${fmtGB(mem.total)} GB`, mem.percent));
 
-    const disk = pickDisk(fs);
-    if (disk) body.append(metricRow("SSD", `${fmtGB(disk.used)} / ${fmtGB(disk.size)} GB`, disk.percent));
+    if (host.allDisks) {
+      for (const d of allDisks(fs)) {
+        body.append(metricRow(d.label, `${fmtGB(d.used)} / ${fmtGB(d.size)} GB`, d.percent));
+      }
+    } else {
+      const disk = pickDisk(fs);
+      if (disk) body.append(metricRow("SSD", `${fmtGB(disk.used)} / ${fmtGB(disk.size)} GB`, disk.percent));
+    }
 
     // Prefer the power-api's x86_pkg_temp (matches Grafana); fall back to the
     // hottest Glances sensor only when there's no power-api on this host.

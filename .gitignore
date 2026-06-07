@@ -47,3 +47,5 @@ senya-daily/data
 # Authelia — runtime state (the config files themselves are kept in git)
 authelia/db.sqlite3
 authelia/notification.txt
+# Vaultwarden — vault database, attachments, keys (NEVER commit)
+vaultwarden/data/

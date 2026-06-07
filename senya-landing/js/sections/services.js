@@ -27,8 +27,13 @@ export function initServices() {
 function el_links(s) {
   const links = document.createElement("div");
   links.className = "svc-links";
-  links.appendChild(link("local", `http://${internal.LOCAL_IP}:${s.port}`, "pill"));
-  links.appendChild(link("ts", `http://${internal.TAILSCALE_IP}:${s.port}`, "pill ts"));
+  // Services on another host override the default IPs; omit `port` for the
+  // host's default web port (80).
+  const localIp = s.localIp || internal.LOCAL_IP;
+  const tsIp = s.tsIp || internal.TAILSCALE_IP;
+  const port = s.port ? `:${s.port}` : "";
+  links.appendChild(link("local", `http://${localIp}${port}`, "pill"));
+  links.appendChild(link("ts", `http://${tsIp}${port}`, "pill ts"));
   // External (Cloudflare tunnel) link, only when the service is exposed publicly.
   if (s.ext && internal.PUBLIC_DOMAIN) {
     links.appendChild(link("ext", `https://${s.ext}.${internal.PUBLIC_DOMAIN}`, "pill ext"));

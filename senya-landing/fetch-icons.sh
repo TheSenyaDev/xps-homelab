@@ -17,7 +17,7 @@ SLUGS="
 proton-mail github-light claude-ai openai youtube reddit cloudflare tailscale
 wikipedia hacker-news homepage homarr grafana portainer glances uptime-kuma
 prometheus searxng obsidian baikal memos vikunja firefly-iii miniflux truenas
-dell authelia traefik
+dell authelia traefik vaultwarden jellyfin
 "
 
 for s in $SLUGS; do

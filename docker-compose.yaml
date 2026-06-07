@@ -346,6 +346,29 @@ services:
       - HOMEPAGE_ALLOWED_HOSTS=192.168.2.100:3010,100.121.230.17:3010
     restart: unless-stopped
 
+  # Vaultwarden — self-hosted, Bitwarden-compatible password vault. Local-only
+  # for now (DOMAIN = LAN URL). To expose later: set DOMAIN=https://vault.senya.ca,
+  # add a route in traefik/dynamic/routes.yml (NO authelia middleware — it breaks
+  # the Bitwarden clients), and a Cloudflare hostname → http://traefik:80.
+  # NOTE: the web vault/apps need HTTPS to log in; over a plain-http LAN IP the
+  # browser crypto is blocked, so use https://localhost:8222 or expose via HTTPS.
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    ports:
+      - "8222:80"
+    volumes:
+      - ./vaultwarden/data:/data
+    environment:
+      - TZ=${TZ}
+      - DOMAIN=http://${SERVER_IP}:8222
+      # Leave signups on to create your account, then set to false and recreate.
+      - SIGNUPS_ALLOWED=true
+      # Unlocks the /admin panel. Random hex token in .env (swap for an argon2
+      # hash via `docker run --rm -it vaultwarden/server /vaultwarden hash` later).
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
+    restart: unless-stopped
+
   # Custom-built Senya apps (built from local source, not pulled images).
   senya-landing:
     build: ./senya-landing
