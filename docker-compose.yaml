@@ -429,12 +429,37 @@ services:
       - ./senya-daily/data:/data
     restart: unless-stopped
 
+  # Spending tracker. Reads bank CSV exports from the read-only TrueNAS SMB mount
+  # (/import), normalizes + categorizes them into SQLite (/data). See its README.
+  senya-finance:
+    build: ./senya-finance
+    image: senya-finance:latest
+    container_name: senya-finance
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./senya-finance/data:/data
+      - finance-smb:/import:ro
+    environment:
+      - TZ=${TZ}
+    restart: unless-stopped
+
 volumes:
   grafana-data:
   prometheus-data:
   firefly-db:
   firefly-upload:
   miniflux-db:
+
+  # Read-only CIFS mount of the TrueNAS Finance dataset (SMB share) (bank/credit-card exports)
+  # for the upcoming finance app. Creds: FINANCE_SMB_USER / FINANCE_SMB_PASSWORD
+  # in .env. Mount into a service with:  volumes: [ "finance-smb:/data/finance:ro" ]
+  finance-smb:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: "//192.168.2.82/Finance"
+      o: "username=${FINANCE_SMB_USER},password=${FINANCE_SMB_PASSWORD},ro,vers=3.1.1,uid=1000,gid=1000,iocharset=utf8,file_mode=0440,dir_mode=0550"
 
 # Single self-managed network so `docker compose up` works from scratch with no
 # pre-created network. Keeps the stable name so cloudflared/homepage routing and

@@ -53,5 +53,6 @@ window.SENYA_INTERNAL = {
     { name: "TrueNAS", icon: "truenas", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
     { name: "SenyaTasks", port: 8000 },
     { name: "SenyaDaily", port: 8001 },
+    { name: "SenyaFinance", port: 8002 },
   ],
 };

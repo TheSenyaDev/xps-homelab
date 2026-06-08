@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SenyaFinance</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>💰 SenyaFinance</h1>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="dashboard">Dashboard</button>
+      <button class="tab" data-view="transactions">Transactions</button>
+      <button class="tab" data-view="categories">Categories &amp; Rules</button>
+    </nav>
+    <div class="topbar-right">
+      <label class="month-pick">Month
+        <select id="month-select"></select>
+      </label>
+      <button id="import-btn" class="ghost" title="Re-scan the SMB folder for new transactions">⟳ Import</button>
+    </div>
+  </header>
+
+  <main id="content" class="content"></main>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

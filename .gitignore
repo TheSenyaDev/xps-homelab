@@ -52,3 +52,6 @@ vaultwarden/data/
 
 # Obsidian LiveSync CouchDB — database files
 obsidian-couchdb/data/
+
+# Finance app — SQLite database
+senya-finance/data/

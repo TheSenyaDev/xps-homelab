@@ -7,6 +7,7 @@
 | Senya Landing      | http://192.168.2.100:8090             | http://100.121.230.17:8090              |
 | SenyaTasks         | http://192.168.2.100:8000             | http://100.121.230.17:8000              |
 | SenyaDaily         | http://192.168.2.100:8001             | http://100.121.230.17:8001              |
+| SenyaFinance       | http://192.168.2.100:8002             | http://100.121.230.17:8002              |
 
 ## Prebuilt Containers & Apps
 
