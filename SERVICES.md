@@ -8,6 +8,7 @@
 | SenyaTasks         | http://192.168.2.100:8000             | http://100.121.230.17:8000              |
 | SenyaDaily         | http://192.168.2.100:8001             | http://100.121.230.17:8001              |
 | SenyaFinance       | http://192.168.2.100:8002             | http://100.121.230.17:8002              |
+| SenyaNotes         | http://192.168.2.100:8003             | http://100.121.230.17:8003              |
 
 ## Prebuilt Containers & Apps
 
@@ -43,6 +44,7 @@
 | Prometheus Exporter  | http://192.168.2.100:9091/metrics     | http://100.121.230.17:9091/metrics    |
 | Traefik dashboard    | http://192.168.2.100:8096             | http://100.121.230.17:8096            |
 | CouchDB (Obsidian)   | http://192.168.2.100:5984/_utils      | http://100.121.230.17:5984/_utils     |
+| LiveSync Bridge      | no UI — decodes vault → ./livesync-bridge/data/vault for SenyaNotes | (internal replicator)    |
 
 ## CalDAV / CardDAV (Baikal)
 

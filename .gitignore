@@ -53,5 +53,9 @@ vaultwarden/data/
 # Obsidian LiveSync CouchDB — database files
 obsidian-couchdb/data/
 
+# LiveSync Bridge — replicator state + decoded vault files (and any runtime config)
+livesync-bridge/data/
+livesync-bridge/dat/
+
 # Finance app — SQLite database
 senya-finance/data/

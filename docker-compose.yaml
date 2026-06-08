@@ -179,6 +179,29 @@ services:
       - ./obsidian-couchdb/local.ini:/opt/couchdb/etc/local.d/00-livesync.ini
     restart: unless-stopped
 
+  # Headless replicator (by the LiveSync author) that decodes the CouchDB vault
+  # into plain .md files under ./livesync-bridge/data/vault — and pushes edits
+  # back up. Its config.json is generated on boot from the LIVESYNC_*/COUCHDB_*
+  # vars in .env (no secrets in the image or any committed file). This is what
+  # turns the chunked/encrypted vault into files senya-notes can edit. See its README.
+  livesync-bridge:
+    build: ./livesync-bridge
+    image: livesync-bridge:latest
+    container_name: livesync-bridge
+    volumes:
+      - ./livesync-bridge/data:/app/data
+    environment:
+      - TZ=${TZ}
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+      - LIVESYNC_DATABASE=${LIVESYNC_DATABASE}
+      - LIVESYNC_COUCHDB_URL=${LIVESYNC_COUCHDB_URL}
+      - LIVESYNC_E2E_PASSPHRASE=${LIVESYNC_E2E_PASSPHRASE}
+      - LIVESYNC_OBFUSCATE_PASSPHRASE=${LIVESYNC_OBFUSCATE_PASSPHRASE}
+    depends_on:
+      - obsidian-couchdb
+    restart: unless-stopped
+
   uptime-kuma:
     image: louislam/uptime-kuma:latest
     container_name: uptime-kuma
@@ -427,6 +450,28 @@ services:
       - "8001:8001"
     volumes:
       - ./senya-daily/data:/data
+    restart: unless-stopped
+
+  # Plain-markdown reader/editor over the vault that livesync-bridge materializes.
+  # It edits the same files the bridge produces; saves sync back through the
+  # bridge -> CouchDB -> all devices. See its README.
+  senya-notes:
+    build: ./senya-notes
+    image: senya-notes:latest
+    container_name: senya-notes
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./livesync-bridge/data/vault:/vault
+    environment:
+      - TZ=${TZ}
+      # Read-only health check: confirms the CouchDB the bridge replicates is alive.
+      - LIVESYNC_COUCHDB_URL=${LIVESYNC_COUCHDB_URL}
+      - LIVESYNC_DATABASE=${LIVESYNC_DATABASE}
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+    depends_on:
+      - livesync-bridge
     restart: unless-stopped
 
   # Spending tracker. Reads bank CSV exports from the read-only TrueNAS SMB mount

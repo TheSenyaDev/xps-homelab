@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SenyaNotes</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ===== Sidebar: file tree ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="side-head">
+        <h1>📝 Notes</h1>
+        <div class="side-actions">
+          <button id="new-btn" class="ghost small" title="New note">＋</button>
+          <button id="refresh-btn" class="ghost small" title="Refresh tree">⟳</button>
+        </div>
+      </div>
+      <input id="filter" class="filter" type="text" placeholder="Filter notes…" />
+      <nav id="tree" class="tree"></nav>
+      <div class="side-foot" id="health"></div>
+    </aside>
+
+    <!-- ===== Main editor ===== -->
+    <main class="editor">
+      <header class="toolbar">
+        <button id="sidebar-toggle" class="ghost small" title="Toggle sidebar">☰</button>
+        <span id="cur-path" class="cur-path">No note open</span>
+        <span id="save-state" class="save-state"></span>
+        <div class="modes">
+          <button class="mode-btn" data-mode="edit">Edit</button>
+          <button class="mode-btn active" data-mode="split">Split</button>
+          <button class="mode-btn" data-mode="preview">Preview</button>
+        </div>
+        <button id="delete-btn" class="ghost small danger" title="Delete note">🗑</button>
+      </header>
+
+      <div class="panes" id="panes">
+        <textarea id="md" class="md" placeholder="Open a note from the sidebar, or ＋ to create one…" spellcheck="true"></textarea>
+        <div id="preview" class="preview markdown"></div>
+      </div>
+
+      <div id="empty" class="empty">
+        <p>Select a note on the left, or create a new one with <b>＋</b>.</p>
+        <p class="dim">Files live in your Obsidian vault and sync back through LiveSync.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="/markdown.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
