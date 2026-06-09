@@ -222,6 +222,25 @@ services:
       - SEARXNG_BASE_URL=http://${SERVER_IP}:4000/
     restart: unless-stopped
 
+  # WebDAV server for syncing Onyx Boox notes/exports. The Boox's built-in
+  # WebDAV client (Settings -> Accounts/Sync, or NeoReader/Notes export) points
+  # at http://192.168.2.100:8085 with the WEBDAV_USERNAME/PASSWORD from .env.
+  # Files land in ./webdav/data on the host. Config (no secrets) in webdav/config.yml.
+  webdav:
+    image: ghcr.io/hacdias/webdav:latest
+    container_name: webdav
+    command: -c /config.yml
+    ports:
+      - "8085:6065"
+    volumes:
+      - ./webdav/config.yml:/config.yml:ro
+      - ./webdav/data:/data
+    environment:
+      - TZ=${TZ}
+      - WEBDAV_USERNAME=${WEBDAV_USERNAME}
+      - WEBDAV_PASSWORD=${WEBDAV_PASSWORD}
+    restart: unless-stopped
+
   baikal:
     image: ckulka/baikal:nginx
     container_name: baikal
@@ -472,6 +491,21 @@ services:
       - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
     depends_on:
       - livesync-bridge
+    restart: unless-stopped
+
+  # PDF viewer for the notes your Onyx Boox exports over WebDAV. Reads the same
+  # ./webdav/data folder the `webdav` service writes to, mounted read-only, and
+  # serves each .pdf to the browser's built-in viewer. See its README.
+  senya-boox:
+    build: ./senya-boox
+    image: senya-boox:latest
+    container_name: senya-boox
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./webdav/data:/notes:ro
+    environment:
+      - TZ=${TZ}
     restart: unless-stopped
 
   # Spending tracker. Reads bank CSV exports from the read-only TrueNAS SMB mount

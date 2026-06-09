@@ -1,0 +1,16 @@
+# hacdias/webdav config. Secrets are NOT here — username/password are pulled
+# from the container environment (WEBDAV_USERNAME / WEBDAV_PASSWORD in ../.env)
+# via the "{env}VAR" syntax, so this file is safe to commit.
+address: 0.0.0.0
+port: 6065
+
+# Everything lives under /data, which is bind-mounted to ./webdav/data on the
+# host. This is the folder your Boox reads from / writes to.
+directory: /data
+
+# C=Create R=Read U=Update D=Delete. Full access for the sync user.
+permissions: CRUD
+
+users:
+  - username: "{env}WEBDAV_USERNAME"
+    password: "{env}WEBDAV_PASSWORD"

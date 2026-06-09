@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SenyaBoox</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app no-file" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-head">
+        <h1>📖 Boox Notes</h1>
+        <div class="side-actions">
+          <button class="ghost small" id="refresh-btn" title="Refresh list">⟳</button>
+        </div>
+      </div>
+      <input class="filter" id="filter" placeholder="Filter notes…" />
+      <div class="tree" id="tree"></div>
+      <div class="side-foot" id="health">
+        <div class="health-row"><span class="dot"></span><span class="label">…</span></div>
+        <div class="health-detail" id="health-detail"></div>
+      </div>
+    </aside>
+
+    <main class="viewer">
+      <div class="toolbar">
+        <button class="ghost small" id="toggle-side" title="Toggle sidebar">☰</button>
+        <span class="cur-path" id="cur-path"></span>
+        <div class="tools">
+          <a class="ghost small" id="open-btn" target="_blank" rel="noopener" title="Open in new tab">↗ Open</a>
+          <a class="ghost small" id="download-btn" title="Download">↓ Download</a>
+        </div>
+      </div>
+      <iframe class="pdf" id="pdf" title="PDF viewer"></iframe>
+      <div class="empty" id="empty">
+        <div>Select a note to view</div>
+        <div class="dim">PDFs your Boox synced over WebDAV appear in the sidebar.</div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
