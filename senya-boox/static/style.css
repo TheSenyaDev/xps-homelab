@@ -40,7 +40,10 @@ input, button { font: inherit; }
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column; min-height: 0;
 }
-.sidebar.collapsed { display: none; }
+/* Slide out via negative margin (no internal reflow → smooth). Transition is
+   only enabled once .app.ready is set, so it doesn't animate on first paint. */
+.app.ready .sidebar { transition: margin-left .2s ease; }
+.sidebar.collapsed { margin-left: -290px; border-right-color: transparent; }
 .side-head {
   display: flex; align-items: center; gap: 8px; padding: 16px 14px 10px;
 }
@@ -99,10 +102,20 @@ input, button { font: inherit; }
   font-size: 14px; color: var(--muted); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; max-width: 45vw;
 }
-.tools { margin-left: auto; display: flex; gap: 6px; }
+.tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.zoombar { display: inline-flex; gap: 4px; margin-right: 4px; }
+#zoom-pct { min-width: 44px; text-align: center; display: inline-block; }
 
-.pdf { flex: 1; min-height: 0; border: none; width: 100%; background: #525659; }
-.app.no-file .pdf, .app.no-file .tools { display: none; }
+/* Pan/zoom stage: the viewport clips; #pdf-wrap is the GPU-transformed canvas. */
+.stage {
+  flex: 1; min-height: 0; position: relative; overflow: hidden;
+  background: #34373e; touch-action: none; cursor: grab;
+}
+.stage.panning { cursor: grabbing; }
+.pdf-wrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+.pdf-page { position: absolute; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.45); }
+.pdf-page canvas { display: block; }
+.app.no-file .stage, .app.no-file .tools { display: none; }
 
 .empty {
   flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center;

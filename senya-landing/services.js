@@ -31,28 +31,38 @@ window.SENYA_INTERNAL = {
   // "ext" link to https://<ext>.<PUBLIC_DOMAIN>. Omit it for LAN/TS-only services.
   // `localIp`/`tsIp` override the default IPs for services on another host;
   // omit `port` to use the host's default web port (80).
+  // Custom-built, in-house apps (own section on the landing page). Same shape as
+  // SERVICES below; no `icon` → _default.svg.
+  // `container` = docker container_name; the landing page shows a live up/down dot
+  // by matching it against the Glances containers list (/stats/xps/containers).
+  // Omit `container` for things that aren't a local container (remote host, etc.)
+  // → the dot shows neutral "unknown".
+  SENYA_APPS: [
+    { name: "SenyaTasks", port: 8000, container: "senyatasks" },
+    { name: "SenyaDaily", port: 8001, container: "senya-daily" },
+    { name: "SenyaFinance", port: 8002, container: "senya-finance" },
+    { name: "SenyaNotes", port: 8003, container: "senya-notes" },
+    { name: "SenyaBoox", port: 8004, container: "senya-boox" },
+  ],
   SERVICES: [
-    { name: "Homepage", port: 3010, icon: "homepage" },
-    { name: "Homarr", port: 3000, icon: "homarr" },
-    { name: "Grafana", port: 3002, icon: "grafana" },
-    { name: "Portainer", port: 9000, icon: "portainer" },
-    { name: "Glances", port: 61208, icon: "glances", ext: "glances" },
-    { name: "Uptime Kuma", port: 3001, icon: "uptime-kuma" },
-    { name: "Prometheus", port: 9090, icon: "prometheus" },
-    { name: "SearXNG", port: 4000, icon: "searxng" },
-    { name: "Obsidian", port: 8080, icon: "obsidian" },
-    { name: "Claude (Chromium)", port: 3003, icon: "claude-ai" },
-    { name: "Baikal", port: 5232, icon: "baikal" },
-    { name: "Vaultwarden", port: 8222, icon: "vaultwarden" },
-    { name: "Memos", port: 5230, icon: "memos" },
-    { name: "Vikunja", port: 3456, icon: "vikunja" },
-    { name: "Firefly III", port: 3005, icon: "firefly-iii" },
-    { name: "Firefly Importer", port: 3006, icon: "firefly-iii" },
-    { name: "Miniflux", port: 3007, icon: "miniflux" },
+    { name: "Homepage", port: 3010, icon: "homepage", container: "homepage" },
+    { name: "Homarr", port: 3000, icon: "homarr", container: "homarr" },
+    { name: "Grafana", port: 3002, icon: "grafana", container: "grafana" },
+    { name: "Portainer", port: 9000, icon: "portainer", container: "portainer" },
+    { name: "Glances", port: 61208, icon: "glances", ext: "glances", container: "glances" },
+    { name: "Uptime Kuma", port: 3001, icon: "uptime-kuma", container: "uptime-kuma" },
+    { name: "Prometheus", port: 9090, icon: "prometheus", container: "prometheus" },
+    { name: "SearXNG", port: 4000, icon: "searxng", container: "searxng" },
+    { name: "Obsidian", port: 8080, icon: "obsidian", container: "obsidian-remote" },
+    { name: "Claude (Chromium)", port: 3003, icon: "claude-ai", container: "claude" },
+    { name: "Baikal", port: 5232, icon: "baikal", container: "baikal" },
+    { name: "Vaultwarden", port: 8222, icon: "vaultwarden", container: "vaultwarden" },
+    { name: "Memos", port: 5230, icon: "memos", container: "memos" },
+    { name: "Vikunja", port: 3456, icon: "vikunja", container: "vikunja" },
+    { name: "Firefly III", port: 3005, icon: "firefly-iii", container: "firefly" },
+    { name: "Firefly Importer", port: 3006, icon: "firefly-iii", container: "firefly-importer" },
+    { name: "Miniflux", port: 3007, icon: "miniflux", container: "miniflux" },
     { name: "Jellyfin", port: 30013, icon: "jellyfin", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
     { name: "TrueNAS", icon: "truenas", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
-    { name: "SenyaTasks", port: 8000 },
-    { name: "SenyaDaily", port: 8001 },
-    { name: "SenyaFinance", port: 8002 },
   ],
 };

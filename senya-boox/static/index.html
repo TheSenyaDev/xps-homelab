@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SenyaBoox</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -28,18 +29,26 @@
         <button class="ghost small" id="toggle-side" title="Toggle sidebar">☰</button>
         <span class="cur-path" id="cur-path"></span>
         <div class="tools">
-          <a class="ghost small" id="open-btn" target="_blank" rel="noopener" title="Open in new tab">↗ Open</a>
-          <a class="ghost small" id="download-btn" title="Download">↓ Download</a>
+          <div class="zoombar">
+            <button class="ghost small" id="zoom-out" title="Zoom out">−</button>
+            <button class="ghost small" id="zoom-fit" title="Fit to width"><span id="zoom-pct">100%</span></button>
+            <button class="ghost small" id="zoom-in" title="Zoom in">+</button>
+          </div>
+          <a class="ghost small" id="open-btn" target="_blank" rel="noopener" title="Open raw in new tab">↗</a>
+          <a class="ghost small" id="download-btn" title="Download">↓</a>
         </div>
       </div>
-      <iframe class="pdf" id="pdf" title="PDF viewer"></iframe>
+      <div class="stage" id="stage">
+        <div class="pdf-wrap" id="pdf-wrap"></div>
+      </div>
       <div class="empty" id="empty">
         <div>Select a note to view</div>
-        <div class="dim">PDFs your Boox synced over WebDAV appear in the sidebar.</div>
+        <div class="dim">PDFs your Boox synced over WebDAV appear in the sidebar.<br>
+          Scroll to pan · Ctrl/⌘+scroll or pinch to zoom · double-click to zoom in.</div>
       </div>
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

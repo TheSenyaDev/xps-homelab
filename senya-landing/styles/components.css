@@ -157,6 +157,17 @@
   padding: var(--svc-pad, 12px 14px);
 }
 .svc-name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+
+/* Live container status dot (driven by the Glances containers list). */
+.svc-status {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: var(--muted); transition: background .2s, box-shadow .2s;
+}
+.svc-status.up      { background: #10b981; box-shadow: 0 0 6px #10b981; }   /* running  */
+.svc-status.warn    { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }   /* unhealthy/starting */
+.svc-status.down    { background: #ef4444; }                                /* stopped  */
+.svc-status.unknown { background: #4b515f; }                                /* no/unseen container */
+
 .svc-links { display: flex; gap: 6px; }
 .pill {
   font-size: 12px;

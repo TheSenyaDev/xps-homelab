@@ -1,14 +1,21 @@
 // SenyaBoox — browse and view the PDF notes the Boox syncs over WebDAV.
-// Vanilla JS, no build step. Talks to the Flask API in ../app.py.
+// Vanilla JS module, no build step. Talks to the Flask API in ../app.py and
+// renders PDFs through the smooth pan/zoom viewer in viewer.js.
+
+import { PdfView } from "./viewer.js";
 
 const $ = (sel) => document.querySelector(sel);
 const app = $("#app");
 const treeEl = $("#tree");
 const filterEl = $("#filter");
-const pdfEl = $("#pdf");
 const curPathEl = $("#cur-path");
 const openBtn = $("#open-btn");
 const downloadBtn = $("#download-btn");
+const zoomPct = $("#zoom-pct");
+
+const viewer = new PdfView($("#stage"), $("#pdf-wrap"), {
+  onState: (scale) => { zoomPct.textContent = Math.round(scale * 100) + "%"; },
+});
 
 let activePath = null;
 
@@ -88,7 +95,7 @@ async function loadTree() {
 function openPdf(path) {
   activePath = path;
   app.classList.remove("no-file");
-  pdfEl.src = pdfUrl(path, false);
+  viewer.load(pdfUrl(path, false));
   curPathEl.textContent = path;
   curPathEl.title = path;
   openBtn.href = pdfUrl(path, false);
@@ -132,7 +139,27 @@ function applyFilter() {
 
 filterEl.addEventListener("input", applyFilter);
 $("#refresh-btn").addEventListener("click", () => { loadTree(); loadHealth(); });
-$("#toggle-side").addEventListener("click", () => $("#sidebar").classList.toggle("collapsed"));
+
+// ----- collapsible sidebar (remembered across reloads) -----
+const SIDEBAR_KEY = "senyaboox.sidebar.collapsed";
+const sidebar = $("#sidebar");
+
+function setSidebar(collapsed) {
+  sidebar.classList.toggle("collapsed", collapsed);
+  try { localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0"); } catch {}
+}
+
+// Restore saved state before enabling transitions, so it doesn't animate on load.
+try { if (localStorage.getItem(SIDEBAR_KEY) === "1") sidebar.classList.add("collapsed"); } catch {}
+requestAnimationFrame(() => app.classList.add("ready"));
+
+$("#toggle-side").addEventListener("click",
+  () => setSidebar(!sidebar.classList.contains("collapsed")));
+
+// ----- zoom controls -----
+$("#zoom-in").addEventListener("click", () => viewer.zoomBy(1.25));
+$("#zoom-out").addEventListener("click", () => viewer.zoomBy(1 / 1.25));
+$("#zoom-fit").addEventListener("click", () => viewer.fit());
 
 // ----- health -----
 

@@ -18,6 +18,9 @@ ingress:
   # Example service protected by Authelia (remove once you've seen it work).
   - hostname: whoami.senya.ca
     service: http://traefik:80
+  # SenyaBoox PDF viewer, behind Authelia (routed via Traefik).
+  - hostname: boox.senya.ca
+    service: http://traefik:80
 
   # Existing public service, kept pointing straight at the container. Move it to
   # `service: http://traefik:80` (and add Traefik labels) to protect it too.

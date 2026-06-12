@@ -26,6 +26,14 @@ http:
       service: 'whoami'
       middlewares: ['authelia@file']
 
+    # SenyaBoox PDF viewer — public at boox.senya.ca, behind the Authelia login.
+    # It's a browser app, so the forward-auth login redirect works fine here.
+    senya-boox:
+      rule: 'Host(`boox.senya.ca`)'
+      entryPoints: ['web']
+      service: 'senya-boox'
+      middlewares: ['authelia@file']
+
     # ── Templates: copy one of these to expose a real service ──────────────
     # Protected (requires login):
     # grafana:
@@ -49,6 +57,10 @@ http:
       loadBalancer:
         servers:
           - url: 'http://whoami:80'
+    senya-boox:
+      loadBalancer:
+        servers:
+          - url: 'http://senya-boox:8004'
 
     # Point at any container by its compose name + internal port:
     # grafana:
