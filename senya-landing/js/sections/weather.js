@@ -121,14 +121,8 @@ async function load(loc, wrap) {
 }
 
 export function initWeather() {
-  const section = document.getElementById("weather-section");
-  if (!section) return;
-  if (!Array.isArray(WEATHER_LOCATIONS) || !WEATHER_LOCATIONS.length) {
-    section.remove();
-    return;
-  }
-
   const wrap = document.getElementById("weather");
+  if (!wrap) return;
   const locsEl = document.getElementById("weather-locs");
   const locOf = (name) => WEATHER_LOCATIONS.find((l) => l.name === name) || WEATHER_LOCATIONS[0];
 

@@ -26,6 +26,7 @@
 | Obsidian           | http://192.168.2.100:8080             | http://100.121.230.17:8080              |
 | Claude (Chromium)  | http://192.168.2.100:3003             | http://100.121.230.17:3003              |
 | Baikal (CalDAV)    | http://192.168.2.100:5232             | http://100.121.230.17:5232              |
+| InfCloud (web cal) | http://192.168.2.100:5233             | http://100.121.230.17:5233              |
 | WebDAV (Boox)      | http://192.168.2.100:8085             | http://100.121.230.17:8085              |
 | Memos              | http://192.168.2.100:5230             | http://100.121.230.17:5230              |
 | Vikunja            | http://192.168.2.100:3456             | http://100.121.230.17:3456              |
@@ -50,9 +51,13 @@
 
 ## CalDAV / CardDAV (Baikal)
 
-| Protocol | Local IP                                   | Tailscale                                    |
-|----------|--------------------------------------------|----------------------------------------------|
-| CalDAV   | http://192.168.2.100:5232/dav.php/         | http://100.121.230.17:5232/dav.php/          |
+| Protocol   | Local IP                                 | Tailscale                                    |
+|------------|------------------------------------------|----------------------------------------------|
+| CalDAV     | http://192.168.2.100:5232/dav.php/       | http://100.121.230.17:5232/dav.php/          |
+| Web client | http://192.168.2.100:5233/ (InfCloud)    | http://100.121.230.17:5233/                  |
+
+Auth is **Basic** (switched from Digest for InfCloud). Log in to InfCloud with a
+Baikal user (e.g. `Senya`). See [infcloud/README.md](infcloud/README.md).
 
 ## Public (Cloudflare Tunnel)
 

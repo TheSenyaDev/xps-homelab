@@ -251,6 +251,22 @@ services:
       - ./baikal/data:/var/www/baikal/Specific
     restart: unless-stopped
 
+  # InfCloud — CalDAV/CardDAV web client (CalDavZAP + CardDavMATE combined) for
+  # viewing/editing the calendars + address books in Baikal from a browser.
+  # Built from ./infcloud: serves the app AND reverse-proxies Baikal's /dav.php/
+  # on the same origin, so no CORS config is needed. Log in with a Baikal user
+  # (e.g. Senya). NOTE: requires Baikal Basic auth (dav_auth_type: Basic in
+  # baikal/config/baikal.yaml) — InfCloud cannot authenticate with Digest. See its README.
+  infcloud:
+    build: ./infcloud
+    image: infcloud:latest
+    container_name: infcloud
+    ports:
+      - "5233:80"
+    depends_on:
+      - baikal
+    restart: unless-stopped
+
   prometheus-exporter:
     image: python:3.12-alpine
     container_name: prometheus-exporter

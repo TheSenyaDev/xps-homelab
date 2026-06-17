@@ -2,77 +2,59 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Senya</title>
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="styles/base.css" />
   <link rel="stylesheet" href="styles/components.css" />
-  <link rel="stylesheet" href="styles/compact.css" />
 </head>
 <body>
-  <main>
+  <!-- Sticky top bar: brand · clock · customize. On mobile it docks the search
+       too (see base.css) so the essentials stay reachable while scrolling. -->
+  <div class="topbar">
     <header class="top">
-      <h1>🚀 Senya</h1>
+      <div class="brand"><span class="logo" aria-hidden="true">🚀</span><h1>Senya</h1></div>
       <div class="top-right">
-        <div id="view-toggle" class="view-toggle" role="group" aria-label="View density">
-          <button type="button" data-view="comfortable">Comfortable</button>
-          <button type="button" data-view="compact">Compact</button>
-        </div>
         <p id="clock" class="clock"></p>
+        <button id="settings-btn" class="icon-btn" type="button"
+                aria-label="Customize layout" title="Customize layout">⚙</button>
       </div>
     </header>
 
     <form id="search" class="search">
+      <div class="search-row">
+        <input id="q" type="text" placeholder="Search the web…" autocomplete="off" autofocus
+               aria-label="Search query" />
+        <button type="submit">Search</button>
+      </div>
       <div class="engines">
         <label data-engine="google"><input type="radio" name="engine" value="google" /> Google</label>
         <label data-engine="searxng"><input type="radio" name="engine" value="searxng" checked /> SearXNG</label>
       </div>
-      <div class="search-row">
-        <input id="q" type="text" placeholder="Search the web…" autocomplete="off" autofocus />
-        <button type="submit">Search</button>
-      </div>
     </form>
+  </div>
 
-    <section id="weather-section">
-      <h2>Weather <span id="weather-locs" class="weather-locs"></span></h2>
-      <div id="weather" class="weather"></div>
-    </section>
-
-    <section id="system-section">
-      <h2>System <span class="hint">· live</span></h2>
-      <div id="system" class="system"></div>
-    </section>
-
-    <section id="daily-section">
-      <h2>Daily <span class="hint">· today</span></h2>
-      <div id="daily" class="daily"></div>
-    </section>
-
-    <section id="public-section">
-      <h2>Public <span class="hint">· senya.ca</span></h2>
-      <div id="public" class="grid"></div>
-    </section>
-
-    <section id="bookmarks-section">
-      <h2>Bookmarks</h2>
-      <div id="bookmarks" class="grid"></div>
-    </section>
-
-    <section id="senya-section">
-      <h2>Senya Apps <span class="hint">· built in-house</span></h2>
-      <div id="senya-apps" class="services"></div>
-    </section>
-
-    <section id="services-section">
-      <h2>Services <span class="hint">· local / tailscale</span></h2>
-      <div id="services" class="services"></div>
-    </section>
+  <!-- Sections are generated here from the registry (js/registry.js), in the
+       user's saved order, by the layout manager (js/layout.js). -->
+  <main>
+    <div id="dashboard" class="dashboard"></div>
   </main>
 
+  <!-- Customize drawer (desktop) / bottom sheet (mobile). Populated by settings.js. -->
+  <div id="settings-backdrop" class="settings-backdrop"></div>
+  <aside id="settings" class="settings-panel" aria-label="Customize layout" aria-hidden="true">
+    <div class="settings-head">
+      <h2>Customize</h2>
+      <button id="settings-close" class="icon-btn" type="button" aria-label="Close">✕</button>
+    </div>
+    <p class="settings-hint">Drag <span class="set-handle-hint">⠿</span> to reorder · toggle to show/hide. Saved in this browser.</p>
+    <ul id="settings-list" class="settings-list"></ul>
+  </aside>
+
   <!-- services.js is a classic script gated by nginx to LAN/Tailscale: on public
-       it 404s, window.SENYA_INTERNAL stays undefined, and the internal-only
-       sections remove themselves. It must run before the module below; deferred
-       scripts (classic defer + modules) execute in document order. -->
+       it 404s, window.SENYA_INTERNAL stays undefined, and the registry marks the
+       internal-only sections unavailable (so they're never built). It must run
+       before the module below; deferred scripts execute in document order. -->
   <script src="services.js" defer></script>
   <script type="module" src="js/main.js"></script>
 </body>

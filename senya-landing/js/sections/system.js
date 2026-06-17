@@ -102,14 +102,8 @@ async function refreshHost(host, body) {
 }
 
 export function initSystem() {
-  const section = document.getElementById("system-section");
-  if (!section) return;
-  if (!internal || !Array.isArray(internal.HOSTS) || !internal.HOSTS.length) {
-    section.remove();
-    return;
-  }
-
   const wrap = document.getElementById("system");
+  if (!wrap) return;
   const bodies = [];
   for (const host of internal.HOSTS) {
     const body = el("div", { class: "host-body" }, el("span", { class: "offline-msg", text: "…" }));

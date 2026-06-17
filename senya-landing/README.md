@@ -1,8 +1,11 @@
 # Senya Landing
 
 A **static** homelab landing page: search, bookmarks, live weather, live host
-stats, and links to every service (local · Tailscale · external). Two view
-densities — **Comfortable** and **Compact** — toggled in the header.
+stats, and links to every service (local · Tailscale · external). The layout is
+**space-maximizing** on desktop (wide canvas, full-width sections with dense
+inner grids) with a **bespoke mobile view** (sticky bar, big tap targets,
+bottom-sheet settings). Sections are **show/hide- and drag-reorderable** from a
+Customize panel (⚙), saved per-browser.
 
 Designed to be **safe to expose publicly with no auth**: pure static files served
 by a hardened, read-only nginx — no backend, no database, no secrets. The only
@@ -22,37 +25,54 @@ No build step — plain native **ES modules** served as-is (works under the stri
 isolation, so one failing piece never blanks the rest of the page.
 
 ```
-index.html            markup + section containers
+index.html            shell: sticky top bar + search + empty #dashboard
 services.js           INTERNAL config (gated by nginx — see below)
 styles/
-  base.css            tokens, layout, header, search, density variables
-  components.css      bookmarks · weather · system · services
-  compact.css         compact-view overrides (retunes the density variables)
+  base.css            tokens, shell, top bar, search, dashboard, Customize
+                      panel, density variables, the mobile @media view
+  components.css      bookmarks · weather · system · daily · services
 js/
   config.js           PUBLIC config: BOOKMARKS, WEATHER_LOCATIONS, search engines
+  registry.js         declarative SECTIONS list — the source of truth for what
+                      sections exist, how they're built, and when they're shown
+  layout.js           builds sections from the registry in the saved order,
+                      lazily inits each, applies live show/hide + reorder
+  settings.js         Customize panel (toggle + Pointer-Events drag reorder)
   utils.js            el() builder, link/iconImg, fetchJSON, safe localStorage
-  views.js            Comfortable/Compact toggle (persisted)
-  main.js             entry point; runs each section in try/catch
-  sections/           clock · search · bookmarks · weather · system · services
+  main.js             entry point: clock, search, layout, settings (try/catch)
+  sections/           clock · search · bookmarks · weather · system · daily ·
+                      public · services (each populates its container by id)
 ```
 
 ## Customize
 
+At runtime (saved per-browser, no code needed): open the **⚙ Customize** panel to
+**show/hide** any section and **drag to reorder** them. Order + hidden set live in
+`localStorage` (`senya.sections.order` / `senya.sections.hidden`).
+
+In code:
+
 - **Bookmarks, weather locations, search engines** → [`js/config.js`](js/config.js)
 - **Internal** service list / IPs / SearXNG / stat hosts → [`services.js`](services.js)
-- **Add a section**: drop `js/sections/foo.js` exporting `initFoo()`, add a
-  container in `index.html`, and register it in [`js/main.js`](js/main.js).
-- **Spacing/density**: tweak the CSS variables in `styles/base.css` (comfortable)
-  and `styles/compact.css` (compact).
+- **Add a section**: drop `js/sections/foo.js` exporting `initFoo()` (it populates
+  an element by id), then add **one entry** to the `SECTIONS` array in
+  [`js/registry.js`](js/registry.js) — `{ id, title, bodyId, bodyClass, init,
+  available }`. No markup or `main.js` edits; it appears in Customize automatically.
+- **Spacing/density**: tweak the CSS variables in the `:root` of
+  [`styles/base.css`](styles/base.css) (and its mobile `@media` block).
 
 Rebuild after editing: `docker compose up --build -d`.
 
-## Views
+## Modularity & lifecycle
 
-A header toggle switches between **Comfortable** (roomy cards) and **Compact**
-(denser grids, smaller type, wider canvas — more info per screen). The choice is
-saved in `localStorage` and applied as a `body.compact` class, so the difference
-is pure CSS.
+Each section is described once in [`js/registry.js`](js/registry.js): its shell
+(heading + body container), its `init`, and an `available()` predicate (e.g.
+internal-only sections are unavailable off-network, so they're never built). The
+layout manager builds a section's shell and runs its `init` **lazily, the first
+time it's shown** — so a section hidden by default never polls in the background.
+Toggling it off keeps the node in the DOM (instant re-show, no re-fetch); drag
+reordering just moves the existing nodes. One section throwing never blanks the
+rest — each `init` runs in its own try/catch.
 
 ## Sections
 

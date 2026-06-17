@@ -1,5 +1,6 @@
 /* Section components: bookmarks, weather, system stats, services. Density-
-   sensitive sizes read from CSS variables so compact.css can shrink them. */
+   sensitive sizes read from CSS variables (defined in base.css) so the whole
+   layout can be retuned in one place, including the mobile overrides below. */
 
 /* ---- Bookmarks ---- */
 .grid {
@@ -146,42 +147,89 @@
   grid-template-columns: repeat(auto-fill, minmax(var(--svc-min, 220px), 1fr));
   gap: var(--gap, 10px);
 }
+/* Two-row card: an icon tile + name on top, the link pills on their own row.
+   The old single-row layout crammed the dot, icon, name and up to three pills
+   together; splitting them gives the icon and long names room to breathe. */
 .svc {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  gap: var(--svc-gap, 12px);
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: var(--svc-pad, 12px 14px);
+  border-radius: 14px;
+  padding: var(--svc-pad, 14px);
+  transition: border-color .15s, transform .05s;
 }
-.svc-name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.svc:hover { border-color: var(--accent); }
 
-/* Live container status dot (driven by the Glances containers list). */
+.svc-head { display: flex; align-items: center; gap: 11px; min-width: 0; }
+
+/* Icon tile: a rounded chip framing the favicon, with the live status dot
+   pinned to its corner so it no longer competes for horizontal space. */
+.svc-icon {
+  position: relative;
+  flex: none;
+  width: var(--svc-tile, 40px);
+  height: var(--svc-tile, 40px);
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+.svc-icon .ico { width: var(--svc-ico, 24px); height: var(--svc-ico, 24px); }
+
+.svc-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Live container status dot, pinned to the icon-tile corner (driven by the
+   Glances containers list). The panel-coloured ring lifts it off the tile. */
 .svc-status {
-  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  position: absolute;
+  right: -3px; bottom: -3px;
+  width: 12px; height: 12px; border-radius: 50%; flex: none;
+  border: 2px solid var(--panel);
   background: var(--muted); transition: background .2s, box-shadow .2s;
 }
-.svc-status.up      { background: #10b981; box-shadow: 0 0 6px #10b981; }   /* running  */
-.svc-status.warn    { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }   /* unhealthy/starting */
+.svc-status.up      { background: #10b981; box-shadow: 0 0 7px #10b981; }   /* running  */
+.svc-status.warn    { background: #f59e0b; box-shadow: 0 0 7px #f59e0b; }   /* unhealthy/starting */
 .svc-status.down    { background: #ef4444; }                                /* stopped  */
 .svc-status.unknown { background: #4b515f; }                                /* no/unseen container */
 
 .svc-links { display: flex; gap: 6px; }
 .pill {
+  flex: 1;
+  text-align: center;
   font-size: 12px;
   text-decoration: none;
   color: var(--muted);
   background: var(--panel-2);
   border: 1px solid var(--border);
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 5px 10px;
+  border-radius: 8px;
 }
 .pill:hover { color: var(--text); border-color: var(--accent); }
 .pill.ts:hover { border-color: var(--ts); color: var(--ts); }
 .pill.ext:hover { border-color: var(--ext); color: var(--ext); }
 
-@media (max-width: 560px) {
+/* ---- Bespoke mobile view: bigger tap targets, full-width cards ---- */
+@media (max-width: 720px) {
   .wx-days { grid-template-columns: repeat(4, 1fr); }
+
+  /* Bookmarks / public links: comfortable thumb targets. */
+  .card { padding: 14px 10px; min-height: 64px; }
+  .ico { width: 24px; height: 24px; }
+
+  /* Service cards span the row; pills become full-width tappable buttons. */
+  .svc { padding: 14px; border-radius: 16px; }
+  .svc-icon { width: 44px; height: 44px; }
+  .svc-icon .ico { width: 26px; height: 26px; }
+  .svc-name { font-size: 15px; }
+  .svc-links { gap: 8px; }
+  .pill { padding: 10px 10px; font-size: 13px; }
 }

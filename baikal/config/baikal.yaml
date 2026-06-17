@@ -3,7 +3,7 @@ system:
     timezone: America/Tortola
     card_enabled: true
     cal_enabled: true
-    dav_auth_type: Digest
+    dav_auth_type: Basic
     admin_passwordhash: 633bf7061950d456f8e3c75b532e599eb00f539ef04a4d1a419d734ad47a700a
     failed_access_message: 'user %u authentication failure for Baikal'
     auth_realm: BaikalDAV

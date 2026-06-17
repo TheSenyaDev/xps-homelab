@@ -1,5 +1,5 @@
 import { internal } from "../config.js";
-import { link, iconImg, fetchJSON } from "../utils.js";
+import { el, link, iconImg, fetchJSON } from "../utils.js";
 
 // How often to re-poll container states.
 const STATUS_REFRESH_MS = 15000;
@@ -14,17 +14,16 @@ const STATUS_SOURCES = ["/stats/xps/containers"];
 const UP = new Set(["running", "healthy"]);
 const WARN = new Set(["starting", "restarting", "unhealthy", "created", "paused"]);
 
+// Two registry entries (Senya Apps, Services) share one status poller. The Senya
+// and Services lists may be built at different times (lazy mount), so the poller
+// re-queries the DOM each tick and is started only once.
+export function initSenyaApps() {
+  renderList("senya-apps", internal?.SENYA_APPS);
+  startStatusPolling();
+}
+
 export function initServices() {
-  // Both the Senya-apps and Services lists are internal-only. Off-network
-  // (public/tunnel) services.js wasn't served — hide both sections.
-  if (!internal) {
-    for (const id of ["senya-section", "services-section"]) {
-      document.getElementById(id)?.remove();
-    }
-    return;
-  }
-  renderList("senya-apps", internal.SENYA_APPS);
-  renderList("services", internal.SERVICES);
+  renderList("services", internal?.SERVICES);
   startStatusPolling();
 }
 
@@ -32,23 +31,18 @@ function renderList(containerId, items) {
   const wrap = document.getElementById(containerId);
   if (!wrap || !items) return;
   for (const s of items) {
-    const links = el_links(s);
-    const title = document.createElement("span");
-    title.className = "svc-name";
-
-    // Live up/down dot. Services with a `container` get polled; others stay
-    // neutral ("unknown") since we can't see their docker state.
-    const dot = document.createElement("span");
-    dot.className = "svc-status unknown";
-    dot.title = "status…";
+    // Live up/down dot, pinned to the icon tile's corner. Services with a
+    // `container` get polled; others stay neutral ("unknown") since we can't
+    // see their docker state.
+    const dot = el("span", { class: "svc-status unknown", title: "status…" });
     if (s.container) dot.dataset.container = s.container;
 
-    title.append(dot, iconImg(s.icon), s.name);
+    // Icon tile frames the favicon and carries the status dot.
+    const icon = el("div", { class: "svc-icon" }, iconImg(s.icon), dot);
+    const head = el("div", { class: "svc-head" }, icon,
+      el("span", { class: "svc-name", title: s.name, text: s.name }));
 
-    const card = document.createElement("div");
-    card.className = "svc";
-    card.append(title, links);
-    wrap.appendChild(card);
+    wrap.appendChild(el("div", { class: "svc" }, head, el_links(s)));
   }
 }
 
@@ -82,10 +76,14 @@ function applyDot(dot, map) {
   else { dot.classList.add("down"); dot.title = status || "stopped"; }
 }
 
-async function startStatusPolling() {
-  const dots = [...document.querySelectorAll(".svc-status[data-container]")];
-  if (!dots.length) return;
+let polling = false;
+function startStatusPolling() {
+  if (polling) return; // shared across both lists — start once
+  polling = true;
   const tick = async () => {
+    // Re-query each tick so dots added by a lazily-mounted list get updated too.
+    const dots = [...document.querySelectorAll(".svc-status[data-container]")];
+    if (!dots.length) return;
     const map = await fetchStatuses();
     for (const dot of dots) applyDot(dot, map);
   };
@@ -94,8 +92,7 @@ async function startStatusPolling() {
 }
 
 function el_links(s) {
-  const links = document.createElement("div");
-  links.className = "svc-links";
+  const links = el("div", { class: "svc-links" });
   // Services on another host override the default IPs; omit `port` for the
   // host's default web port (80).
   const localIp = s.localIp || internal.LOCAL_IP;

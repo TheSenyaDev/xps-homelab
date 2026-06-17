@@ -1,7 +1,6 @@
 // SenyaDaily "today" widget. Reads today's note + tracker values from the daily
 // app via the same-origin /daily/ proxy (internal only). Display + open link.
 
-import { internal } from "../config.js";
 import { el, fetchJSON, link } from "../utils.js";
 
 const REFRESH_MS = 60 * 1000;
@@ -63,14 +62,8 @@ async function load(wrap) {
 }
 
 export function initDaily() {
-  const section = document.getElementById("daily-section");
-  if (!section) return;
-  // The /daily/ proxy is gated to LAN/Tailscale, so this is internal-only.
-  if (!internal) {
-    section.remove();
-    return;
-  }
   const wrap = document.getElementById("daily");
+  if (!wrap) return;
   load(wrap);
   setInterval(() => load(wrap), REFRESH_MS);
 }
