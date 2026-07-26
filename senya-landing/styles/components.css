@@ -2,6 +2,7 @@
    pane. Full-bleed — no side padding — with 1px dividers instead of gaps. */
 
 .topbar-row {
+  position: relative; /* fallback anchor for the weather popover on narrow screens */
   display: flex; align-items: stretch;
   border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
 }
@@ -16,6 +17,31 @@
 .engines input { display: none; }
 .engines label:has(input:checked) { color: var(--text); background: var(--panel-2); }
 .spacer-cell { flex: 1; }
+
+/* ---- Weather chip: condensed cell in the top row, expanding popover ---- */
+.wx-cell { position: relative; display: flex; align-items: stretch; border-left: 1px solid var(--border); }
+.wx-chip {
+  display: flex; align-items: center; gap: 6px; padding: 0 12px;
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.wx-chip:hover { color: var(--text); background: var(--border-3); }
+.wx-chip.open { color: var(--text); background: var(--panel-3); }
+.wx-chip-icon { font-size: 13px; line-height: 1; }
+.wx-chip-temp { font-weight: 600; }
+
+.wx-pop[hidden] { display: none; }
+.wx-pop {
+  position: absolute; z-index: 30; top: 100%; right: -1px;
+  width: 360px; max-width: calc(100vw - 16px);
+  background: var(--panel-3); border: 1px solid var(--border); border-top: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .45);
+}
+.wx-pop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border-2); }
+.wx-pop-loc { font-family: ui-monospace, monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.wx-pop-cond { font-size: 11px; color: var(--muted); }
+.wx-pop .wx-days .wx-day:last-child { border-right: none; }
+
 .clock-cell { margin: 0; display: flex; align-items: center; padding: 0 14px; border-left: 1px solid var(--border); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .health-cell { display: flex; align-items: center; gap: 6px; padding: 0 14px; border-left: 1px solid var(--border); font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
 .health-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ts); flex: none; }
@@ -24,13 +50,17 @@
 
 /* ---- Bookmarks: always visible, edge-to-edge cells ---- */
 .bookmarks-row { display: flex; align-items: stretch; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
-.bm-edit-cell, .bm-add-cell {
-  width: 46px; height: 46px; flex: none; display: flex; align-items: center; justify-content: center;
+/* One trailing cell = edit + add. The ✎ is the mode, the small + is the blank
+   form it opens with; both happen on the same click. */
+.bm-edit-cell {
+  width: 46px; height: 46px; flex: none; display: flex; align-items: center; justify-content: center; gap: 1px;
   border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
   background: transparent; border-top: none; border-left: none; color: var(--dim); font-size: 14px; cursor: pointer;
 }
-.bm-edit-cell:hover, .bm-add-cell:hover { color: var(--text); }
+.bm-edit-cell:hover { color: var(--text); }
 .bm-edit-cell.active { color: var(--text); background: var(--panel-3); }
+.bm-edit-glyph { font-size: 14px; line-height: 1; }
+.bm-edit-plus { font-size: 10px; line-height: 1; align-self: flex-start; margin-top: 13px; }
 .bookmarks-tiles { display: contents; }
 .bm-tile {
   position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
@@ -52,6 +82,7 @@
 .bm-form input { flex: 1; min-width: 140px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; color: var(--text); font-size: 13px; outline: none; }
 .bm-form button { font-size: 12px; border-radius: var(--radius-sm); padding: 9px 14px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); }
 .bm-form button:hover { color: var(--text); }
+.bm-form-hint { font-size: 11px; color: var(--dim); }
 #bm-form-save { color: var(--text); background: #2b3049; border-color: var(--accent); }
 
 /* ---- Main table: rail | dashboard | info ---- */
@@ -111,16 +142,34 @@
 .wx-loc:hover { color: var(--text); }
 .wx-loc.active { color: var(--accent); }
 
-/* ---- System (unchanged markup from sections/system.js) ---- */
+/* ---- System (markup from sections/system.js): one metric per row — label +
+   value on top, full-width bar below. Two rows keep long labels (CPU Power,
+   ZFS pool names) from colliding with the bar/value and give bars room. ---- */
 .system .host { border-bottom: 1px solid var(--border-3); }
-.host-name { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--panel-2); font-size: 11px; font-weight: 600; margin: 0; }
-.host-body { display: flex; flex-direction: column; min-height: 16px; }
-.host-body.offline { opacity: .5; padding: 6px 10px; }
-.metric { display: grid; grid-template-columns: 42px 1fr 56px; gap: 8px; align-items: center; padding: 4px 10px; }
-.metric-head { display: contents; }
-.metric-label { font-family: ui-monospace, monospace; font-size: 9px; color: var(--muted); text-transform: uppercase; }
-.metric-val { font-family: ui-monospace, monospace; font-size: 9px; color: #cdd2dd; text-align: right; grid-column: 3; }
-.bar { grid-column: 2; height: 3px; background: var(--panel-2); border-radius: 1px; overflow: hidden; }
+.system .host:last-child { border-bottom: none; }
+.host-name { display: flex; align-items: center; gap: 7px; padding: 7px 11px; background: var(--panel-2); font-size: 12px; font-weight: 600; margin: 0; }
+/* LAN / Tailscale address chips, right of the host name: hover for the full
+   address, click to copy (js/sections/system.js). */
+.host-addrs { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.addr-chip {
+  position: relative; height: 15px; padding: 0 5px; display: flex; align-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-3);
+  font-family: ui-monospace, monospace; font-size: 8px; letter-spacing: 0.06em; font-weight: 400;
+  color: var(--dim); cursor: pointer; transition: color .15s, border-color .15s;
+}
+.addr-chip:hover { color: var(--text); border-color: var(--muted); }
+.addr-chip.addr-lan:hover { color: var(--accent); border-color: var(--accent); }
+.addr-chip.addr-ts:hover { color: var(--ts); border-color: var(--ts); }
+.addr-chip.copied { color: var(--ts); border-color: var(--ts); }
+.addr-chip.copied .addr-chip-label { visibility: hidden; }
+.addr-chip.copied::after { content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 8px; }
+.host-body { display: flex; flex-direction: column; padding: 4px 0; min-height: 16px; }
+.host-body.offline { opacity: .5; padding: 8px 11px; }
+.metric { display: flex; flex-direction: column; gap: 4px; padding: 5px 11px; }
+.metric-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.metric-label { font-family: ui-monospace, monospace; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric-val { font-family: ui-monospace, monospace; font-size: 10px; color: #cdd2dd; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar { height: 4px; background: var(--panel-2); border-radius: 2px; overflow: hidden; }
 .bar-fill { height: 100%; width: 0; background: var(--accent); transition: width .4s ease; }
 .bar-fill.warm { background: var(--warm); }
 .bar-fill.hot { background: var(--hot); }
@@ -166,6 +215,10 @@
 @media (max-width: 860px) {
   .search-cell { max-width: none; }
   .clock-cell, .health-cell { display: none; }
+  /* Anchor the popover to the whole top row instead of the (near the right
+     edge) chip, so it drops full-width rather than off-screen. */
+  .wx-cell { position: static; }
+  .wx-pop { left: 0; right: 0; width: auto; max-width: none; border-left: none; border-right: none; }
   .main-table { flex-direction: column; }
   .rail { width: 100% !important; position: static; border-right: none; border-bottom: 1px solid var(--border); }
   .rail[data-expanded="false"] .rail-title, .rail[data-expanded="false"] .rail-tab-name { display: none; }

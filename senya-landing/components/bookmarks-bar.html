@@ -1,0 +1,21 @@
+<!-- Bookmarks bar: always-visible icon row + the inline editor that drops below
+     it. Tiles are rendered into #bookmarks by js/sections/bookmarks.js. The
+     single trailing ✎+ cell is edit and add at once — it turns on the row's
+     edit mode and opens a blank add form in the same click. -->
+<div class="bookmarks-row">
+  <div id="bookmarks" class="bookmarks-tiles"></div>
+  <button id="bm-edit-toggle" class="bm-edit-cell" type="button"
+          title="Edit &amp; add bookmarks" aria-label="Edit and add bookmarks">
+    <span class="bm-edit-glyph">✎</span><span class="bm-edit-plus">+</span>
+  </button>
+</div>
+
+<!-- Shown while edit mode is on: blank for a new bookmark, or filled in with
+     the tile you clicked. Hidden and reset when edit mode goes off. -->
+<div id="bm-form" class="bm-form" hidden>
+  <input id="bm-form-name" type="text" placeholder="Name" />
+  <input id="bm-form-url" type="text" placeholder="example.com" />
+  <button id="bm-form-save" type="button">Add</button>
+  <button id="bm-form-cancel" type="button">Done</button>
+  <span class="bm-form-hint">click a bookmark to edit · ✕ to delete</span>
+</div>

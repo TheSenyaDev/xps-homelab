@@ -1,0 +1,40 @@
+<!-- Top bar: identity · search · at-a-glance readouts (weather, time, health)
+     · Customize gear. One bordered flex row of cells with no gaps — add a
+     readout by dropping another cell before the gear. Behaviour binds by id:
+     search → js/sections/search.js, clock → js/sections/clock.js, weather chip
+     → js/sections/weather.js, health dot → js/rail.js, gear → js/settings.js. -->
+<div class="topbar-row">
+  <div class="brand-cell"><span class="logo" aria-hidden="true">🚀</span><span>Senya</span></div>
+
+  <form id="search" class="search-cell">
+    <div class="search-row">
+      <span class="search-slash">/</span>
+      <input id="q" type="text" placeholder="Search the web…" autocomplete="off"
+             aria-label="Search query" />
+      <div class="engines">
+        <label data-engine="searxng"><input type="radio" name="engine" value="searxng" checked /> searx</label>
+        <label data-engine="google"><input type="radio" name="engine" value="google" /> google</label>
+      </div>
+    </div>
+  </form>
+
+  <!-- Everything after this is pushed to the right edge. -->
+  <div class="spacer-cell"></div>
+
+  <!-- Condensed weather chip (icon + temp); click expands the full current /
+       hourly / 7-day detail, off the same fetch as the info pane's block. -->
+  <div class="wx-cell">
+    <button id="wx-chip" class="wx-chip" type="button" aria-expanded="false" aria-controls="wx-pop"
+            aria-label="Weather" title="Weather">
+      <span class="wx-chip-icon">·</span><span class="wx-chip-temp">—</span>
+    </button>
+    <div id="wx-pop" class="wx-pop" hidden></div>
+  </div>
+
+  <p id="clock" class="clock-cell"></p>
+
+  <!-- Aggregate container health, rolled up from the rail's status polling. -->
+  <div class="health-cell"><span id="health-dot" class="health-dot"></span><span id="health-text"></span></div>
+
+  <button id="settings-btn" class="gear-cell" type="button" aria-label="Customize" title="Customize">⚙</button>
+</div>

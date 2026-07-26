@@ -25,13 +25,25 @@ No build step — plain native **ES modules** served as-is (works under the stri
 isolation, so one failing piece never blanks the rest of the page.
 
 ```
-index.html            shell: sticky top bar + search + empty #dashboard
+index.html            the page as a list of section slots, nothing else
+components/           the markup, one HTML file per section (see below)
+  top-bar.html        brand · search · weather chip · clock · health · gear
+  bookmarks-bar.html  icon row + the inline add/edit form
+  main-table.html     the three columns, as slots
+  launcher-rail.html  condensed Senya Apps / Services / Public launchers
+  dashboard-grid.html empty grid the registry's widgets are built into
+  info-pane.html      permanent right column, as slots
+  system-panel.html   live per-host stats block
+  weather-panel.html  current + hourly + 7-day block
+  settings-drawer.html Customize drawer + backdrop
 services.js           INTERNAL config (gated by nginx — see below)
 styles/
   base.css            tokens, shell, top bar, search, dashboard, Customize
                       panel, density variables, the mobile @media view
   components.css      bookmarks · weather · system · daily · services
 js/
+  page.js             composes index.html's slots from components/ (fetch +
+                      replace, nestable, cached) — awaited before any init
   config.js           PUBLIC config: BOOKMARKS, WEATHER_LOCATIONS, search engines
   registry.js         declarative SECTIONS list — the source of truth for what
                       sections exist, how they're built, and when they're shown
@@ -39,10 +51,37 @@ js/
                       lazily inits each, applies live show/hide + reorder
   settings.js         Customize panel (toggle + Pointer-Events drag reorder)
   utils.js            el() builder, link/iconImg, fetchJSON, safe localStorage
-  main.js             entry point: clock, search, layout, settings (try/catch)
+  main.js             entry point: renders the page, then clock, search,
+                      bookmarks, rail, system, weather, layout, settings
   sections/           clock · search · bookmarks · weather · system · daily ·
-                      public · services (each populates its container by id)
+                      rail (each populates its container by id)
 ```
+
+### Markup: one file per section
+
+`index.html` is just the running order of the page:
+
+```html
+<div data-component="top-bar"></div>
+<div data-component="bookmarks-bar"></div>
+<div data-component="main-table"></div>
+<div data-component="settings-drawer"></div>
+```
+
+[`js/page.js`](js/page.js) replaces each slot with `components/<name>.html`
+(the slot element itself is replaced, so no wrapper divs end up in the DOM) and
+resolves nested slots depth-first — `main-table.html` is itself three slots, and
+`info-pane.html` two more. Files are fetched once and cached.
+
+- **Reorder the page** → reorder the lines in `index.html`.
+- **Add a section** → write `components/<name>.html`, add a slot where it goes
+  (top level, or inside another component), and — if it needs behaviour — an
+  `initX()` in `js/sections/` called from `js/main.js`.
+- **Edit existing markup** → open that one component file; no other file knows
+  about its internals, only the ids it exposes.
+
+Markup and behaviour stay separate: components carry no scripts, and each
+`init` finds its container by id after `renderPage()` has finished.
 
 ## Customize
 
@@ -76,13 +115,20 @@ rest — each `init` runs in its own try/catch.
 
 ## Sections
 
-- **Weather** — Open-Meteo (no API key); current conditions + a 7-day forecast,
-  with a selectable set of locations. Shown on and off network.
+- **Weather** — Open-Meteo (no API key); current conditions, next 24 hours and a
+  7-day forecast, with a selectable set of locations. The top bar also carries a
+  condensed chip (icon + temp) that expands to the same detail on click, painted
+  from the same fetch. Shown on and off network.
 - **System** — live CPU/RAM/SSD/temp per host via each host's Glances API,
-  reverse-proxied same-origin under `/stats/<host>/` (internal only).
+  reverse-proxied same-origin under `/stats/<host>/` (internal only). Each host
+  name carries small **LAN** / **TS** chips — hover for the address, click to
+  copy; set `ip`/`ts` per host in `HOSTS` (`services.js`).
 - **Services** — each service links to **local**, **ts** (Tailscale), and, if it
   has an `ext` subdomain, **ext** (`https://<ext>.senya.ca`). Internal only.
-- **Bookmarks** / **Search** (Google + SearXNG on-network).
+- **Bookmarks** — icon row under the top bar; the trailing **✎+** cell is edit
+  and add at once (add form opens with edit mode; click a tile to edit it, ✕ to
+  delete). Saved in `localStorage` over the `BOOKMARKS` defaults.
+- **Search** (Google + SearXNG on-network).
 
 ## Network-aware internal sections
 

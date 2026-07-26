@@ -18,13 +18,20 @@ window.SENYA_INTERNAL = {
   // nginx.conf pointing at its address, then add an entry here.
   // `power: true` → host also exposes the power-api (proxied at /stats/<key>/power)
   // for RAPL CPU watts and the accurate x86_pkg_temp CPU temperature.
+  // `gpu: true` → host also exposes the nvidia-api (proxied at /stats/<key>/gpu)
+  // for the NVIDIA GPU temperature. Needed because the proprietary driver
+  // publishes no hwmon entry, so Glances' own sensors list never includes it.
   // `allDisks: true` → list every storage pool/drive (e.g. a NAS) instead of
   // just the largest filesystem. Requires Glances to actually see the pools
   // (on TrueNAS SCALE: mount the host's /mnt into the Glances app, read-only).
+  // `ip`/`ts` = the box's LAN and Tailscale addresses; the System panel shows
+  // them as small chips beside the host name (hover for the address, click to
+  // copy). Omit `ip` to fall back to LOCAL_IP above; omit `ts` and no TS chip
+  // is drawn for that host.
   HOSTS: [
-    { name: "XPS", key: "xps", icon: "dell", power: true },
-    { name: "Fedora", key: "fedora", icon: "fedora", power: true },
-    { name: "TrueNAS", key: "truenas", icon: "truenas", allDisks: true },
+    { name: "XPS", key: "xps", icon: "dell", power: true, ip: "192.168.2.100", ts: "100.121.230.17" },
+    { name: "TrueNAS", key: "truenas", icon: "truenas", allDisks: true, ip: "192.168.2.82", ts: "100.112.73.95" },
+    { name: "Fedora", key: "fedora", icon: "fedora", gpu: true, ip: "192.168.2.252", ts: "100.125.177.67" },
   ],
   // `icon` = filename (without .png) in /icons, sourced from dashboardicons.com
   // via fetch-icons.sh. Omit `icon` (or point to a missing file) → _default.svg.

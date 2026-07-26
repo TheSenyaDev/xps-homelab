@@ -1,5 +1,9 @@
 // Weather via Open-Meteo (no API key, CORS-enabled). The CSP connect-src allows
 // https://api.open-meteo.com. Coordinates come from WEATHER_LOCATIONS (config.js).
+//
+// Renders twice off a single fetch: the full info-pane block, and the condensed
+// top-bar chip (icon + temp) whose click expands the same current/hourly/7-day
+// detail in a popover.
 
 import { WEATHER_LOCATIONS } from "../config.js";
 import { el, fetchJSON, store } from "../utils.js";
@@ -104,6 +108,60 @@ function forecastStrip(d) {
   return strip;
 }
 
+// ---- Top-bar chip: condensed by default, expands to the full detail ----
+
+// Collapsed form: just the condition icon and the rounded temperature.
+function paintChip(loc, data) {
+  const chip = document.getElementById("wx-chip");
+  const pop = document.getElementById("wx-pop");
+  if (!chip || !pop) return;
+
+  const icoEl = chip.querySelector(".wx-chip-icon");
+  const tempEl = chip.querySelector(".wx-chip-temp");
+
+  if (!data) {
+    icoEl.textContent = "·";
+    tempEl.textContent = "—";
+    chip.title = "Weather unavailable";
+    pop.replaceChildren(el("div", { class: "offline-msg", text: "Weather unavailable" }));
+    return;
+  }
+
+  const cur = data.current;
+  const w = wmo(cur.weather_code, cur.is_day === 1);
+  icoEl.textContent = w.icon;
+  tempEl.textContent = `${Math.round(cur.temperature_2m)}°`;
+  chip.title = `${loc.name} · ${w.label} ${Math.round(cur.temperature_2m)}°`;
+
+  // Expanded form: same components as the info-pane block, under a location head.
+  pop.replaceChildren(...[
+    el("div", { class: "wx-pop-head" },
+      el("span", { class: "wx-pop-loc", text: loc.name }),
+      el("span", { class: "wx-pop-cond", text: w.label })),
+    currentCard(cur, data.daily),
+    hourlyStrip(data.hourly),
+    forecastStrip(data.daily),
+  ].filter(Boolean));
+}
+
+// Open/close wiring is set up once; the contents are repainted on every refresh.
+function initChip() {
+  const chip = document.getElementById("wx-chip");
+  const pop = document.getElementById("wx-pop");
+  if (!chip || !pop) return;
+
+  const setOpen = (open) => {
+    pop.hidden = !open;
+    chip.classList.toggle("open", open);
+    chip.setAttribute("aria-expanded", String(open));
+  };
+
+  chip.addEventListener("click", (e) => { e.stopPropagation(); setOpen(pop.hidden); });
+  pop.addEventListener("click", (e) => e.stopPropagation());
+  document.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+}
+
 async function load(loc, wrap) {
   wrap.replaceChildren(el("div", { class: "offline-msg", text: "Loading weather…" }));
   try {
@@ -114,9 +172,11 @@ async function load(loc, wrap) {
       forecastStrip(data.daily),
     ].filter(Boolean);
     wrap.replaceChildren(...parts);
+    paintChip(loc, data);
   } catch (e) {
     console.error("[senya] weather load failed:", e);
     wrap.replaceChildren(el("div", { class: "offline-msg", text: "Weather unavailable" }));
+    paintChip(loc, null);
   }
 }
 
@@ -125,6 +185,7 @@ export function initWeather() {
   if (!wrap) return;
   const locsEl = document.getElementById("weather-locs");
   const locOf = (name) => WEATHER_LOCATIONS.find((l) => l.name === name) || WEATHER_LOCATIONS[0];
+  initChip();
 
   let current = store.get(KEY, WEATHER_LOCATIONS[0].name);
   if (!WEATHER_LOCATIONS.some((l) => l.name === current)) current = WEATHER_LOCATIONS[0].name;

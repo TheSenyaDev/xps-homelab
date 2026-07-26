@@ -9,77 +9,17 @@
   <link rel="stylesheet" href="styles/components.css" />
 </head>
 <body>
-  <!-- Tabular top row: brand | search | clock | health | customize. One bordered
-       row, no gaps — matches the dense table look used through the rest of the
-       page (see components.css .topbar-row). -->
-  <div class="topbar-row">
-    <div class="brand-cell"><span class="logo" aria-hidden="true">🚀</span><span>Senya</span></div>
-    <form id="search" class="search-cell">
-      <div class="search-row">
-        <span class="search-slash">/</span>
-        <input id="q" type="text" placeholder="Search the web…" autocomplete="off"
-               aria-label="Search query" />
-        <div class="engines">
-          <label data-engine="searxng"><input type="radio" name="engine" value="searxng" checked /> searx</label>
-          <label data-engine="google"><input type="radio" name="engine" value="google" /> google</label>
-        </div>
-      </div>
-    </form>
-    <div class="spacer-cell"></div>
-    <p id="clock" class="clock-cell"></p>
-    <div class="health-cell"><span id="health-dot" class="health-dot"></span><span id="health-text"></span></div>
-    <button id="settings-btn" class="gear-cell" type="button" aria-label="Customize" title="Customize">⚙</button>
-  </div>
-
-  <!-- Bookmarks: always visible, icon-first, editable behind one bar-level
-       toggle (not per-tile controls) — see js/sections/bookmarks.js. -->
-  <div class="bookmarks-row">
-    <button id="bm-edit-toggle" class="bm-edit-cell" type="button" title="Edit bookmarks" aria-label="Edit bookmarks">✎</button>
-    <div id="bookmarks" class="bookmarks-tiles"></div>
-    <button id="bm-add" class="bm-add-cell" type="button" title="Add bookmark" aria-label="Add bookmark">+</button>
-  </div>
-  <div id="bm-form" class="bm-form" hidden>
-    <input id="bm-form-name" type="text" placeholder="Name" />
-    <input id="bm-form-url" type="text" placeholder="example.com" />
-    <button id="bm-form-save" type="button">Add</button>
-    <button id="bm-form-cancel" type="button">Cancel</button>
-  </div>
-
-  <!-- Main table: rail (condensed launchers) | dashboard (registry sections —
-       Daily today, more later) | info (permanent System + Weather, not a widget). -->
-  <main class="main-table">
-    <aside id="rail" class="rail" data-expanded="false">
-      <div class="rail-head">
-        <span class="rail-title">Launchers</span>
-        <button id="rail-toggle" class="rail-toggle" type="button" aria-label="Expand launchers">›</button>
-      </div>
-      <div id="rail-nav" class="rail-nav"></div>
-      <div id="rail-items" class="rail-items"></div>
-    </aside>
-
-    <div id="dashboard" class="dashboard"></div>
-
-    <aside class="info-pane">
-      <div class="info-block">
-        <div class="info-head">System</div>
-        <div id="system" class="system"></div>
-      </div>
-      <div class="info-block">
-        <div class="info-head">Weather <span id="weather-locs" class="weather-locs"></span></div>
-        <div id="weather" class="weather"></div>
-      </div>
-    </aside>
-  </main>
-
-  <div id="settings-backdrop" class="settings-backdrop"></div>
-  <aside id="settings" class="settings-panel" aria-label="Customize layout" aria-hidden="true">
-    <div class="settings-head">
-      <h2>Customize</h2>
-      <button id="settings-close" class="icon-btn" type="button" aria-label="Close">✕</button>
-    </div>
-    <p class="settings-hint">Drag <span class="set-handle-hint">⠿</span> to reorder · toggle to show/hide. Bookmarks, launchers, System and Weather are fixed page chrome and aren't listed here — everything below is a droppable dashboard widget (add RSS, stocks, etc. by extending js/registry.js).</p>
-    <ul id="settings-list" class="settings-list"></ul>
-  </aside>
+  <!-- The page is a list of sections, top to bottom. Each one's markup lives in
+       its own file under /components and is pulled in by js/page.js, which
+       replaces the slot below with that file's contents. Reorder the page by
+       reordering these lines; add a section by writing
+       components/<name>.html and adding a slot for it. -->
+  <div data-component="top-bar"></div>
+  <div data-component="bookmarks-bar"></div>
+  <!-- main-table nests three more components: launcher-rail · dashboard-grid ·
+       info-pane (which itself nests system-panel · weather-panel). -->
+  <div data-component="main-table"></div>
+  <div data-component="settings-drawer"></div>
 
   <script src="services.js" defer></script>
   <script type="module" src="js/main.js"></script>
