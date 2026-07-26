@@ -23,6 +23,7 @@ window.SENYA_INTERNAL = {
   // (on TrueNAS SCALE: mount the host's /mnt into the Glances app, read-only).
   HOSTS: [
     { name: "XPS", key: "xps", icon: "dell", power: true },
+    { name: "Fedora", key: "fedora", icon: "fedora", power: true },
     { name: "TrueNAS", key: "truenas", icon: "truenas", allDisks: true },
   ],
   // `icon` = filename (without .png) in /icons, sourced from dashboardicons.com

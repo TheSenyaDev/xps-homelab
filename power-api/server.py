@@ -64,17 +64,29 @@ def fan_speeds():
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        try:
-            power_w = measure_power_w()
-            data = {
-                "power_w": round(power_w, 2),
-                "cpu_temp_c": cpu_temp_c(),
-                "capacity": int(read_file(f"{BAT}/capacity")),
-                "status": read_file(f"{BAT}/status"),
-                "fans": fan_speeds(),
-            }
-        except Exception as e:
-            data = {"error": str(e)}
+        # Each field is collected independently: a desktop (no BAT0) or a board
+        # without RAPL should still report everything else it *can* read, rather
+        # than collapsing the whole response into {"error": ...}.
+        data = {}
+        errors = {}
+
+        for key, fn in (
+            ("power_w",    lambda: round(measure_power_w(), 2)),
+            ("cpu_temp_c", cpu_temp_c),
+            ("capacity",   lambda: int(read_file(f"{BAT}/capacity"))),
+            ("status",     lambda: read_file(f"{BAT}/status")),
+            ("fans",       fan_speeds),
+        ):
+            try:
+                value = fn()
+            except Exception as e:
+                errors[key] = str(e)
+                continue
+            if value is not None:
+                data[key] = value
+
+        if errors:
+            data["errors"] = errors
 
         body = json.dumps(data).encode()
         self.send_response(200)

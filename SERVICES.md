@@ -42,6 +42,8 @@
 | Service              | Local IP                              | Tailscale                             |
 |----------------------|---------------------------------------|---------------------------------------|
 | Power API            | http://192.168.2.100:8081             | http://100.121.230.17:8081            |
+| Glances (Fedora)     | http://<FEDORA_IP>:61208              | http://<FEDORA_TS_IP>:61208           |
+| Power API (Fedora)   | http://<FEDORA_IP>:8081               | http://<FEDORA_TS_IP>:8081            |
 | Tailscale API        | http://192.168.2.100:8082             | http://100.121.230.17:8082            |
 | Nvidia API           | http://192.168.2.100:8083             | http://100.121.230.17:8083            |
 | Prometheus Exporter  | http://192.168.2.100:9091/metrics     | http://100.121.230.17:9091/metrics    |
