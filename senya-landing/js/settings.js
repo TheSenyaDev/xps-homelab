@@ -5,16 +5,37 @@
 
 import { el } from "./utils.js";
 import { getSectionsState, setHidden, setOrder } from "./layout.js";
+import { getScale, setScale, MIN, MAX, STEP } from "./ui-scale.js";
 
 export function initSettings() {
   const btn = document.getElementById("settings-btn");
   const panel = document.getElementById("settings");
   const list = document.getElementById("settings-list");
   const backdrop = document.getElementById("settings-backdrop");
+  const scaleWrap = document.getElementById("settings-scale");
   if (!btn || !panel || !list) return;
 
+  // ---- text size ----
+
+  let paintScale = () => {};
+  if (scaleWrap) {
+    const value = el("span", { class: "scale-value" });
+    const paint = () => { value.textContent = `${Math.round(getScale() * 100)}%`; };
+    paintScale = paint; // re-read on open: another tab may have changed it
+    const bump = (delta) => { setScale(getScale() + delta); paint(); };
+
+    scaleWrap.replaceChildren(
+      el("span", { class: "set-name", text: "Text size" }),
+      el("div", { class: "scale-ctl" },
+        el("button", { type: "button", class: "scale-btn", title: "Smaller", "aria-label": "Smaller text", text: "−", onclick: () => bump(-STEP) }),
+        value,
+        el("button", { type: "button", class: "scale-btn", title: "Bigger", "aria-label": "Bigger text", text: "+", onclick: () => bump(STEP) }),
+        el("button", { type: "button", class: "scale-reset", title: `Reset to 100% (${Math.round(MIN * 100)}–${Math.round(MAX * 100)}%)`, text: "reset", onclick: () => { setScale(1); paint(); } })));
+    paint();
+  }
+
   const isOpen = () => document.body.classList.contains("settings-open");
-  const open = () => { document.body.classList.add("settings-open"); panel.setAttribute("aria-hidden", "false"); renderList(); };
+  const open = () => { document.body.classList.add("settings-open"); panel.setAttribute("aria-hidden", "false"); paintScale(); renderList(); };
   const close = () => { document.body.classList.remove("settings-open"); panel.setAttribute("aria-hidden", "true"); };
 
   btn.addEventListener("click", () => (isOpen() ? close() : open()));

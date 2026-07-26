@@ -110,24 +110,54 @@ async function refreshHost(host, body) {
   }
 }
 
-// Small address chip beside a host name: hover for the full address, click to
-// copy it. `kind` is "lan" or "ts" (each gets its own hover colour).
+// Only one address popup is open at a time, page-wide.
+let openAddrPopup = null;
+function closeAddrPopup() {
+  if (!openAddrPopup) return;
+  openAddrPopup.pop.hidden = true;
+  openAddrPopup.chip.classList.remove("open");
+  openAddrPopup.chip.setAttribute("aria-expanded", "false");
+  openAddrPopup = null;
+}
+document.addEventListener("click", closeAddrPopup);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAddrPopup(); });
+
+// Small address chip beside a host name. Clicking it opens a little popup with
+// the actual address — clicking that copies it. `kind` is "lan" or "ts".
 function addrChip(kind, label, address) {
   const chip = el("button", {
     type: "button", class: `addr-chip addr-${kind}`,
-    title: `${label} ${address} — click to copy`, "aria-label": `Copy ${label} address ${address}`,
+    title: `${label} address`, "aria-expanded": "false", "aria-label": `Show ${label} address`,
   }, el("span", { class: "addr-chip-label", text: label }));
 
-  chip.addEventListener("click", async () => {
+  const value = el("button", { type: "button", class: "addr-pop-val", title: "Click to copy", text: address });
+  const pop = el("div", { class: "addr-pop", hidden: "" },
+    el("span", { class: "addr-pop-label", text: label }), value);
+
+  chip.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const wasOpen = openAddrPopup?.chip === chip;
+    closeAddrPopup();
+    if (wasOpen) return;
+    pop.hidden = false;
+    chip.classList.add("open");
+    chip.setAttribute("aria-expanded", "true");
+    openAddrPopup = { chip, pop };
+  });
+
+  value.addEventListener("click", async (e) => {
+    e.stopPropagation();
     try {
       await navigator.clipboard.writeText(address);
     } catch {
-      return; // clipboard blocked (non-secure context) — the tooltip still shows it
+      return; // clipboard blocked (non-secure context) — the address is still readable
     }
-    chip.classList.add("copied");
-    setTimeout(() => chip.classList.remove("copied"), 1200);
+    value.classList.add("copied");
+    setTimeout(() => value.classList.remove("copied"), 1200);
   });
-  return chip;
+  pop.addEventListener("click", (e) => e.stopPropagation());
+
+  return el("span", { class: "addr-chip-wrap" }, chip, pop);
 }
 
 function hostName(host) {

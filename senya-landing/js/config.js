@@ -26,6 +26,13 @@ export const WEATHER_LOCATIONS = [
   { name: "Vancouver", lat: 49.2827, lon: -123.1207 },
 ];
 
+// Crypto widget: CoinGecko coin ids (the slug in coingecko.com/en/coins/<id>),
+// shown ordered by market cap. `CRYPTO_VS` is the quote currency.
+export const CRYPTO_COINS = [
+  "bitcoin", "ethereum", "solana", "ripple", "cardano", "chainlink", "dogecoin", "monero",
+];
+export const CRYPTO_VS = "usd";
+
 // Publicly reachable subdomains (Cloudflare tunnel). Public-safe → shown on and
 // off network. Add an entry here when you expose a new service at <x>.senya.ca.
 export const PUBLIC_LINKS = [

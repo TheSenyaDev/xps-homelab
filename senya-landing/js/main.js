@@ -5,6 +5,7 @@
 // dashboard grid is built from js/registry.js by the layout manager.
 
 import { renderPage } from "./page.js";
+import { applyScale } from "./ui-scale.js";
 import { initClock } from "./sections/clock.js";
 import { initSearch } from "./sections/search.js";
 import { initBookmarks } from "./sections/bookmarks.js";
@@ -19,6 +20,7 @@ function run(name, fn) {
   try { fn(); } catch (e) { console.error(`[senya] "${name}" failed:`, e); }
 }
 
+applyScale();     // before the page is built, so nothing paints at the wrong size
 await renderPage();
 
 run("clock", initClock);

@@ -8,6 +8,8 @@
     <h2>Customize</h2>
     <button id="settings-close" class="icon-btn" type="button" aria-label="Close">✕</button>
   </div>
-  <p class="settings-hint">Drag <span class="set-handle-hint">⠿</span> to reorder · toggle to show/hide. Bookmarks, launchers, System and Weather are fixed page chrome and aren't listed here — everything below is a droppable dashboard widget (add RSS, stocks, etc. by extending js/registry.js).</p>
+  <!-- Text size: scales the whole page, not just type — see js/ui-scale.js. -->
+  <div id="settings-scale" class="set-row set-scale"></div>
+  <p class="settings-hint">Drag <span class="set-handle-hint">⠿</span> to reorder · toggle to show/hide. Bookmarks, launchers, System and the weather chip are fixed page chrome and aren't listed here — everything below is a droppable dashboard widget (add more by extending js/registry.js).</p>
   <ul id="settings-list" class="settings-list"></ul>
 </aside>

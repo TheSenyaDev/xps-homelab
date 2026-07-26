@@ -1,9 +1,10 @@
 // Weather via Open-Meteo (no API key, CORS-enabled). The CSP connect-src allows
 // https://api.open-meteo.com. Coordinates come from WEATHER_LOCATIONS (config.js).
 //
-// Renders twice off a single fetch: the full info-pane block, and the condensed
-// top-bar chip (icon + temp) whose click expands the same current/hourly/7-day
-// detail in a popover.
+// Weather lives entirely in the top bar: a condensed chip (icon · temp · today's
+// high/low · rain and wind) that expands on click into the full detail —
+// location pills, current conditions, the next 24 hours and a 7-day forecast.
+// There's no side-pane weather block; the chip is the whole surface.
 
 import { WEATHER_LOCATIONS } from "../config.js";
 import { el, fetchJSON, store } from "../utils.js";
@@ -108,107 +109,90 @@ function forecastStrip(d) {
   return strip;
 }
 
-// ---- Top-bar chip: condensed by default, expands to the full detail ----
+// ---- The chip itself: collapsed readout + expanded popover ----
 
-// Collapsed form: just the condition icon and the rounded temperature.
-function paintChip(loc, data) {
+// Collapsed: condition icon, temperature, then today's high/low and the two
+// numbers worth knowing before you step outside (rain chance, wind).
+function paintChip(loc, data, onSelectLoc) {
   const chip = document.getElementById("wx-chip");
   const pop = document.getElementById("wx-pop");
   if (!chip || !pop) return;
 
-  const icoEl = chip.querySelector(".wx-chip-icon");
-  const tempEl = chip.querySelector(".wx-chip-temp");
+  const set = (sel, text) => { const n = chip.querySelector(sel); if (n) n.textContent = text; };
 
   if (!data) {
-    icoEl.textContent = "·";
-    tempEl.textContent = "—";
+    set(".wx-chip-icon", "·");
+    set(".wx-chip-temp", "—");
+    set(".wx-chip-hl", "");
+    set(".wx-chip-sub", "");
     chip.title = "Weather unavailable";
     pop.replaceChildren(el("div", { class: "offline-msg", text: "Weather unavailable" }));
     return;
   }
 
-  const cur = data.current;
+  const cur = data.current, d = data.daily;
   const w = wmo(cur.weather_code, cur.is_day === 1);
-  icoEl.textContent = w.icon;
-  tempEl.textContent = `${Math.round(cur.temperature_2m)}°`;
-  chip.title = `${loc.name} · ${w.label} ${Math.round(cur.temperature_2m)}°`;
+  const rain = d.precipitation_probability_max[0] ?? 0;
 
-  // Expanded form: same components as the info-pane block, under a location head.
-  pop.replaceChildren(...[
-    el("div", { class: "wx-pop-head" },
-      el("span", { class: "wx-pop-loc", text: loc.name }),
-      el("span", { class: "wx-pop-cond", text: w.label })),
-    currentCard(cur, data.daily),
-    hourlyStrip(data.hourly),
-    forecastStrip(data.daily),
-  ].filter(Boolean));
+  set(".wx-chip-icon", w.icon);
+  set(".wx-chip-temp", `${Math.round(cur.temperature_2m)}°`);
+  set(".wx-chip-hl", `${Math.round(d.temperature_2m_max[0])}°/${Math.round(d.temperature_2m_min[0])}°`);
+  set(".wx-chip-sub", `💧${rain}% · ${Math.round(cur.wind_speed_10m)} km/h`);
+  chip.title = `${loc.name} · ${w.label} ${Math.round(cur.temperature_2m)}° (feels ${Math.round(cur.apparent_temperature)}°)`;
+
+  // Expanded: location pills + everything the side panel used to show.
+  const head = el("div", { class: "wx-pop-head" },
+    el("span", { class: "wx-pop-cond", text: `${w.label} · feels ${Math.round(cur.apparent_temperature)}°` }));
+  const locs = el("span", { class: "wx-pop-locs" });
+  for (const l of WEATHER_LOCATIONS) {
+    locs.append(el("button", {
+      type: "button",
+      class: "wx-loc" + (l.name === loc.name ? " active" : ""),
+      text: l.name,
+      onclick: (e) => { e.stopPropagation(); onSelectLoc(l.name); },
+    }));
+  }
+  head.prepend(locs);
+
+  pop.replaceChildren(...[head, currentCard(cur, d), hourlyStrip(data.hourly), forecastStrip(d)].filter(Boolean));
 }
 
-// Open/close wiring is set up once; the contents are repainted on every refresh.
-function initChip() {
+export function initWeather() {
   const chip = document.getElementById("wx-chip");
   const pop = document.getElementById("wx-pop");
   if (!chip || !pop) return;
+
+  const locOf = (name) => WEATHER_LOCATIONS.find((l) => l.name === name) || WEATHER_LOCATIONS[0];
+  let current = store.get(KEY, WEATHER_LOCATIONS[0].name);
+  if (!WEATHER_LOCATIONS.some((l) => l.name === current)) current = WEATHER_LOCATIONS[0].name;
 
   const setOpen = (open) => {
     pop.hidden = !open;
     chip.classList.toggle("open", open);
     chip.setAttribute("aria-expanded", String(open));
   };
-
   chip.addEventListener("click", (e) => { e.stopPropagation(); setOpen(pop.hidden); });
   pop.addEventListener("click", (e) => e.stopPropagation());
   document.addEventListener("click", () => setOpen(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
-}
 
-async function load(loc, wrap) {
-  wrap.replaceChildren(el("div", { class: "offline-msg", text: "Loading weather…" }));
-  try {
-    const data = await fetchJSON(weatherURL(loc));
-    const parts = [
-      currentCard(data.current, data.daily),
-      hourlyStrip(data.hourly),
-      forecastStrip(data.daily),
-    ].filter(Boolean);
-    wrap.replaceChildren(...parts);
-    paintChip(loc, data);
-  } catch (e) {
-    console.error("[senya] weather load failed:", e);
-    wrap.replaceChildren(el("div", { class: "offline-msg", text: "Weather unavailable" }));
-    paintChip(loc, null);
-  }
-}
-
-export function initWeather() {
-  const wrap = document.getElementById("weather");
-  if (!wrap) return;
-  const locsEl = document.getElementById("weather-locs");
-  const locOf = (name) => WEATHER_LOCATIONS.find((l) => l.name === name) || WEATHER_LOCATIONS[0];
-  initChip();
-
-  let current = store.get(KEY, WEATHER_LOCATIONS[0].name);
-  if (!WEATHER_LOCATIONS.some((l) => l.name === current)) current = WEATHER_LOCATIONS[0].name;
-
-  const select = (name) => {
-    current = name;
-    store.set(KEY, name);
-    locsEl.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.textContent === name));
-    load(locOf(name), wrap);
-  };
-
-  // Location selector pills (only when there's more than one).
-  if (WEATHER_LOCATIONS.length > 1) {
-    for (const loc of WEATHER_LOCATIONS) {
-      locsEl.append(el("button", {
-        type: "button",
-        class: "wx-loc" + (loc.name === current ? " active" : ""),
-        text: loc.name,
-        onclick: () => select(loc.name),
-      }));
+  async function load() {
+    const loc = locOf(current);
+    try {
+      paintChip(loc, await fetchJSON(weatherURL(loc)), select);
+    } catch (e) {
+      console.error("[senya] weather load failed:", e);
+      paintChip(loc, null, select);
     }
   }
 
-  load(locOf(current), wrap);
-  setInterval(() => load(locOf(current), wrap), REFRESH_MS);
+  // Switching location keeps the popover open — you're comparing, not leaving.
+  function select(name) {
+    current = name;
+    store.set(KEY, name);
+    load();
+  }
+
+  load();
+  setInterval(load, REFRESH_MS);
 }

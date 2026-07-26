@@ -34,7 +34,6 @@ components/           the markup, one HTML file per section (see below)
   dashboard-grid.html empty grid the registry's widgets are built into
   info-pane.html      permanent right column, as slots
   system-panel.html   live per-host stats block
-  weather-panel.html  current + hourly + 7-day block
   settings-drawer.html Customize drawer + backdrop
 services.js           INTERNAL config (gated by nginx — see below)
 styles/
@@ -86,8 +85,12 @@ Markup and behaviour stay separate: components carry no scripts, and each
 ## Customize
 
 At runtime (saved per-browser, no code needed): open the **⚙ Customize** panel to
-**show/hide** any section and **drag to reorder** them. Order + hidden set live in
-`localStorage` (`senya.sections.order` / `senya.sections.hidden`).
+set the **text size**, **show/hide** any section and **drag to reorder** them.
+Text size scales the whole page rather than only the type — the layout is dense
+px-tuned chrome, so growing the font alone would cram it (see
+[`js/ui-scale.js`](js/ui-scale.js)). Order, hidden set and scale live in
+`localStorage` (`senya.sections.order` / `senya.sections.hidden` /
+`senya.uiScale`).
 
 In code:
 
@@ -115,20 +118,46 @@ rest — each `init` runs in its own try/catch.
 
 ## Sections
 
-- **Weather** — Open-Meteo (no API key); current conditions, next 24 hours and a
-  7-day forecast, with a selectable set of locations. The top bar also carries a
-  condensed chip (icon + temp) that expands to the same detail on click, painted
-  from the same fetch. Shown on and off network.
+- **Weather** — Open-Meteo (no API key), and it lives entirely in the **top bar**
+  (there's no side-pane block): a condensed chip shows icon · temp · today's
+  high/low · rain chance and wind, and clicking it expands location pills,
+  current conditions, the next 24 hours and a 7-day forecast. Shown on and off
+  network.
 - **System** — live CPU/RAM/SSD/temp per host via each host's Glances API,
   reverse-proxied same-origin under `/stats/<host>/` (internal only). Each host
-  name carries small **LAN** / **TS** chips — hover for the address, click to
-  copy; set `ip`/`ts` per host in `HOSTS` (`services.js`).
-- **Services** — each service links to **local**, **ts** (Tailscale), and, if it
-  has an `ext` subdomain, **ext** (`https://<ext>.senya.ca`). Internal only.
+  name carries small **LAN** / **TS** chips — click one for a popup with the
+  address, click the address to copy it; set `ip`/`ts` per host in `HOSTS`
+  (`services.js`).
+- **Services** (launcher rail) — click a service for its reachability links:
+  **LAN**, **TS** (Tailscale) and, if it has an `ext` subdomain, **EXT**
+  (`https://<ext>.senya.ca`) — each opens in a new tab. Whether you leave the
+  rail expanded or compact is remembered (`senya.rail.expanded`). Internal only.
 - **Bookmarks** — icon row under the top bar; the trailing **✎+** cell is edit
   and add at once (add form opens with edit mode; click a tile to edit it, ✕ to
   delete). Saved in `localStorage` over the `BOOKMARKS` defaults.
+- **Market Map** — the S&P 500 as blocks, finviz-style: a squarified treemap
+  where each company's area is its market cap and its colour is its performance
+  over the selected period (1D · 1W · 1M · 3M · 1Y · YTD), grouped by sector.
+  Structure (sector / ticker / market cap) is a static snapshot in
+  `data/market-map.json`; live percentages come from finviz's JSON through
+  nginx's cached `/market/perf` proxy (they send no CORS headers). Refresh the
+  snapshot with `tools/extract-map-structure.py` — see below.
+- **Crypto** — prices, 24h change and market cap from CoinGecko's free API (no
+  key). Coins: `CRYPTO_COINS` in [`js/config.js`](js/config.js).
 - **Search** (Google + SearXNG on-network).
+
+### Refreshing the market map snapshot
+
+Index membership and market caps move quarterly, so the structure is a snapshot
+rather than a live fetch. finviz ships it in a content-hashed webpack chunk:
+
+```bash
+# 1. find the chunk the map page preloads (data-chunk-id="map_base_sec")
+curl -s https://finviz.com/map | grep -o '/assets/dist/[0-9]*\.v1\.[a-f0-9]*\.js'
+# 2. pull it and re-extract
+curl -s https://finviz.com/assets/dist/<that-file> -o /tmp/base.js
+python3 tools/extract-map-structure.py /tmp/base.js data/market-map.json
+```
 
 ## Network-aware internal sections
 

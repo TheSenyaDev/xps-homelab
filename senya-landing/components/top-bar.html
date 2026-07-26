@@ -21,12 +21,18 @@
   <!-- Everything after this is pushed to the right edge. -->
   <div class="spacer-cell"></div>
 
-  <!-- Condensed weather chip (icon + temp); click expands the full current /
-       hourly / 7-day detail, off the same fetch as the info pane's block. -->
+  <!-- Weather lives here and only here (there's no side-pane block any more):
+       a condensed chip — icon, temp, today's high/low and rain/wind — that
+       expands to the full current / hourly / 7-day detail on click. -->
   <div class="wx-cell">
     <button id="wx-chip" class="wx-chip" type="button" aria-expanded="false" aria-controls="wx-pop"
             aria-label="Weather" title="Weather">
-      <span class="wx-chip-icon">·</span><span class="wx-chip-temp">—</span>
+      <span class="wx-chip-icon">·</span>
+      <span class="wx-chip-temp">—</span>
+      <span class="wx-chip-meta">
+        <span class="wx-chip-hl"></span>
+        <span class="wx-chip-sub"></span>
+      </span>
     </button>
     <div id="wx-pop" class="wx-pop" hidden></div>
   </div>
