@@ -1,8 +1,11 @@
 // Bookmarks bar: always visible, icon-first row directly under search. Editable
-// behind one bar-level toggle (js/sections/bookmarks.js) rather than per-tile
-// controls — click the ✎ cell to enter edit mode, then click a bookmark to
-// rename/re-url it or hit its ✕ to delete. Persisted in localStorage over the
-// BOOKMARKS defaults from config.js.
+// behind one bar-level control at the END of the row rather than per-tile
+// controls: the ✎+ cell is edit and add at the same time — it turns on edit mode
+// AND opens a blank add form in one click. While it's on, clicking a bookmark
+// loads it into that same form to rename/re-url, and each tile shows a ✕ to
+// delete. Saving keeps edit mode on and resets the form back to "add", so you
+// can add several in a row; the cell (or Done, or Esc) exits.
+// Persisted in localStorage over the BOOKMARKS defaults from config.js.
 
 import { BOOKMARKS } from "../config.js";
 import { el } from "../utils.js";
@@ -22,6 +25,33 @@ function persist(list) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch {}
 }
 
+// Bookmark icons come from all over: some are solid black (GitHub, OpenAI) and
+// disappear against the dark row, others are solid white and would disappear on
+// a light plate. So decide per icon — average the image's own visible pixels and
+// plate only the dark ones. Same-origin images, so the canvas isn't tainted.
+function isDarkIcon(img) {
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 16;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, 16, 16);
+    const { data } = ctx.getImageData(0, 0, 16, 16);
+    let lum = 0, weight = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3] / 255;
+      if (!alpha) continue; // transparent padding says nothing about the logo
+      lum += ((0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255) * alpha;
+      weight += alpha;
+    }
+    // Measured over the current icon set: the invisible ones land at 0.00–0.11
+    // (OpenAI, Tailscale, Wikipedia) while the darkest still-legible logo is
+    // YouTube's red at 0.26 — so 0.20 plates exactly what needs it.
+    return weight > 0 && lum / weight < 0.20;
+  } catch {
+    return false; // canvas unavailable — leave the icon as-is
+  }
+}
+
 function avatarColor(name) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
@@ -32,7 +62,6 @@ export function initBookmarks() {
   const row = document.getElementById("bookmarks")?.closest(".bookmarks-row") || document.querySelector(".bookmarks-row");
   const wrap = document.getElementById("bookmarks");
   const editBtn = document.getElementById("bm-edit-toggle");
-  const addBtn = document.getElementById("bm-add");
   const form = document.getElementById("bm-form");
   const nameInput = document.getElementById("bm-form-name");
   const urlInput = document.getElementById("bm-form-url");
@@ -54,6 +83,7 @@ export function initBookmarks() {
     const tile = el("div", { class: "bm-tile", title: b.name });
     if (b.icon) {
       const img = el("img", { alt: "", src: `icons/${b.icon}.png` });
+      img.addEventListener("load", () => img.classList.toggle("plate", isDarkIcon(img)));
       img.addEventListener("error", function onErr() { img.removeEventListener("error", onErr); img.remove(); tile.append(avatar(b)); });
       tile.append(img);
     } else {
@@ -72,6 +102,7 @@ export function initBookmarks() {
 
   function withScheme(url) { return /^https?:\/\//.test(url) ? url : `https://${url}`; }
 
+  // `existing` = null → the add half of the form; a bookmark → the edit half.
   function openForm(existing) {
     editingId = existing ? existing.id : null;
     nameInput.value = existing ? existing.name : "";
@@ -82,16 +113,23 @@ export function initBookmarks() {
   }
   function closeForm() { form.hidden = true; editingId = null; }
 
-  editBtn.addEventListener("click", () => { editMode = !editMode; if (!editMode) closeForm(); render(); });
-  addBtn.addEventListener("click", () => openForm(null));
-  cancelBtn.addEventListener("click", closeForm);
+  // One control for both jobs: on → edit mode + a blank add form; off → neither.
+  function setEditMode(on) {
+    editMode = on;
+    if (on) openForm(null); else closeForm();
+    render();
+  }
+
+  editBtn.addEventListener("click", () => setEditMode(!editMode));
+  cancelBtn.addEventListener("click", () => setEditMode(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && editMode) setEditMode(false); });
   saveBtn.addEventListener("click", () => {
     const name = nameInput.value.trim(), url = urlInput.value.trim();
     if (!name || !url) return;
     if (editingId) list = list.map((b) => (b.id === editingId ? { ...b, name, url } : b));
     else list = [...list, { id: "b" + Date.now(), name, url, icon: null }];
     persist(list);
-    closeForm();
+    openForm(null); // stay in edit mode, ready for the next add
     render();
   });
 

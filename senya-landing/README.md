@@ -25,13 +25,24 @@ No build step — plain native **ES modules** served as-is (works under the stri
 isolation, so one failing piece never blanks the rest of the page.
 
 ```
-index.html            shell: sticky top bar + search + empty #dashboard
+index.html            the page as a list of section slots, nothing else
+components/           the markup, one HTML file per section (see below)
+  top-bar.html        brand · search · weather chip · clock · health · gear
+  bookmarks-bar.html  icon row + the inline add/edit form
+  main-table.html     the three columns, as slots
+  launcher-rail.html  condensed Senya Apps / Services / Public launchers
+  dashboard-grid.html empty grid the registry's widgets are built into
+  info-pane.html      permanent right column, as slots
+  system-panel.html   live per-host stats block
+  settings-drawer.html Customize drawer + backdrop
 services.js           INTERNAL config (gated by nginx — see below)
 styles/
   base.css            tokens, shell, top bar, search, dashboard, Customize
                       panel, density variables, the mobile @media view
   components.css      bookmarks · weather · system · daily · services
 js/
+  page.js             composes index.html's slots from components/ (fetch +
+                      replace, nestable, cached) — awaited before any init
   config.js           PUBLIC config: BOOKMARKS, WEATHER_LOCATIONS, search engines
   registry.js         declarative SECTIONS list — the source of truth for what
                       sections exist, how they're built, and when they're shown
@@ -39,16 +50,53 @@ js/
                       lazily inits each, applies live show/hide + reorder
   settings.js         Customize panel (toggle + Pointer-Events drag reorder)
   utils.js            el() builder, link/iconImg, fetchJSON, safe localStorage
-  main.js             entry point: clock, search, layout, settings (try/catch)
+  main.js             entry point: renders the page, then clock, search,
+                      bookmarks, rail, system, weather, layout, settings
   sections/           clock · search · bookmarks · weather · system · daily ·
-                      public · services (each populates its container by id)
+                      rail (each populates its container by id)
 ```
+
+### Markup: one file per section
+
+`index.html` is just the running order of the page:
+
+```html
+<div data-component="top-bar"></div>
+<div data-component="bookmarks-bar"></div>
+<div data-component="main-table"></div>
+<div data-component="settings-drawer"></div>
+```
+
+[`js/page.js`](js/page.js) replaces each slot with `components/<name>.html`
+(the slot element itself is replaced, so no wrapper divs end up in the DOM) and
+resolves nested slots depth-first — `main-table.html` is itself three slots, and
+`info-pane.html` two more. Files are fetched once and cached.
+
+- **Reorder the page** → reorder the lines in `index.html`.
+- **Add a section** → write `components/<name>.html`, add a slot where it goes
+  (top level, or inside another component), and — if it needs behaviour — an
+  `initX()` in `js/sections/` called from `js/main.js`.
+- **Edit existing markup** → open that one component file; no other file knows
+  about its internals, only the ids it exposes.
+
+Markup and behaviour stay separate: components carry no scripts, and each
+`init` finds its container by id after `renderPage()` has finished.
 
 ## Customize
 
 At runtime (saved per-browser, no code needed): open the **⚙ Customize** panel to
-**show/hide** any section and **drag to reorder** them. Order + hidden set live in
-`localStorage` (`senya.sections.order` / `senya.sections.hidden`).
+set the size, **show/hide** any section and **drag to reorder** them.
+
+Size is two independent knobs (see [`js/ui-scale.js`](js/ui-scale.js)):
+
+- **Font** — type only (85–140%). Every `font-size` in the stylesheets is
+  written `calc(<px> * var(--fs))`, so text grows inside the existing chrome.
+- **Zoom** — the whole page (80–160%): type, padding, row heights, the rail and
+  the info pane, via root `zoom`, so proportions are preserved.
+
+Order, hidden set and both scales live in `localStorage`
+(`senya.sections.order` / `senya.sections.hidden` / `senya.fontScale` /
+`senya.uiZoom`).
 
 In code:
 
@@ -76,13 +124,46 @@ rest — each `init` runs in its own try/catch.
 
 ## Sections
 
-- **Weather** — Open-Meteo (no API key); current conditions + a 7-day forecast,
-  with a selectable set of locations. Shown on and off network.
+- **Weather** — Open-Meteo (no API key), and it lives entirely in the **top bar**
+  (there's no side-pane block): a condensed chip shows icon · temp · today's
+  high/low · rain chance and wind, and clicking it expands location pills,
+  current conditions, the next 24 hours and a 7-day forecast. Shown on and off
+  network.
 - **System** — live CPU/RAM/SSD/temp per host via each host's Glances API,
-  reverse-proxied same-origin under `/stats/<host>/` (internal only).
-- **Services** — each service links to **local**, **ts** (Tailscale), and, if it
-  has an `ext` subdomain, **ext** (`https://<ext>.senya.ca`). Internal only.
-- **Bookmarks** / **Search** (Google + SearXNG on-network).
+  reverse-proxied same-origin under `/stats/<host>/` (internal only). Each host
+  name carries small **LAN** / **TS** chips — click one for a popup with the
+  address, click the address to copy it; set `ip`/`ts` per host in `HOSTS`
+  (`services.js`).
+- **Services** (launcher rail) — click a service for its reachability links:
+  **LAN**, **TS** (Tailscale) and, if it has an `ext` subdomain, **EXT**
+  (`https://<ext>.senya.ca`) — each opens in a new tab. Whether you leave the
+  rail expanded or compact is remembered (`senya.rail.expanded`). Internal only.
+- **Bookmarks** — icon row under the top bar; the trailing **✎+** cell is edit
+  and add at once (add form opens with edit mode; click a tile to edit it, ✕ to
+  delete). Saved in `localStorage` over the `BOOKMARKS` defaults.
+- **Market Map** — the S&P 500 as blocks, finviz-style: a squarified treemap
+  where each company's area is its market cap and its colour is its performance
+  over the selected period (1D · 1W · 1M · 3M · 1Y · YTD), grouped by sector.
+  Structure (sector / ticker / market cap) is a static snapshot in
+  `data/market-map.json`; live percentages come from finviz's JSON through
+  nginx's cached `/market/perf` proxy (they send no CORS headers). Refresh the
+  snapshot with `tools/extract-map-structure.py` — see below.
+- **Crypto** — prices, 24h change and market cap from CoinGecko's free API (no
+  key). Coins: `CRYPTO_COINS` in [`js/config.js`](js/config.js).
+- **Search** (Google + SearXNG on-network).
+
+### Refreshing the market map snapshot
+
+Index membership and market caps move quarterly, so the structure is a snapshot
+rather than a live fetch. finviz ships it in a content-hashed webpack chunk:
+
+```bash
+# 1. find the chunk the map page preloads (data-chunk-id="map_base_sec")
+curl -s https://finviz.com/map | grep -o '/assets/dist/[0-9]*\.v1\.[a-f0-9]*\.js'
+# 2. pull it and re-extract
+curl -s https://finviz.com/assets/dist/<that-file> -o /tmp/base.js
+python3 tools/extract-map-structure.py /tmp/base.js data/market-map.json
+```
 
 ## Network-aware internal sections
 

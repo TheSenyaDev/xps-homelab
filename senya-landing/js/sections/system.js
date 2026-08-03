@@ -65,12 +65,13 @@ function metricRow(label, value, pct) {
 
 async function refreshHost(host, body) {
   try {
-    const [cpu, mem, fs, sensors, power] = await Promise.all([
+    const [cpu, mem, fs, sensors, power, gpu] = await Promise.all([
       fetchJSON(`/stats/${host.key}/cpu`),
       fetchJSON(`/stats/${host.key}/mem`),
       fetchJSON(`/stats/${host.key}/fs`),
       fetchJSON(`/stats/${host.key}/sensors`).catch(() => []),
       host.power ? fetchJSON(`/stats/${host.key}/power`).catch(() => null) : Promise.resolve(null),
+      host.gpu ? fetchJSON(`/stats/${host.key}/gpu`).catch(() => null) : Promise.resolve(null),
     ]);
     body.classList.remove("offline");
     body.replaceChildren(metricRow("CPU", `${Math.round(cpu.total)}%`, cpu.total));
@@ -92,6 +93,14 @@ async function refreshHost(host, body) {
       : pickTemp(sensors)?.value;
     if (typeof tempC === "number") body.append(metricRow("Temp", `${Math.round(tempC)}°C`, tempC));
 
+    // NVIDIA GPU temp, from the nvidia-api (`gpu: true` hosts only). The
+    // proprietary driver exports no hwmon entry, so this never shows up in the
+    // Glances sensors list above. nvidia-api answers 200 with {"error": ...}
+    // when nvidia-smi fails, so check the field rather than the status.
+    if (gpu && typeof gpu.temp_c === "number") {
+      body.append(metricRow("GPU Temp", `${Math.round(gpu.temp_c)}°C`, gpu.temp_c));
+    }
+
     if (power && typeof power.power_w === "number") {
       body.append(metricRow("CPU Power", `${power.power_w.toFixed(1)} W`, null));
     }
@@ -101,15 +110,73 @@ async function refreshHost(host, body) {
   }
 }
 
+// Only one address popup is open at a time, page-wide.
+let openAddrPopup = null;
+function closeAddrPopup() {
+  if (!openAddrPopup) return;
+  openAddrPopup.pop.hidden = true;
+  openAddrPopup.chip.classList.remove("open");
+  openAddrPopup.chip.setAttribute("aria-expanded", "false");
+  openAddrPopup = null;
+}
+document.addEventListener("click", closeAddrPopup);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAddrPopup(); });
+
+// Small address chip beside a host name. Clicking it opens a little popup with
+// the actual address — clicking that copies it. `kind` is "lan" or "ts".
+function addrChip(kind, label, address) {
+  const chip = el("button", {
+    type: "button", class: `addr-chip addr-${kind}`,
+    title: `${label} address`, "aria-expanded": "false", "aria-label": `Show ${label} address`,
+  }, el("span", { class: "addr-chip-label", text: label }));
+
+  const value = el("button", { type: "button", class: "addr-pop-val", title: "Click to copy", text: address });
+  const pop = el("div", { class: "addr-pop", hidden: "" },
+    el("span", { class: "addr-pop-label", text: label }), value);
+
+  chip.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const wasOpen = openAddrPopup?.chip === chip;
+    closeAddrPopup();
+    if (wasOpen) return;
+    pop.hidden = false;
+    chip.classList.add("open");
+    chip.setAttribute("aria-expanded", "true");
+    openAddrPopup = { chip, pop };
+  });
+
+  value.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(address);
+    } catch {
+      return; // clipboard blocked (non-secure context) — the address is still readable
+    }
+    value.classList.add("copied");
+    setTimeout(() => value.classList.remove("copied"), 1200);
+  });
+  pop.addEventListener("click", (e) => e.stopPropagation());
+
+  return el("span", { class: "addr-chip-wrap" }, chip, pop);
+}
+
+function hostName(host) {
+  const name = el("div", { class: "host-name" }, iconImg(host.icon), el("span", { text: host.name }));
+  const addrs = el("div", { class: "host-addrs" });
+  const lan = host.ip || internal.LOCAL_IP;
+  if (lan) addrs.append(addrChip("lan", "LAN", lan));
+  if (host.ts) addrs.append(addrChip("ts", "TS", host.ts));
+  if (addrs.children.length) name.append(addrs);
+  return name;
+}
+
 export function initSystem() {
   const wrap = document.getElementById("system");
   if (!wrap) return;
   const bodies = [];
   for (const host of internal.HOSTS) {
     const body = el("div", { class: "host-body" }, el("span", { class: "offline-msg", text: "…" }));
-    wrap.append(el("div", { class: "host" },
-      el("div", { class: "host-name" }, iconImg(host.icon), host.name),
-      body));
+    wrap.append(el("div", { class: "host" }, hostName(host), body));
     bodies.push([host, body]);
   }
 

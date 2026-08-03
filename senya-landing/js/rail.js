@@ -5,9 +5,10 @@
 // port, address and container detail. Also drives the top-bar health badge.
 
 import { internal, PUBLIC_LINKS } from "./config.js";
-import { el, iconImg, fetchJSON } from "./utils.js";
+import { el, link, iconImg, fetchJSON, store } from "./utils.js";
 
 const STATUS_REFRESH_MS = 15000;
+const EXPANDED_KEY = "senya.rail.expanded"; // remembered across reloads
 const STATUS_SOURCES = ["/stats/xps/containers"];
 const UP = new Set(["running", "healthy"]);
 const WARN = new Set(["starting", "restarting", "unhealthy", "created", "paused"]);
@@ -31,12 +32,20 @@ export function initRail() {
   if (!sections.length) { rail.hidden = true; return; }
 
   let active = sections[0].key;
-  let expanded = false;
+  let expanded = store.get(EXPANDED_KEY, "false") === "true";
   let selected = null; // "<section>:<name>" of the row showing inline detail
   let lastMap = null;
   const statusDots = new Map(); // container name -> dot element
 
-  function setExpanded(v) { expanded = v; rail.dataset.expanded = String(expanded); toggle.textContent = expanded ? "‹" : "›"; }
+  // However you left it — chevron or a row click that expanded it — is how it
+  // comes back next reload.
+  function setExpanded(v) {
+    expanded = v;
+    rail.dataset.expanded = String(expanded);
+    toggle.textContent = expanded ? "‹" : "›";
+    store.set(EXPANDED_KEY, String(expanded));
+  }
+  setExpanded(expanded);
   toggle.addEventListener("click", () => setExpanded(!expanded));
 
   function renderNav() {
@@ -50,9 +59,36 @@ export function initRail() {
     }));
   }
 
-  function addr(it) {
-    const ip = it.localIp || internal?.LOCAL_IP;
-    return it.url || (ip ? ip + (it.port ? `:${it.port}` : "") : String(it.port ?? "—"));
+  // Every way to reach a service, as clickable links: LAN, Tailscale, and — for
+  // services with an `ext` subdomain — the public tunnel. Items that carry a
+  // ready-made `url` (the Public section) just get that one. Each opens in a new
+  // window; the port is the service's, or the host's default web port.
+  function addrLinks(it) {
+    const port = it.port ? `:${it.port}` : "";
+    const rows = [];
+
+    if (it.url) {
+      rows.push(["url", it.url, it.url.replace(/^https?:\/\//, "")]);
+    } else {
+      const lan = it.localIp || internal?.LOCAL_IP;
+      const ts = it.tsIp || internal?.TAILSCALE_IP;
+      if (lan) rows.push(["lan", `http://${lan}${port}`, `${lan}${port}`]);
+      if (ts) rows.push(["ts", `http://${ts}${port}`, `${ts}${port}`]);
+    }
+    if (it.ext && internal?.PUBLIC_DOMAIN) {
+      const host = `${it.ext}.${internal.PUBLIC_DOMAIN}`;
+      rows.push(["ext", `https://${host}`, host]);
+    }
+    if (!rows.length) return [el("div", { class: "addr", text: "—" })];
+
+    return rows.map(([kind, href, text]) => {
+      const a = link(text, href, `addr-link addr-${kind}`);
+      a.title = href;
+      a.prepend(el("span", { class: "addr-tag", text: kind.toUpperCase() }));
+      // Don't let opening a link collapse the row's detail.
+      a.addEventListener("click", (e) => e.stopPropagation());
+      return a;
+    });
   }
 
   function renderItems() {
@@ -74,7 +110,7 @@ export function initRail() {
       if (selected === id && expanded) {
         wrap.append(el("div", { class: "rail-detail" },
           el("div", { class: "status", text: it.container ? "…" : "unknown" }),
-          el("div", { class: "addr", text: addr(it) }),
+          ...addrLinks(it),
           it.container ? el("div", { class: "container", text: it.container }) : null));
       }
       return wrap;

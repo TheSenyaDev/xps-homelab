@@ -5,16 +5,47 @@
 
 import { el } from "./utils.js";
 import { getSectionsState, setHidden, setOrder } from "./layout.js";
+import { getFont, setFont, getZoom, setZoom, LIMITS } from "./ui-scale.js";
 
 export function initSettings() {
   const btn = document.getElementById("settings-btn");
   const panel = document.getElementById("settings");
   const list = document.getElementById("settings-list");
   const backdrop = document.getElementById("settings-backdrop");
+  const scaleWrap = document.getElementById("settings-scale");
   if (!btn || !panel || !list) return;
 
+  // ---- size controls: font and zoom, independent ----
+
+  let paintScale = () => {};
+  if (scaleWrap) {
+    // Two identical −/value/+/reset rows over different setters.
+    const knob = (name, hint, get, set, limits) => {
+      const value = el("span", { class: "scale-value" });
+      const paint = () => { value.textContent = `${Math.round(get() * 100)}%`; };
+      const bump = (d) => { set(get() + d); paint(); };
+      const range = `${Math.round(limits.min * 100)}–${Math.round(limits.max * 100)}%`;
+
+      const row = el("div", { class: "set-row set-scale" },
+        el("span", { class: "set-name" },
+          name, el("span", { class: "set-sub", text: hint })),
+        el("div", { class: "scale-ctl" },
+          el("button", { type: "button", class: "scale-btn", title: `Smaller (${range})`, "aria-label": `Decrease ${name}`, text: "−", onclick: () => bump(-limits.step) }),
+          value,
+          el("button", { type: "button", class: "scale-btn", title: `Bigger (${range})`, "aria-label": `Increase ${name}`, text: "+", onclick: () => bump(limits.step) }),
+          el("button", { type: "button", class: "scale-reset", title: "Back to 100%", text: "reset", onclick: () => { set(1); paint(); } })));
+      return { row, paint };
+    };
+
+    const font = knob("Font", "text only", getFont, setFont, LIMITS.font);
+    const zoom = knob("Zoom", "whole page", getZoom, setZoom, LIMITS.zoom);
+    scaleWrap.replaceChildren(font.row, zoom.row);
+    paintScale = () => { font.paint(); zoom.paint(); }; // re-read on open
+    paintScale();
+  }
+
   const isOpen = () => document.body.classList.contains("settings-open");
-  const open = () => { document.body.classList.add("settings-open"); panel.setAttribute("aria-hidden", "false"); renderList(); };
+  const open = () => { document.body.classList.add("settings-open"); panel.setAttribute("aria-hidden", "false"); paintScale(); renderList(); };
   const close = () => { document.body.classList.remove("settings-open"); panel.setAttribute("aria-hidden", "true"); };
 
   btn.addEventListener("click", () => (isOpen() ? close() : open()));

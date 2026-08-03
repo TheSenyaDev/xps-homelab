@@ -4,8 +4,14 @@ export const REL = "noopener noreferrer";
 const DEFAULT_ICON = "icons/_default.svg";
 
 // Terse element builder: el("div", { class: "x", text: "hi", onclick: fn }, child, …).
-// Props: `class`, `text`, `html`, `title`, `on<event>` handlers, else setAttribute.
+// Props: `class`, `text`, `html`, `style`, `on<event>` handlers, else setAttribute.
 // Children may be nodes, strings, or arrays (flattened); null/undefined skipped.
+//
+// `style` is applied through the CSSOM (cssText / Object.assign), never as a
+// style="…" attribute: the page runs under `style-src 'self'` with no
+// 'unsafe-inline', which blocks inline style *attributes* but not CSSOM writes.
+// Setting the attribute silently drops the styles in production while working
+// fine on any server that sends no CSP — so it's handled here, once.
 export function el(tag, props = {}, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
@@ -13,6 +19,7 @@ export function el(tag, props = {}, ...kids) {
     if (k === "class") n.className = v;
     else if (k === "text") n.textContent = v;
     else if (k === "html") n.innerHTML = v;
+    else if (k === "style") { if (typeof v === "string") n.style.cssText = v; else Object.assign(n.style, v); }
     else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
     else n.setAttribute(k, v);
   }

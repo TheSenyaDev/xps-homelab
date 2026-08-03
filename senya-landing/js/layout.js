@@ -51,8 +51,11 @@ function ensureBuilt(id) {
   if (s.hint) h2.append(" ", el("span", { class: "hint", text: s.hint }));
   if (s.headerExtra) h2.append(" ", el("span", { id: s.headerExtra.id, class: s.headerExtra.class }));
 
-  const node = el("section", { id: `${s.id}-section`, "data-section": s.id },
-    h2, el("div", { id: s.bodyId, class: s.bodyClass }));
+  // `wide: true` in the registry → the section spans every grid column (for
+  // widgets like the market map that need room to be readable).
+  const node = el("section", {
+    id: `${s.id}-section`, "data-section": s.id, ...(s.wide ? { "data-wide": "" } : {}),
+  }, h2, el("div", { id: s.bodyId, class: s.bodyClass }));
   built.set(id, node);
   dash.appendChild(node);
   try { s.init(); } catch (e) { console.error(`[senya] section "${id}" failed:`, e); }

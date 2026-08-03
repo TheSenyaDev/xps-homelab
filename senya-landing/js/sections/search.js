@@ -11,6 +11,14 @@ export function initSearch() {
 
   const form = document.getElementById("search");
   if (!form) return;
+
+  // Land on the page ready to type. Skipped on touch/narrow screens, where
+  // focusing an input throws up the on-screen keyboard before you've asked for
+  // it. `preventScroll` keeps the focus from jumping the page on short viewports.
+  const input = document.getElementById("q");
+  const wantsKeyboard = window.matchMedia("(min-width: 861px) and (pointer: fine)").matches;
+  if (input && wantsKeyboard) input.focus({ preventScroll: true });
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const q = document.getElementById("q").value.trim();
