@@ -1,0 +1,51 @@
+# Stats stack for the Fedora PC — the remote half of the "Fedora" card on the
+# Senya Landing page (http://192.168.2.100:8090).
+#
+# This compose file runs ON THE FEDORA BOX, not on the XPS. It exposes the same
+# two endpoints the XPS does, so senya-landing's /stats/fedora/ proxy can read
+# them and render an identical card:
+#
+#   :61208  glances    → CPU, RAM, disks, sensors, containers  (/stats/fedora/*)
+#   :8081   power-api  → RAPL watts + x86_pkg_temp CPU temp    (/stats/fedora/power)
+#
+# Deploy:  see README.md in this folder.
+
+services:
+  # Same image and flags as the XPS glances service, so the JSON shape the
+  # landing page parses (/api/4/cpu, /mem, /fs, /sensors) is identical.
+  glances:
+    image: nicolargo/glances:latest
+    container_name: glances
+    ports:
+      - 61208:61208
+    volumes:
+      # Lets glances report container status. Drop this line if the Fedora box
+      # runs podman instead of docker.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - GLANCES_OPT=-w
+    # Host PID namespace: without it glances only sees its own processes and
+    # reports near-zero CPU.
+    pid: host
+    restart: unless-stopped
+
+  # Reads Intel RAPL energy counters and the x86_pkg_temp thermal zone straight
+  # from sysfs. Glances reports neither correctly, which is why the XPS card
+  # prefers this source for Temp and CPU Power.
+  #
+  # Shares ONE server.py with the XPS (../power-api/server.py) so the two hosts
+  # can never drift — that script already degrades gracefully when a field is
+  # unreadable, so a desktop with no BAT0 battery still reports watts and temp.
+  power-api:
+    image: python:3.12-alpine
+    container_name: power-api
+    ports:
+      - 8081:8081
+    volumes:
+      - ../power-api/server.py:/server.py:ro
+      - /sys:/sys:ro
+    # Needed to read /sys/class/powercap. Also drops the container out of
+    # SELinux confinement, which Fedora enforces by default.
+    privileged: true
+    command: python /server.py
+    restart: unless-stopped

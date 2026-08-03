@@ -45,7 +45,29 @@ export const PUBLIC_LINKS = [
 // Internal config from /services.js — present only on LAN / Tailscale.
 export const internal = window.SENYA_INTERNAL || null;
 
+// SearXNG sits on the same host as this page, but that host answers on both a
+// LAN and a Tailscale address — and only one of them is reachable at a time.
+// Send the search to whichever address the page itself was loaded from, so a
+// search off-network doesn't land on an unreachable 192.168.x URL. For any
+// other hostname (MagicDNS name, localhost) reuse it as-is, keeping the port
+// and path from the configured URL.
+function searxngUrl() {
+  if (!internal?.SEARXNG) return null;
+  const here = location.hostname;
+  if (here === internal.LOCAL_IP) return internal.SEARXNG;
+  if (here === internal.TAILSCALE_IP) return internal.SEARXNG_TS || internal.SEARXNG;
+  try {
+    const u = new URL(internal.SEARXNG);
+    u.hostname = here;
+    return u.href;
+  } catch {
+    return internal.SEARXNG;
+  }
+}
+
+const searxng = searxngUrl();
+
 export const SEARCH_ENGINES = {
   google: "https://www.google.com/search?q=",
-  ...(internal ? { searxng: internal.SEARXNG } : {}),
+  ...(searxng ? { searxng } : {}),
 };

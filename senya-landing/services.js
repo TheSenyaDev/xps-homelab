@@ -7,7 +7,11 @@
 window.SENYA_INTERNAL = {
   LOCAL_IP: "192.168.2.100",
   TAILSCALE_IP: "100.121.230.17",
+  // Search box target. SearXNG is reachable at two addresses; config.js picks
+  // the one matching however you loaded this page, so a search started from the
+  // Tailscale URL doesn't get sent to the LAN IP you can't reach off-network.
   SEARXNG: "http://192.168.2.100:4000/search?q=",
+  SEARXNG_TS: "http://100.121.230.17:4000/search?q=",
   // Parent domain for services exposed through the Cloudflare tunnel. A service
   // with an `ext` field below gets an extra "ext" link to https://<ext>.<domain>.
   PUBLIC_DOMAIN: "senya.ca",

@@ -150,7 +150,11 @@ rest — each `init` runs in its own try/catch.
   snapshot with `tools/extract-map-structure.py` — see below.
 - **Crypto** — prices, 24h change and market cap from CoinGecko's free API (no
   key). Coins: `CRYPTO_COINS` in [`js/config.js`](js/config.js).
-- **Search** (Google + SearXNG on-network).
+- **Search** (Google + SearXNG on-network). SearXNG is picked to match the
+  address you loaded the page from: reach the landing page over Tailscale and
+  the search goes to `SEARXNG_TS`, over the LAN and it goes to `SEARXNG` (both
+  in [`services.js`](services.js)). Any other hostname — a MagicDNS name,
+  `localhost` — reuses that hostname with SearXNG's port.
 
 ### Refreshing the market map snapshot
 
