@@ -1,8 +1,8 @@
-import { internal, SEARCH_ENGINES } from "../config.js";
+import { SEARCH_ENGINES } from "../config.js";
 
 export function initSearch() {
   // SearXNG is internal-only; drop the option when off-network.
-  if (!internal) {
+  if (!SEARCH_ENGINES.searxng) {
     const sx = document.querySelector('label[data-engine="searxng"]');
     if (sx) sx.remove();
     const g = document.querySelector('input[name="engine"][value="google"]');
