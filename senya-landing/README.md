@@ -179,8 +179,17 @@ requests** (gated by `Host` header). The `/stats/` proxy is gated the same way.
 | How you reach it | `Host` | `services.js` | Internal sections |
 |---|---|---|---|
 | LAN | `192.168.2.100` | served | yes |
-| Tailscale | `100.121.230.17` | served | yes |
+| Tailscale (IP) | `100.121.230.17` | served | yes |
+| Tailscale (MagicDNS) | `xps-mint-server.tailbfafc9.ts.net` | served | yes |
+| Tailscale (short name) | `xps-mint-server` | served | yes |
 | Tunnel (public) | `home.senya.ca` | **404** | no |
+
+The two MagicDNS rows need your **tailnet name** hardcoded in the
+`$internal_client` map in [`nginx.conf`](nginx.conf) — a MagicDNS name carries no
+`100.x` address for the CGNAT regex to match, so without those entries browsing
+to the name loads the page but 404s every internal endpoint (empty System panel,
+no SearXNG option). Change `tailbfafc9` and `xps-mint-server` to yours; find them
+with `tailscale status --json | grep DNSName`.
 
 ## Hardening applied
 
