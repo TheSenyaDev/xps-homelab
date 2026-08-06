@@ -539,12 +539,109 @@ services:
       - TZ=${TZ}
     restart: unless-stopped
 
+  # ── Nextcloud (files/calendar/contacts) + its Postgres and Redis ───────────
+  # Major version is pinned deliberately: Nextcloud refuses to skip a major on
+  # upgrade, so a floating tag (`apache`/`stable-apache`) can strand the install
+  # if it jumps two releases between pulls. Bump this one number to upgrade.
+  nextcloud:
+    image: nextcloud:34-apache
+    container_name: nextcloud
+    ports:
+      - 8088:80
+    volumes:
+      - ./nextcloud/html:/var/www/html
+      - ./nextcloud/data:/var/www/html/data
+    environment:
+      - TZ=${TZ}
+      - POSTGRES_HOST=nextcloud-db
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - REDIS_HOST=nextcloud-redis
+      - NEXTCLOUD_ADMIN_USER=${NEXTCLOUD_ADMIN_USER}
+      - NEXTCLOUD_ADMIN_PASSWORD=${NEXTCLOUD_ADMIN_PASSWORD}
+      # Nextcloud refuses any Host header not listed here — LAN, Tailscale, local.
+      - NEXTCLOUD_TRUSTED_DOMAINS=${SERVER_IP} 100.121.230.17 localhost
+      - OVERWRITEPROTOCOL=http
+      - PHP_MEMORY_LIMIT=768M
+      - PHP_UPLOAD_LIMIT=2G
+    depends_on:
+      nextcloud-db:
+        condition: service_healthy
+      nextcloud-redis:
+        condition: service_started
+    restart: unless-stopped
+
+  nextcloud-db:
+    image: postgres:16-alpine
+    container_name: nextcloud-db
+    volumes:
+      - nextcloud-db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=${NEXTCLOUD_DB_PASSWORD}
+      - POSTGRES_DB=nextcloud
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "nextcloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Background jobs. Without this the image falls back to AJAX cron, which only
+  # fires when someone loads a page — so file scans, cleanup and notifications
+  # silently never run on an idle instance. Same image and volumes, /cron.sh
+  # entrypoint (it runs occ every 5 minutes).
+  nextcloud-cron:
+    image: nextcloud:34-apache
+    container_name: nextcloud-cron
+    entrypoint: /cron.sh
+    volumes:
+      - ./nextcloud/html:/var/www/html
+      - ./nextcloud/data:/var/www/html/data
+    environment:
+      - TZ=${TZ}
+    depends_on:
+      nextcloud-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Nextcloud uses Redis for file locking and caching; without it concurrent
+  # clients (desktop sync + phone) can trip transactional file-locking errors.
+  nextcloud-redis:
+    image: redis:7-alpine
+    container_name: nextcloud-redis
+    command: ["redis-server", "--save", "60", "1"]
+    volumes:
+      - nextcloud-redis:/data
+    restart: unless-stopped
+
+  # ── miniflux-ai: LLM summaries/translations for Miniflux entries ───────────
+  # No ports: it polls the Miniflux API and writes summaries back. It also
+  # serves an internal Flask app (AI news / feed status) that Miniflux
+  # subscribes to by container name over homelab_default.
+  # Secrets (Miniflux API key, LLM key) live in ./miniflux-ai/config.yml, which
+  # is gitignored — see miniflux-ai/config.example.yml for the shape.
+  miniflux-ai:
+    image: ghcr.io/qetesh/miniflux-ai:latest
+    container_name: miniflux-ai
+    volumes:
+      - ./miniflux-ai/config.yml:/app/config.yml:ro
+    environment:
+      - TZ=${TZ}
+    depends_on:
+      - miniflux
+    restart: unless-stopped
+
 volumes:
   grafana-data:
   prometheus-data:
   firefly-db:
   firefly-upload:
   miniflux-db:
+  nextcloud-db:
+  nextcloud-redis:
 
   # Read-only CIFS mount of the TrueNAS Finance dataset (SMB share) (bank/credit-card exports)
   # for the upcoming finance app. Creds: FINANCE_SMB_USER / FINANCE_SMB_PASSWORD

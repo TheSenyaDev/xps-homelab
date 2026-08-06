@@ -1,6 +1,9 @@
 # Secrets
 .env
 cloudflared/credentials.json
+# miniflux-ai config holds the Miniflux API key and the LLM provider key —
+# the committed template is miniflux-ai/config.example.yml
+miniflux-ai/config.yml
 
 # Private keys
 *.key
