@@ -19,6 +19,8 @@ app still presents itself as **SenyaTasks**.
 - Data persisted in a SQLite file under `/data` (Docker volume)
 - **Live Obsidian export:** every change rewrites `/data/Tasks.md` (atomically) with YAML
   frontmatter, nested headings and `- [ ]` / `- [x]` checkboxes
+- **On-demand export** (`↓ md`) of exactly what you're looking at, and **import** (`↑ md`) that
+  parses pasted Obsidian markdown into a reviewable, editable list before anything is saved
 
 ## UI notes
 
@@ -36,7 +38,8 @@ Three CSS variables at the top of [`static/style.css`](static/style.css) drive t
 | `--fs`   | `13px`  | body text size                  |
 | `--gap`  | `6px`   | spacing between row elements    |
 
-Keyboard: `/` search · `n` new task · `\` toggle sidebar · `Esc` close open detail panels.
+Keyboard: `/` search · `n` new task · `\` toggle sidebar · `Esc` close open detail panels (or the
+import dialog).
 Selected category, filter, sort, tag and collapsed subtrees persist in `localStorage`.
 
 ## Data model
@@ -112,7 +115,9 @@ To add a field:
    That single table drives both `POST` and `PATCH`, so the field is now creatable, updatable and
    validated. Validators normalise the value or raise `ApiError(msg, status)`.
 
-3. Optionally surface it in `build_markdown()` and the frontend's `taskDetail()`.
+3. Optionally surface it in `build_markdown()` (export), `parse_task_text()` (import) and the
+   frontend's `taskDetail()`. Skipping these is fine — the field just won't round-trip through
+   markdown.
 
 New status or priority values go in the `STATUSES` / `PRIORITIES` tuples at the top of `app.py`
 **and** in a migration that widens the CHECK constraint. `GET /api/meta` serves those vocabularies
@@ -145,6 +150,85 @@ stays queryable there:
 ```
 
 Checkbox characters carry the status: `[ ]` todo, `[/]` doing, `[!]` blocked, `[x]` done.
+
+## Export on demand
+
+`Tasks.md` is rewritten on every change, but the **`↓ md`** button in the top bar downloads the
+current view as a dated `.md` file — whatever category, status filter, tag and search box are
+active. Categories that contributed no tasks are pruned, so a one-category export isn't padded
+with empty headings.
+
+Under the hood that's `GET /api/export`, which accepts every `GET /api/tasks` filter plus
+`?ids=1,2,3` and `?download=1`:
+
+```bash
+curl 'localhost:8000/api/export?status=done'                  # completed work
+curl 'localhost:8000/api/export?category_id=3&download=1' -OJ # one category, as a file
+```
+
+The UI passes explicit `ids` because its search box and tag chips filter in the browser — the id
+list is the only faithful description of what's on screen.
+
+## Import from Obsidian
+
+**`↑ md`** opens a two-step importer: paste markdown, hit **Parse**, then review a table of
+proposed tasks before anything is written.
+
+The parser is deliberately forgiving, because people paste whole notes rather than clean lists:
+
+| In the markdown                              | Becomes                                          |
+|----------------------------------------------|--------------------------------------------------|
+| `## Work`, `### Garage`                      | category, nested by heading level                 |
+| `- [ ]` `[/]` `[!]` `[x]`                    | status todo / doing / blocked / done              |
+| `🔺` `⏫` `🔼` `🔽` `⏬`                        | priority (highest and lowest fold into high/low)  |
+| `📅` `📆` `🗓` + `YYYY-MM-DD`                  | due date                                          |
+| `✅ YYYY-MM-DD`                               | completion date, preserved rather than re-stamped |
+| `#tag`                                       | tags (lowercased, spaces → `-`)                   |
+| indented lines under a task                  | notes                                             |
+| `- plain bullet`, `1. numbered`              | a candidate task, **unticked**, flagged           |
+
+Ignored outright: YAML frontmatter, prose paragraphs, `>` callouts and quotes, and a lone `#` H1
+before the first task (that's the note's title, not a category — otherwise every round-trip nests
+everything one level deeper).
+
+Obsidian Tasks fields with no equivalent here — `🔁` recurrence, `🛫` start, `⏳` scheduled, `➕`
+created, `🆔`/`⛔` dependencies — are stripped from the title and reported as a warning on that
+row, so you can see what was dropped instead of finding it glued into a task name.
+
+### The review step
+
+Every row is editable — title, status, priority, due date, tags, and a slash-separated category
+path (`Home / Garage`) that's created on import if it doesn't exist. Rows carrying a warning are
+tinted; duplicates of tasks you already have are tinted red and called out by name. Plain bullets
+arrive unticked, so junk needs an explicit opt-in rather than an opt-out. **Select all**, **None**
+and **Only clean** (everything without a warning) handle the bulk cases.
+
+Guarantees worth knowing:
+
+- **Preview writes nothing.** `POST /api/import/preview` only parses; the database is untouched
+  until you press Import.
+- **Your edits win.** The reviewed items are what get posted, not the original text.
+- **Same validation as any other write.** Committed items go through the same `TASK_FIELDS`
+  validators as `POST /api/tasks` — the import path has no shortcut into the database.
+- **All or nothing.** One bad row aborts the whole batch and rolls back, so a partial import can't
+  leave half a note behind.
+
+### Round trip
+
+Export → import is lossless for everything the schema holds: status, priority, due date, tags,
+notes, completion dates and category placement all survive, and re-importing your own export
+produces no warnings. It does create *duplicates* if the tasks are still there — that's what the
+duplicate flagging in the review step is for.
+
+```bash
+# import a note from the command line
+curl -X POST localhost:8000/api/import/preview -H 'Content-Type: application/json' \
+     -d '{"markdown":"## Work\n- [ ] ship it ⏫ 📅 2026-09-01"}'
+# feed the reviewed items straight back
+curl -X POST localhost:8000/api/import/commit -H 'Content-Type: application/json' \
+     -d '{"items":[{"title":"ship it","priority":"high","due_date":"2026-09-01",
+                    "category_path":["Work"],"tags":["ship"]}]}'
+```
 
 ## Deploying the rename (one time)
 
@@ -200,14 +284,18 @@ All bodies are JSON. Errors come back as `{"error": "..."}` with a 4xx status.
 | GET    | `/api/tags`             | — (each tag carries a `task_count`)                                  |
 | PATCH  | `/api/tags/:id`         | `name` and/or `color`                                                |
 | DELETE | `/api/tags/:id`         | — (removes the label everywhere; tasks are untouched)                |
-| GET    | `/api/tasks`            | filters: `?status= ?priority= ?category_id= ?tag= ?q= ?due_before=`  |
+| GET    | `/api/tasks`            | filters: `?status= ?priority= ?category_id= ?tag= ?q= ?due_before= ?ids=` |
 | POST   | `/api/tasks`            | `{ title, notes?, status?, priority?, category_id?, due_date?, position?, tags? }` |
 | PATCH  | `/api/tasks/:id`        | any subset of the same fields (plus `done` as a `status` shortcut)   |
 | POST   | `/api/tasks/reorder`    | `{ "ids": [3, 1, 2] }` — rewrites `position` in the order given      |
 | DELETE | `/api/tasks/:id`        | —                                                                    |
+| GET    | `/api/export`           | markdown; same filters as `/api/tasks`, plus `?download=1`           |
+| POST   | `/api/import/preview`   | `{ markdown, default_status? }` → proposed tasks + warnings, no writes |
+| POST   | `/api/import/commit`    | `{ items: [...], create_categories? }` → inserts the reviewed items   |
 
 `?category_id=none` selects uncategorized tasks; `?q=` matches title **and** notes. `tags` on a
-write **replaces** the task's whole tag set.
+write **replaces** the task's whole tag set. Import items accept every task field plus
+`category_path: ["Home", "Garage"]` and an `include` flag (items with `include: false` are skipped).
 
 ```bash
 # everything overdue, highest priority first

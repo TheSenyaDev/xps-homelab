@@ -8,6 +8,10 @@
 </head>
 <body>
   <div class="app">
+    <!-- Only rendered as a hit target on narrow screens, where the sidebar
+         becomes an off-canvas drawer (see the mobile block in style.css). -->
+    <div class="drawer-scrim"></div>
+
     <aside class="sidebar">
       <div class="brand">
         <span>📋 SenyaTasks</span>
@@ -37,7 +41,7 @@
 
     <main class="content">
       <header class="bar">
-        <button id="sidebar-show" class="icon-btn" title="Show sidebar (\)">›</button>
+        <button id="sidebar-show" class="icon-btn" title="Categories (\)">☰</button>
         <h2 id="current-title">All tasks</h2>
         <span id="current-count" class="count-chip"></span>
 
@@ -54,6 +58,11 @@
             <option value="title">Title A–Z</option>
           </select>
         </label>
+
+        <span class="bar-tools">
+          <button id="btn-export" class="ghost-btn" title="Download the tasks below as Obsidian markdown">↓&nbsp;Export</button>
+          <button id="btn-import" class="ghost-btn" title="Paste Obsidian markdown to import">↑&nbsp;Import</button>
+        </span>
       </header>
 
       <form id="task-form" class="add-task">
@@ -69,6 +78,50 @@
 
       <div id="task-groups"></div>
     </main>
+  </div>
+
+  <!-- Import: paste → parse → review/edit → confirm. Nothing is written until
+       the reviewer presses Import, so a bad paste costs nothing. -->
+  <div id="import-modal" class="modal" hidden>
+    <div class="modal-card">
+      <header class="modal-head">
+        <strong>Import from Obsidian</strong>
+        <span id="import-step" class="count-chip">1 · paste</span>
+        <button id="import-close" class="icon-btn" title="Close (Esc)">✕</button>
+      </header>
+
+      <section id="import-paste" class="modal-body">
+        <p class="hint">
+          Paste a note, a task list, or a whole exported <code>Tasks.md</code>.
+          Headings become categories; <code>#tags</code>, <code>⏫🔼🔽</code> priority and
+          <code>📅 dates</code> are picked up. Nothing is saved until you confirm.
+        </p>
+        <textarea id="import-text" spellcheck="false"
+                  placeholder="## Work&#10;- [ ] something to do #tag ⏫ 📅 2026-09-01&#10;- [x] something finished ✅ 2026-08-01"></textarea>
+      </section>
+
+      <section id="import-review" class="modal-body" hidden>
+        <div class="review-toolbar">
+          <span id="import-summary"></span>
+          <span class="spacer"></span>
+          <button id="sel-all" class="ghost-btn">Select all</button>
+          <button id="sel-none" class="ghost-btn">None</button>
+          <button id="sel-clean" class="ghost-btn" title="Deselect anything with a warning">Only clean</button>
+        </div>
+        <div id="import-rows" class="review-rows"></div>
+      </section>
+
+      <footer class="modal-foot">
+        <label class="opt"><input type="checkbox" id="import-create-cats" checked /> create missing categories</label>
+        <label class="opt">items with no checkbox →
+          <select id="import-default-status"></select>
+        </label>
+        <span class="spacer"></span>
+        <button id="import-back" class="ghost-btn" hidden>← Back</button>
+        <button id="import-parse" class="primary-btn">Parse →</button>
+        <button id="import-commit" class="primary-btn" hidden>Import</button>
+      </footer>
+    </div>
   </div>
 
   <script src="/app.js"></script>
