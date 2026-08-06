@@ -467,14 +467,14 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
-  senyatasks:
-    build: ./senyatasks
-    image: senyatasks:latest
-    container_name: senyatasks
+  senya-tasks:
+    build: ./senya-tasks
+    image: senya-tasks:latest
+    container_name: senya-tasks
     ports:
       - "8000:8000"
     volumes:
-      - ./senyatasks/data:/data
+      - ./senya-tasks/data:/data
     restart: unless-stopped
 
   senya-daily:

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SenyaTasks</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span>📋 SenyaTasks</span>
+        <button id="sidebar-toggle" class="icon-btn" title="Hide sidebar (\)">‹</button>
+      </div>
+
+      <nav id="category-list"></nav>
+
+      <details class="add-category">
+        <summary>+ category</summary>
+        <form id="category-form">
+          <div class="row">
+            <input id="category-name" type="text" placeholder="Name" maxlength="40" />
+            <input id="category-color" type="color" value="#6366f1" title="Colour" />
+          </div>
+          <div class="row">
+            <select id="category-parent" title="Parent category">
+              <option value="">— top level —</option>
+            </select>
+            <button type="submit">Add</button>
+          </div>
+        </form>
+      </details>
+
+      <div id="tag-cloud" class="tag-cloud"></div>
+    </aside>
+
+    <main class="content">
+      <header class="bar">
+        <button id="sidebar-show" class="icon-btn" title="Show sidebar (\)">›</button>
+        <h2 id="current-title">All tasks</h2>
+        <span id="current-count" class="count-chip"></span>
+
+        <div class="filters" id="filters"></div>
+
+        <input id="search" type="search" placeholder="Search  /" autocomplete="off" />
+
+        <label class="sort">
+          <select id="sort-by" title="Sort">
+            <option value="manual">Manual</option>
+            <option value="created" selected>Newest</option>
+            <option value="due">Due date</option>
+            <option value="priority">Priority</option>
+            <option value="title">Title A–Z</option>
+          </select>
+        </label>
+      </header>
+
+      <form id="task-form" class="add-task">
+        <input id="task-title" type="text" placeholder="Add a task…  (n)" autocomplete="off" />
+        <select id="task-priority" title="Priority">
+          <option value="high">High</option>
+          <option value="medium" selected>Med</option>
+          <option value="low">Low</option>
+        </select>
+        <input id="task-due" type="date" title="Due date" />
+        <button type="submit">Add</button>
+      </form>
+
+      <div id="task-groups"></div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
