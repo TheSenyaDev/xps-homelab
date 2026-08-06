@@ -50,7 +50,7 @@ window.SENYA_INTERNAL = {
   // Omit `container` for things that aren't a local container (remote host, etc.)
   // → the dot shows neutral "unknown".
   SENYA_APPS: [
-    { name: "SenyaTasks", port: 8000, container: "senyatasks" },
+    { name: "SenyaTasks", port: 8000, container: "senya-tasks" },
     { name: "SenyaDaily", port: 8001, container: "senya-daily" },
     { name: "SenyaFinance", port: 8002, container: "senya-finance" },
     { name: "SenyaNotes", port: 8003, container: "senya-notes" },

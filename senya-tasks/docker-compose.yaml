@@ -1,8 +1,8 @@
 services:
-  senyatasks:
+  senya-tasks:
     build: .
-    image: senyatasks:latest
-    container_name: senyatasks
+    image: senya-tasks:latest
+    container_name: senya-tasks
     ports:
       - "8000:8000"
     volumes:
