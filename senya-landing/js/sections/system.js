@@ -53,14 +53,17 @@ function metricRow(label, value, pct) {
   const head = el("div", { class: "metric-head" },
     el("span", { class: "metric-label", text: label }),
     el("span", { class: "metric-val", text: value }));
-  if (typeof pct !== "number") return el("div", { class: "metric" }, head);
+  // The title carries the reading for the collapsed pane, where the head is
+  // hidden and only the bar is left.
+  const title = `${label} ${value}`;
+  if (typeof pct !== "number") return el("div", { class: "metric", title }, head);
 
   const fill = el("div", { class: "bar-fill" });
   const p = Math.max(0, Math.min(100, pct));
   fill.style.width = p + "%";
   if (p >= 90) fill.classList.add("hot");
   else if (p >= 75) fill.classList.add("warm");
-  return el("div", { class: "metric" }, head, el("div", { class: "bar" }, fill));
+  return el("div", { class: "metric", title }, head, el("div", { class: "bar" }, fill));
 }
 
 async function refreshHost(host, body) {
@@ -161,7 +164,9 @@ function addrChip(kind, label, address) {
 }
 
 function hostName(host) {
-  const name = el("div", { class: "host-name" }, iconImg(host.icon), el("span", { text: host.name }));
+  // title, because the collapsed pane is too narrow for longer host names
+  const name = el("div", { class: "host-name", title: host.name },
+    iconImg(host.icon), el("span", { text: host.name }));
   const addrs = el("div", { class: "host-addrs" });
   const lan = host.ip || internal.LOCAL_IP;
   if (lan) addrs.append(addrChip("lan", "LAN", lan));

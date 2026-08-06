@@ -9,6 +9,8 @@ import { el, link, iconImg, fetchJSON, store } from "./utils.js";
 
 const STATUS_REFRESH_MS = 15000;
 const EXPANDED_KEY = "senya.rail.expanded"; // remembered across reloads
+const FILTER_KEY = "senya.rail.filter";     // "all" or a section key, likewise
+const ALL = "all";
 const STATUS_SOURCES = ["/stats/xps/containers"];
 const UP = new Set(["running", "healthy"]);
 const WARN = new Set(["starting", "restarting", "unhealthy", "created", "paused"]);
@@ -31,7 +33,10 @@ export function initRail() {
   const sections = sectionsData();
   if (!sections.length) { rail.hidden = true; return; }
 
-  let active = sections[0].key;
+  // Everything, grouped by type, is the default view; the tabs narrow it to one
+  // type. Whichever you picked last is what you get next time.
+  const stored = store.get(FILTER_KEY, ALL);
+  let active = stored === ALL || sections.some((s) => s.key === stored) ? stored : ALL;
   let expanded = store.get(EXPANDED_KEY, "false") === "true";
   let selected = null; // "<section>:<name>" of the row showing inline detail
   let lastMap = null;
@@ -48,13 +53,26 @@ export function initRail() {
   setExpanded(expanded);
   toggle.addEventListener("click", () => setExpanded(!expanded));
 
+  function setActive(key) {
+    active = key;
+    selected = null;
+    store.set(FILTER_KEY, key);
+    renderNav();
+    renderItems();
+  }
+
   function renderNav() {
-    nav.replaceChildren(...sections.map((s) => {
-      const tab = el("div", { class: "rail-tab" + (s.key === active ? " active" : "") },
-        el("span", { class: "rail-tab-mono", text: s.mono }),
-        el("span", { class: "rail-tab-name", text: s.name }),
-        el("span", { class: "rail-tab-count", text: String(s.items.length) }));
-      tab.addEventListener("click", () => { active = s.key; selected = null; renderNav(); renderItems(); });
+    const total = sections.reduce((n, s) => n + s.items.length, 0);
+    const tabs = [{ key: ALL, mono: "ALL", name: "All services", count: total },
+      ...sections.map((s) => ({ key: s.key, mono: s.mono, name: s.name, count: s.items.length }))];
+
+    nav.replaceChildren(...tabs.map((t) => {
+      const tab = el("div", { class: "rail-tab" + (t.key === active ? " active" : "") },
+        el("span", { class: "rail-tab-mono", text: t.mono }),
+        el("span", { class: "rail-tab-name", text: t.name }),
+        el("span", { class: "rail-tab-count", text: String(t.count) }));
+      tab.title = t.name;
+      tab.addEventListener("click", () => setActive(t.key));
       return tab;
     }));
   }
@@ -91,30 +109,46 @@ export function initRail() {
     });
   }
 
+  function itemRow(section, it) {
+    // Keyed by the item's own section, not the active tab, so a row's open
+    // detail survives switching between "All" and that section.
+    const id = `${section.key}:${it.name}`;
+    const dot = el("span", { class: "rail-dot" });
+    if (it.container) statusDots.set(it.container, dot);
+    const row = el("div", { class: "rail-row" + (selected === id ? " selected" : "") },
+      iconImg(it.icon), el("span", { class: "rail-name", text: it.name }),
+      el("span", { class: "rail-port", text: it.port ? String(it.port) : "—" }), dot);
+    row.title = it.name;
+    row.addEventListener("click", () => {
+      setExpanded(true);
+      selected = selected === id ? null : id;
+      renderItems();
+    });
+    const wrap = el("div", {}, row);
+    if (selected === id && expanded) {
+      wrap.append(el("div", { class: "rail-detail" },
+        el("div", { class: "status", text: it.container ? "…" : "unknown" }),
+        ...addrLinks(it),
+        it.container ? el("div", { class: "container", text: it.container }) : null));
+    }
+    return wrap;
+  }
+
   function renderItems() {
     statusDots.clear();
-    const section = sections.find((s) => s.key === active);
-    itemsWrap.replaceChildren(...section.items.map((it) => {
-      const id = `${active}:${it.name}`;
-      const dot = el("span", { class: "rail-dot" });
-      if (it.container) statusDots.set(it.container, dot);
-      const row = el("div", { class: "rail-row" + (selected === id ? " selected" : "") },
-        iconImg(it.icon), el("span", { class: "rail-name", text: it.name }),
-        el("span", { class: "rail-port", text: it.port ? String(it.port) : "—" }), dot);
-      row.addEventListener("click", () => {
-        setExpanded(true);
-        selected = selected === id ? null : id;
-        renderItems();
-      });
-      const wrap = el("div", {}, row);
-      if (selected === id && expanded) {
-        wrap.append(el("div", { class: "rail-detail" },
-          el("div", { class: "status", text: it.container ? "…" : "unknown" }),
-          ...addrLinks(it),
-          it.container ? el("div", { class: "container", text: it.container }) : null));
+    const shown = active === ALL ? sections : sections.filter((s) => s.key === active);
+    const nodes = [];
+    for (const section of shown) {
+      // Headers only earn their space when more than one type is on screen.
+      if (shown.length > 1) {
+        nodes.push(el("div", { class: "rail-group", title: section.name },
+          el("span", { class: "rail-group-mono", text: section.mono }),
+          el("span", { class: "rail-group-name", text: section.name }),
+          el("span", { class: "rail-group-count", text: String(section.items.length) })));
       }
-      return wrap;
-    }));
+      nodes.push(...section.items.map((it) => itemRow(section, it)));
+    }
+    itemsWrap.replaceChildren(...nodes);
     applyDots(lastMap);
   }
 

@@ -99,7 +99,9 @@
 /* ---- Main table: rail | dashboard | info ---- */
 .main-table { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
 
-.rail { width: 52px; flex: none; transition: width .16s ease; background: var(--panel-3); border-right: 1px solid var(--border); position: sticky; top: 0; align-self: flex-start; }
+/* Sticky column capped to the viewport: showing every service by default makes
+   the list long, so the item area — not the page — is what scrolls. */
+.rail { width: 52px; flex: none; transition: width .16s ease; background: var(--panel-3); border-right: 1px solid var(--border); position: sticky; top: 0; align-self: flex-start; max-height: 100vh; display: flex; flex-direction: column; }
 .rail[data-expanded="true"] { width: 260px; }
 .rail-head { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-bottom: 1px solid var(--border-2); }
 .rail-title { font-family: ui-monospace, monospace; font-size: calc(9px * var(--fs)); letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; display: none; }
@@ -107,7 +109,7 @@
 .rail-toggle { margin-left: auto; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: var(--radius-sm); color: var(--muted); cursor: pointer; }
 .rail-toggle:hover { background: var(--border-3); color: var(--text); }
 
-.rail-nav { display: flex; flex-direction: column; }
+.rail-nav { display: flex; flex-direction: column; flex: none; }
 .rail-tab { display: flex; align-items: center; gap: 7px; padding: 6px 8px; cursor: pointer; border-bottom: 1px solid var(--border-3); }
 .rail-tab:hover { background: var(--border-3); }
 .rail-tab.active { background: var(--border-3); }
@@ -119,7 +121,29 @@
 .rail-tab-count { font-family: ui-monospace, monospace; font-size: calc(9px * var(--fs)); color: var(--dim); display: none; }
 .rail[data-expanded="true"] .rail-tab-count { display: block; }
 
-.rail-items { display: flex; flex-direction: column; max-height: 560px; overflow-y: auto; }
+.rail-items { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
+/* Type headings, shown only in the "All services" view. Collapsed to 52px there
+   isn't room for a name, so the section's monogram carries it. */
+.rail-group {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px 3px;
+  border-top: 1px solid var(--border-3);
+}
+.rail-group:first-child { border-top: none; }
+.rail-group-mono {
+  width: 20px; flex: none; text-align: center;
+  font-family: ui-monospace, monospace; font-size: calc(8px * var(--fs));
+  letter-spacing: .06em; color: var(--muted);
+}
+.rail-group-name {
+  flex: 1; display: none; font-family: ui-monospace, monospace;
+  font-size: calc(9px * var(--fs)); letter-spacing: .1em; text-transform: uppercase; color: var(--dim);
+}
+.rail-group-count {
+  display: none; font-family: ui-monospace, monospace;
+  font-size: calc(9px * var(--fs)); color: var(--muted);
+}
+.rail[data-expanded="true"] .rail-group-name,
+.rail[data-expanded="true"] .rail-group-count { display: block; }
 .rail-row {
   position: relative; display: grid; grid-template-columns: 22px 1fr 44px 8px; gap: 6px; align-items: center;
   padding: 5px 8px; cursor: pointer; border-bottom: 1px solid var(--border-3);
@@ -208,9 +232,36 @@
 .cx-flat { color: var(--dim); }
 
 /* ---- Info pane: System, permanent (not hideable/draggable) ---- */
-.info-pane { width: 300px; flex: none; display: flex; flex-direction: column; position: sticky; top: 0; align-self: flex-start; }
+.info-pane { width: 300px; flex: none; display: flex; flex-direction: column; position: sticky; top: 0; align-self: flex-start; transition: width .16s ease; }
 .info-block { background: var(--panel-3); border-bottom: 1px solid var(--border); }
-.info-head { padding: 7px 10px; border-bottom: 1px solid var(--border-2); font-family: ui-monospace, monospace; font-size: calc(9px * var(--fs)); letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+.info-head { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--border-2); font-family: ui-monospace, monospace; font-size: calc(9px * var(--fs)); letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+.info-toggle { margin-left: auto; width: 20px; height: 20px; flex: none; display: flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: var(--radius-sm); color: var(--muted); cursor: pointer; }
+.info-toggle:hover { background: var(--border-3); color: var(--text); }
+.info-head-short { display: none; }
+
+/* ---- Collapsed info pane: a thin strip that keeps every metric's bar but
+   drops labels, values and address chips. Each bar carries a title tooltip, so
+   the numbers are one hover away. Toggled by initInfoPane in js/layout.js. ---- */
+.info-pane[data-collapsed="true"] { width: 64px; }
+.info-pane[data-collapsed="true"] .info-head { padding: 7px 4px; justify-content: center; gap: 2px; }
+.info-pane[data-collapsed="true"] .info-head-long { display: none; }
+.info-pane[data-collapsed="true"] .info-head-short { display: block; }
+.info-pane[data-collapsed="true"] .info-toggle { margin-left: 0; width: 16px; }
+.info-pane[data-collapsed="true"] .host-name {
+  gap: 4px; padding: 6px 4px; justify-content: center;
+  font-size: calc(9px * var(--fs)); text-align: center; overflow: hidden;
+}
+.info-pane[data-collapsed="true"] .host-name img { width: 13px; height: 13px; }
+.info-pane[data-collapsed="true"] .host-name > span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.info-pane[data-collapsed="true"] .host-addrs { display: none; }
+.info-pane[data-collapsed="true"] .metric { padding: 3px 8px; gap: 0; }
+.info-pane[data-collapsed="true"] .metric-head { display: none; }
+/* A metric with no bar (e.g. CPU power) would otherwise collapse to nothing */
+.info-pane[data-collapsed="true"] .metric:not(:has(.bar)) { display: none; }
+.info-pane[data-collapsed="true"] .offline-msg { font-size: calc(9px * var(--fs)); }
+.info-pane[data-collapsed="true"] .host-body.offline { padding: 6px 4px; text-align: center; }
 /* Location pills, now in the weather popover's header. */
 .wx-loc { font-size: calc(9px * var(--fs)); cursor: pointer; color: var(--dim); background: none; border: none; padding: 0 4px; font-family: ui-monospace, monospace; }
 .wx-loc:hover { color: var(--text); }
@@ -312,6 +363,17 @@
   .main-table { flex-direction: column; }
   .rail { width: 100% !important; position: static; border-right: none; border-bottom: 1px solid var(--border); }
   .rail[data-expanded="false"] .rail-title, .rail[data-expanded="false"] .rail-tab-name { display: none; }
-  .info-pane { width: 100%; position: static; }
+  /* Stacked single column — a 64px strip makes no sense here, so the collapse
+     is a desktop-only affordance and the pane always shows in full. */
+  .info-pane, .info-pane[data-collapsed="true"] { width: 100%; position: static; }
+  .info-pane[data-collapsed="true"] .info-head { padding: 7px 10px; justify-content: flex-start; }
+  .info-pane[data-collapsed="true"] .info-head-long { display: block; }
+  .info-pane[data-collapsed="true"] .info-head-short { display: none; }
+  .info-pane[data-collapsed="true"] .host-name { padding: 7px 11px; justify-content: flex-start; font-size: calc(12px * var(--fs)); text-align: left; }
+  .info-pane[data-collapsed="true"] .host-addrs { display: flex; }
+  .info-pane[data-collapsed="true"] .metric { padding: 5px 11px; gap: 4px; }
+  .info-pane[data-collapsed="true"] .metric-head { display: flex; }
+  .info-pane[data-collapsed="true"] .metric:not(:has(.bar)) { display: flex; }
+  .info-toggle { display: none; }
   .dashboard { border-right: none; }
 }

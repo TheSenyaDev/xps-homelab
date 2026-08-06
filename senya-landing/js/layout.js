@@ -104,3 +104,28 @@ export function setOrder(newOrder) {
   persist();
   render();
 }
+
+// ---- Info pane (right column) ----
+
+const INFO_COLLAPSED_KEY = "senya.infopane.collapsed";
+
+// Narrows the right column to a strip that keeps each metric's bar but drops
+// its label and value — system health stays glanceable while the dashboard
+// gets the width back. The choice is remembered across reloads.
+export function initInfoPane() {
+  const pane = document.querySelector(".info-pane");
+  const toggle = document.getElementById("info-toggle");
+  if (!pane || !toggle) return;
+
+  const apply = (collapsed) => {
+    pane.dataset.collapsed = String(collapsed);
+    toggle.textContent = collapsed ? "‹" : "›";
+    const label = collapsed ? "Expand system panel" : "Collapse system panel";
+    toggle.setAttribute("aria-label", label);
+    toggle.title = label;
+    store.set(INFO_COLLAPSED_KEY, String(collapsed));
+  };
+
+  apply(store.get(INFO_COLLAPSED_KEY, "false") === "true");
+  toggle.addEventListener("click", () => apply(pane.dataset.collapsed !== "true"));
+}

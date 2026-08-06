@@ -12,7 +12,7 @@ import { initBookmarks } from "./sections/bookmarks.js";
 import { initRail } from "./rail.js";
 import { initSystem } from "./sections/system.js";
 import { initWeather } from "./sections/weather.js";
-import { initLayout } from "./layout.js";
+import { initLayout, initInfoPane } from "./layout.js";
 import { initSettings } from "./settings.js";
 import { internal } from "./config.js";
 
@@ -27,7 +27,12 @@ run("clock", initClock);
 run("search", initSearch);
 run("bookmarks", initBookmarks);
 run("rail", initRail);
-if (internal) run("system", initSystem); else document.getElementById("system")?.closest(".info-block")?.remove();
+if (internal) {
+  run("system", initSystem);
+  run("info-pane", initInfoPane);
+} else {
+  document.getElementById("system")?.closest(".info-block")?.remove();
+}
 run("weather", initWeather);
 run("layout", initLayout);
 run("settings", initSettings);
