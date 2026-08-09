@@ -184,7 +184,25 @@ M5 = """
 ALTER TABLE caldav_map ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0;
 """
 
-MIGRATIONS = [M1, M2, M3, M4, M5]
+# --- 6: one calendar collection per category ------------------------------
+# A Reminders list *is* a CalDAV collection, so per-category lists mean one
+# collection each. Sync tokens are per-collection in WebDAV-Sync, so the single
+# token in caldav_state moves in here alongside the mapping.
+#
+# category_id 0 is the uncategorized bucket: categories are AUTOINCREMENT from
+# 1, so 0 can never collide, and a NOT NULL primary key avoids SQLite's rule
+# that NULLs are distinct in a UNIQUE index (which would let duplicate
+# "uncategorized" rows pile up).
+M6 = """
+CREATE TABLE caldav_collections (
+    category_id INTEGER PRIMARY KEY,   -- 0 = uncategorized
+    href        TEXT NOT NULL,         -- server-relative, trailing slash
+    display     TEXT,
+    sync_token  TEXT
+);
+"""
+
+MIGRATIONS = [M1, M2, M3, M4, M5, M6]
 SCHEMA_VERSION = len(MIGRATIONS)
 
 

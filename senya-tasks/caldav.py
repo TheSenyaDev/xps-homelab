@@ -59,12 +59,15 @@ CONFIG = {
     "auth": os.environ.get("CALDAV_AUTH", "auto").strip().lower(),
     "interval": int(os.environ.get("CALDAV_INTERVAL", "120")),
     "timeout": int(os.environ.get("CALDAV_TIMEOUT", "20")),
+    # "single"       -> every task in one collection (url IS that collection)
+    # "per-category" -> one collection per category (url is the calendar HOME)
+    "mode": os.environ.get("CALDAV_MODE", "single").strip().lower(),
 }
 
 # Settings saved from the UI live in caldav_state and win over the environment,
 # so the env vars act as the initial default and the app stays configurable
 # without editing .env and redeploying.
-CONFIG_KEYS = ("url", "user", "password", "auth", "interval", "enabled")
+CONFIG_KEYS = ("url", "user", "password", "auth", "interval", "enabled", "mode")
 
 
 def load_config(conn):
@@ -97,10 +100,14 @@ def save_config(conn, values):
         interval = max(30, int(values.get("interval") or 120))
     except (TypeError, ValueError):
         raise ValueError("interval must be a number of seconds")
+    mode = (values.get("mode") or "single").strip().lower()
+    if mode not in ("single", "per-category"):
+        raise ValueError("mode must be single or per-category")
     enabled = bool(values.get("enabled"))
     if enabled and not (url and user):
         raise ValueError("a url and user are required before sync can be enabled")
 
+    state_set(conn, "cfg_mode", mode)
     state_set(conn, "cfg_url", url)
     state_set(conn, "cfg_user", user)
     state_set(conn, "cfg_auth", auth)
@@ -129,6 +136,11 @@ STATUS_TO_ICAL = {"todo": "NEEDS-ACTION", "doing": "IN-PROCESS",
                   "blocked": "NEEDS-ACTION", "done": "COMPLETED"}
 ICAL_TO_STATUS = {"NEEDS-ACTION": "todo", "IN-PROCESS": "doing",
                   "COMPLETED": "done", "CANCELLED": "done"}
+
+
+def xml_escape(text):
+    return (str(text).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
 
 
 def ical_escape(text):
@@ -355,7 +367,80 @@ class Client:
             return href
         return self.root + href
 
-    def sync_collection(self, token):
+    # ---- collection management (per-category lists) ----
+
+    def list_collections(self, home):
+        """Calendar collections under a calendar-home, with their components."""
+        body = ('<?xml version="1.0" encoding="utf-8"?>'
+                '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+                '<d:prop><d:displayname/><d:resourcetype/>'
+                '<c:supported-calendar-component-set/></d:prop></d:propfind>')
+        r = self._request("PROPFIND", self.abs_url(home), data=body.encode("utf-8"),
+                          headers={"Depth": "1", "Content-Type": "application/xml; charset=utf-8"})
+        if r.status_code >= 400:
+            raise CalDAVError(f"listing {home} failed: HTTP {r.status_code}")
+        out = {}
+        for resp in ET.fromstring(r.content).findall("d:response", NS):
+            href = self.path_of((resp.findtext("d:href", "", NS) or "").strip())
+            rt = resp.find("d:propstat/d:prop/d:resourcetype", NS)
+            if rt is None or rt.find("c:calendar", NS) is None:
+                continue                      # the home itself, or a non-calendar
+            comps = [c.get("name", "").upper() for c in resp.iter(
+                "{urn:ietf:params:xml:ns:caldav}comp")]
+            out[href] = {
+                "display": (resp.findtext("d:propstat/d:prop/d:displayname", "", NS) or "").strip(),
+                "components": comps,
+            }
+        return out
+
+    def mkcalendar(self, href, display):
+        """Create a VTODO-only calendar.
+
+        Deliberately not VEVENT: a calendar advertising both shows up in the
+        Calendar app as well as Reminders, which would litter the calendar grid
+        with every task.
+        """
+        body = ('<?xml version="1.0" encoding="utf-8"?>'
+                '<c:mkcalendar xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+                '<d:set><d:prop>'
+                f'<d:displayname>{xml_escape(display)}</d:displayname>'
+                '<c:supported-calendar-component-set><c:comp name="VTODO"/>'
+                '</c:supported-calendar-component-set>'
+                '</d:prop></d:set></c:mkcalendar>')
+        r = self._request("MKCALENDAR", self.abs_url(href), data=body.encode("utf-8"),
+                          headers={"Content-Type": "application/xml; charset=utf-8"})
+        if r.status_code == 405:
+            return False                      # already there
+        if r.status_code >= 400:
+            raise CalDAVError(f"could not create calendar {href}: HTTP {r.status_code}")
+        return True
+
+    def set_displayname(self, href, display):
+        body = ('<?xml version="1.0" encoding="utf-8"?>'
+                '<d:propertyupdate xmlns:d="DAV:"><d:set><d:prop>'
+                f'<d:displayname>{xml_escape(display)}</d:displayname>'
+                '</d:prop></d:set></d:propertyupdate>')
+        r = self._request("PROPPATCH", self.abs_url(href), data=body.encode("utf-8"),
+                          headers={"Content-Type": "application/xml; charset=utf-8"})
+        return r.status_code < 400
+
+    def move(self, src_href, dst_href):
+        """Move an object between collections, keeping its identity.
+
+        The alternative — DELETE then PUT — looks to a phone like the task
+        vanishing and an unrelated one appearing, losing any alarm set on it.
+        Returns the new ETag.
+        """
+        r = self._request("MOVE", self.abs_url(src_href),
+                          headers={"Destination": self.abs_url(dst_href), "Overwrite": "T"})
+        if r.status_code >= 400:
+            raise CalDAVError(f"move {src_href} → {dst_href} failed: HTTP {r.status_code}")
+        etag = (r.headers.get("ETag") or "").strip('"')
+        if not etag:
+            _, etag = self.get(dst_href)
+        return etag or ""
+
+    def sync_collection(self, token, url=None):
         """RFC 6578 delta. Returns (changed_hrefs, removed_hrefs, new_token)."""
         body = (
             '<?xml version="1.0" encoding="utf-8"?>'
@@ -365,7 +450,8 @@ class Client:
             '<d:prop><d:getetag/></d:prop>'
             '</d:sync-collection>'
         )
-        r = self._request("REPORT", self.url,
+        target = self.abs_url(url) if url else self.url
+        r = self._request("REPORT", target,
                           data=body.encode("utf-8"),
                           headers={"Depth": "1", "Content-Type": "application/xml; charset=utf-8"})
         if r.status_code in (400, 403, 409, 415, 501):
@@ -390,11 +476,12 @@ class Client:
         new_token = root.findtext("d:sync-token", None, NS)
         return changed, removed, new_token
 
-    def list_all(self):
+    def list_all(self, url=None):
         """Fallback when there's no usable sync-token: every .ics + its ETag."""
         body = ('<?xml version="1.0" encoding="utf-8"?>'
                 '<d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>')
-        r = self._request("PROPFIND", self.url, data=body.encode("utf-8"),
+        r = self._request("PROPFIND", self.abs_url(url) if url else self.url,
+                          data=body.encode("utf-8"),
                           headers={"Depth": "1", "Content-Type": "application/xml; charset=utf-8"})
         if r.status_code >= 400:
             raise CalDAVError(f"PROPFIND failed: HTTP {r.status_code}")
@@ -407,7 +494,7 @@ class Client:
                 out[self.path_of(href)] = (etag or "").strip('"')
         return out
 
-    def describe(self):
+    def describe(self, url=None):
         """Probe the collection: reachable, authenticated, and can it hold tasks?
 
         The last part matters — a calendar that only advertises VEVENT accepts
@@ -418,7 +505,8 @@ class Client:
                 '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
                 '<d:prop><d:displayname/><d:resourcetype/>'
                 '<c:supported-calendar-component-set/></d:prop></d:propfind>')
-        r = self._request("PROPFIND", self.url, data=body.encode("utf-8"),
+        r = self._request("PROPFIND", self.abs_url(url) if url else self.url,
+                          data=body.encode("utf-8"),
                           headers={"Depth": "0", "Content-Type": "application/xml; charset=utf-8"})
         if r.status_code >= 400:
             raise CalDAVError(f"the server answered HTTP {r.status_code} for that URL")
@@ -501,7 +589,7 @@ def touched_at(conn, task_id):
     return row[0] if row else None
 
 
-def apply_remote(conn, parsed, href, etag, task_id=None):
+def apply_remote(conn, parsed, href, etag, task_id=None, category_id=False):
     """Write a parsed VTODO into SQLite, then re-read updated_at.
 
     Re-reading matters: the tasks_touch trigger bumps updated_at on write, so
@@ -515,17 +603,22 @@ def apply_remote(conn, parsed, href, etag, task_id=None):
         "priority": parsed["priority"],
         "due_date": parsed["due_date"],
     }
+    # category_id=False means "don't touch it" (single-collection mode); a real
+    # value — including None for uncategorized — assigns it, which is how a
+    # reminder dragged between lists on the phone changes category here.
     if task_id is None:
         pos = conn.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM tasks").fetchone()[0]
         cur = conn.execute(
-            "INSERT INTO tasks (title, notes, status, priority, due_date, position) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (*fields.values(), pos))
+            "INSERT INTO tasks (title, notes, status, priority, due_date, position, category_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (*fields.values(), pos, None if category_id is False else category_id))
         task_id = cur.lastrowid
     else:
         conn.execute(
             "UPDATE tasks SET title = ?, notes = ?, status = ?, priority = ?, due_date = ? "
             "WHERE id = ?", (*fields.values(), task_id))
+        if category_id is not False:
+            conn.execute("UPDATE tasks SET category_id = ? WHERE id = ?", (category_id, task_id))
 
     if parsed["status"] == "done" and parsed["completed_at"]:
         conn.execute("UPDATE tasks SET completed_at = ? WHERE id = ?",
@@ -542,10 +635,11 @@ def apply_remote(conn, parsed, href, etag, task_id=None):
     return task_id
 
 
-def push_task(conn, client, task, row=None):
-    """PUT one task. Returns "ok", "conflict" (server won) or "skipped"."""
+def push_task(conn, client, task, row=None, collection=None):
+    """PUT one task into `collection`. Returns "ok" or "conflict"."""
     uid = row["uid"] if row else f"senya-{uuid.uuid4()}"
-    href = client.path_of(row["href"]) if row else client.path_of(client.url) + uid + ".ics"
+    base = collection or client.path_of(client.url)
+    href = client.path_of(row["href"]) if row else base + uid + ".ics"
     tags = task_tags(conn, task["id"])
     # Monotonic per object: a client that sees SEQUENCE go backwards treats the
     # update as stale and may ignore it entirely.
@@ -566,16 +660,165 @@ def push_task(conn, client, task, row=None):
     return "ok"
 
 
+# ---- collections (one Reminders list per category) -------------------------
+#
+# A Reminders list is a CalDAV collection, so "sort my tasks into lists" means
+# "one collection per category". Two decisions make the rest tractable:
+#
+#   * The collection URI is derived from the category *id*, never its name
+#     (`senya-tasks-3/`). Renaming a category is then a one-line PROPPATCH of
+#     the displayname instead of a URI change that would orphan every task in it.
+#   * Category 0 is the uncategorized bucket. Categories are AUTOINCREMENT from
+#     1, so it can never collide with a real one.
+
+UNCATEGORIZED = 0
+
+
+def collection_uri(category_id):
+    return f"senya-tasks-{category_id or 'inbox'}/"
+
+
+def collection_rows(conn):
+    return {r["category_id"]: dict(r) for r in
+            conn.execute("SELECT * FROM caldav_collections")}
+
+
+def ensure_collections(conn, client, home):
+    """Make the server's collections match the category list.
+
+    Creates what's missing, renames what drifted, and leaves collections for
+    deleted categories alone — they may hold items added on the phone, and
+    silently deleting a list is not a thing a sync tool should do on its own.
+    """
+    if not home.endswith("/"):
+        home += "/"
+    home = client.path_of(home)
+    existing = client.list_collections(home)
+    known = collection_rows(conn)
+    created, renamed = [], []
+
+    wanted = [(UNCATEGORIZED, "Inbox")]
+    wanted += [(r["id"], r["name"]) for r in
+               conn.execute("SELECT id, name FROM categories ORDER BY id")]
+
+    problems = []
+    for cat_id, name in wanted:
+        href = home + collection_uri(cat_id)
+        info = existing.get(href)
+        if info is None:
+            made = client.mkcalendar(href, name)
+            if not made:
+                # 405 means something already occupies that URI even though the
+                # server didn't list it as a live calendar — on Nextcloud that
+                # is usually a calendar sitting in the trash. Syncing into it
+                # would write objects nobody can see, so say so instead.
+                problems.append(
+                    f"“{name}”: a calendar already exists at {href} but the server "
+                    "doesn't list it — it may be in the trash. Empty the calendar "
+                    "trash (or delete that calendar for good) and sync again.")
+                continue
+            created.append(name)
+            info = {"display": name, "components": ["VTODO"]}
+        elif info["display"] != name:
+            client.set_displayname(href, name)
+            renamed.append(f"{info['display']} → {name}")
+            info["display"] = name
+
+        row = known.get(cat_id)
+        conn.execute(
+            "INSERT INTO caldav_collections (category_id, href, display, sync_token) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(category_id) DO UPDATE SET href = excluded.href, "
+            "display = excluded.display",
+            (cat_id, href, name, row["sync_token"] if row else None))
+
+    # A category deleted locally leaves its collection behind; drop only our
+    # mapping so we stop syncing into it.
+    live = {c for c, _ in wanted}
+    for cat_id in known:
+        if cat_id not in live:
+            conn.execute("DELETE FROM caldav_collections WHERE category_id = ?", (cat_id,))
+    conn.commit()
+    if problems:
+        raise CalDAVError(" / ".join(problems))
+    return created, renamed
+
+
+class Target:
+    """One collection to sync, and the category it represents.
+
+    `assign_category` is False in single-collection mode, where the collection
+    says nothing about where a task belongs.
+    """
+
+    def __init__(self, href, token, category_id=None, assign_category=False):
+        self.href = href
+        self.token = token
+        self.category_id = category_id
+        self.assign_category = assign_category
+
+    @property
+    def category(self):
+        """What apply_remote should set: False = leave alone, else the id."""
+        if not self.assign_category:
+            return False
+        return None if self.category_id == UNCATEGORIZED else self.category_id
+
+
+def sync_targets(conn, client):
+    """The collections this pass should cover, in either mode."""
+    if CONFIG.get("mode") != "per-category":
+        return [Target(client.path_of(client.url), state_get(conn, "sync_token"))]
+    return [Target(r["href"], r["sync_token"], r["category_id"], assign_category=True)
+            for r in conn.execute(
+                "SELECT * FROM caldav_collections ORDER BY category_id")]
+
+
+def collection_of(href):
+    """The collection a .ics href lives in ('/a/b/x.ics' -> '/a/b/')."""
+    return href.rsplit("/", 1)[0] + "/"
+
+
+def target_for_task(conn, task, targets):
+    """Which collection a task belongs in."""
+    if CONFIG.get("mode") != "per-category":
+        return targets[0]
+    want = task["category_id"] or UNCATEGORIZED
+    for t in targets:
+        if t.category_id == want:
+            return t
+    # Category exists locally but its collection hasn't been provisioned yet
+    # (e.g. created seconds ago) — the inbox is a safe place to park it.
+    return next((t for t in targets if t.category_id == UNCATEGORIZED), targets[0])
+
+
 def sync_once(conn, client):
-    """One full pass. Returns a small dict of counts for logging/tests."""
+    """One full pass over every collection. Returns counts for logging/tests."""
     stats = {"pulled": 0, "pushed": 0, "deleted_remote": 0, "deleted_local": 0,
-             "conflicts": 0, "errors": 0}
+             "moved": 0, "conflicts": 0, "errors": 0}
+
+    per_category = CONFIG.get("mode") == "per-category"
+    if per_category:
+        try:
+            created, renamed = ensure_collections(conn, client, CONFIG["url"])
+            if created:
+                log.info("caldav: created lists: %s", ", ".join(created))
+            if renamed:
+                log.info("caldav: renamed lists: %s", ", ".join(renamed))
+        except (CalDAVError, requests.RequestException, ET.ParseError) as e:
+            stats["errors"] += 1
+            log.warning("caldav: could not prepare collections: %s", e)
+            return stats
+
+    targets = sync_targets(conn, client)
+    if not targets:
+        return stats
 
     # ---- 0. local deletions -> remote, FIRST ----
-    # Before anything is pulled. A task deleted locally still exists on the
-    # server until we say otherwise, and its mapping is already gone (the
-    # trigger moved it to a tombstone) — so if the pull ran first it would see
-    # an unmapped object and helpfully recreate the task you just deleted.
+    # A task deleted locally still exists on the server until we say otherwise,
+    # and its mapping is already gone (the trigger moved it to a tombstone) — so
+    # if the pull ran first it would see an unmapped object and helpfully
+    # recreate the task you just deleted.
     pending_deletes = {t["href"] for t in conn.execute("SELECT href FROM caldav_tombstones")}
     for tomb in conn.execute("SELECT * FROM caldav_tombstones").fetchall():
         try:
@@ -587,90 +830,146 @@ def sync_once(conn, client):
             log.warning("caldav: remote delete %s failed: %s", tomb["href"], e)
     conn.commit()
 
-    token = state_get(conn, "sync_token")
-    changed, removed, new_token = client.sync_collection(token)
-
     known_etags = {r["href"]: r["etag"] for r in
                    conn.execute("SELECT href, etag FROM caldav_map")}
+    uid_by_href = {r["href"]: r["uid"] for r in
+                   conn.execute("SELECT href, uid FROM caldav_map")}
 
-    if changed is None:                       # no sync-collection support
-        listing = client.list_all()
-        changed = {h: e for h, e in listing.items() if known_etags.get(h) != e}
-        removed = [h for h in known_etags if h not in listing]
-        new_token = None
-
-    # ---- 1. remote -> local ----
-    for href, delta_etag in changed.items():
-        # Our own PUT bumps the collection's sync-token, so the object we just
-        # wrote comes back in the next delta. Recognising it by ETag skips a
-        # pointless GET *and* avoids re-applying our own data, which would bump
-        # updated_at and make the task look edited when nothing touched it.
-        if delta_etag and known_etags.get(href) == delta_etag:
-            continue
-        # Belt and braces against resurrection: even if a delete failed above
-        # and its tombstone is still pending, never recreate the task from it.
-        if href in pending_deletes:
-            continue
+    # ---- 1. collect every collection's delta BEFORE acting on any of it ----
+    #
+    # This ordering is the whole game for moves. Dragging a reminder from one
+    # list to another shows up as a removal in the source collection and a
+    # creation in the destination. Handled collection-by-collection, the removal
+    # would delete the task before the creation was ever seen — and the task
+    # would come back as a *different* row, losing its id, created_at and
+    # position. Gathering everything first lets a removal be checked against the
+    # UIDs seen elsewhere in the same pass.
+    deltas = []
+    for t in targets:
         try:
-            text, etag = client.get(href)
-            if text is None:
-                continue
-            parsed = parse_vtodo(text)
-            if not parsed or not parsed["uid"]:
-                continue                       # VEVENT or junk: not ours
-            row = conn.execute(
-                "SELECT * FROM caldav_map WHERE href = ? OR uid = ?",
-                (href, parsed["uid"])).fetchone()
-            if row is None:
-                apply_remote(conn, parsed, href, etag)
-                stats["pulled"] += 1
-                continue
-
-            task = conn.execute("SELECT * FROM tasks WHERE id = ?", (row["task_id"],)).fetchone()
-            if task is None:                   # local row vanished; treat as new
-                apply_remote(conn, parsed, href, etag)
-                stats["pulled"] += 1
-                continue
-
-            local_dirty = task["updated_at"] != row["local_rev"]
-            if local_dirty:
-                stats["conflicts"] += 1
-                remote_newer = (parsed["last_modified"] or "") > (task["updated_at"] or "")
-                log.warning("caldav: conflict on %r — %s wins", task["title"],
-                            "server" if remote_newer else "local")
-                if not remote_newer:
-                    continue                   # push step will overwrite it
-            apply_remote(conn, parsed, href, etag, task_id=row["task_id"])
-            stats["pulled"] += 1
+            changed, removed, new_token = client.sync_collection(t.token, url=t.href)
+            if changed is None:                      # no sync-collection support
+                listing = client.list_all(url=t.href)
+                mine = {h: e for h, e in known_etags.items() if collection_of(h) == t.href}
+                changed = {h: e for h, e in listing.items() if mine.get(h) != e}
+                removed = [h for h in mine if h not in listing]
+                new_token = None
+            deltas.append((t, changed, removed, new_token))
         except (CalDAVError, requests.RequestException, ET.ParseError) as e:
             stats["errors"] += 1
-            log.warning("caldav: pull %s failed: %s", href, e)
+            log.warning("caldav: delta for %s failed: %s", t.href, e)
 
-    # ---- 2. remote deletions -> local ----
-    for href in removed or []:
-        row = conn.execute("SELECT * FROM caldav_map WHERE href = ?", (href,)).fetchone()
-        if not row:
-            continue
-        task = conn.execute("SELECT title, updated_at FROM tasks WHERE id = ?",
-                            (row["task_id"],)).fetchone()
-        if task and task["updated_at"] != row["local_rev"]:
-            log.warning("caldav: %r was deleted on the server but had unsynced local "
-                        "edits — the local copy is being removed too", task["title"])
-        # Drop the mapping first so the delete trigger doesn't write a tombstone
-        # and bounce the deletion straight back at the server.
-        conn.execute("DELETE FROM caldav_map WHERE task_id = ?", (row["task_id"],))
-        conn.execute("DELETE FROM tasks WHERE id = ?", (row["task_id"],))
-        conn.execute("DELETE FROM caldav_tombstones WHERE uid = ?", (row["uid"],))
-        stats["deleted_local"] += 1
+    # ---- 2. remote -> local (creates, updates, and the destination half of a move)
+    seen_uids = {}          # uid -> href it currently lives at
+    for t, changed, _removed, _tok in deltas:
+        for href, delta_etag in changed.items():
+            if href in pending_deletes:
+                continue
+            # Our own PUT bumps the collection's sync-token, so what we just
+            # wrote reappears here. Recognise it by ETag: skip the GET, but
+            # still record the UID as present so a removal elsewhere in this
+            # same pass is correctly read as a move rather than a delete.
+            if delta_etag and known_etags.get(href) == delta_etag:
+                if uid_by_href.get(href):
+                    seen_uids[uid_by_href[href]] = href
+                continue
+            try:
+                text, etag = client.get(href)
+                if text is None:
+                    continue
+                parsed = parse_vtodo(text)
+                if not parsed or not parsed["uid"]:
+                    continue                          # a VEVENT, or junk
+                seen_uids[parsed["uid"]] = href
 
-    # ---- 3. local -> remote ----
+                row = conn.execute("SELECT * FROM caldav_map WHERE href = ? OR uid = ?",
+                                   (href, parsed["uid"])).fetchone()
+                if row is None:
+                    apply_remote(conn, parsed, href, etag, category_id=t.category)
+                    stats["pulled"] += 1
+                    continue
+
+                task = conn.execute("SELECT * FROM tasks WHERE id = ?",
+                                    (row["task_id"],)).fetchone()
+                if task is None:                      # local row vanished
+                    apply_remote(conn, parsed, href, etag, category_id=t.category)
+                    stats["pulled"] += 1
+                    continue
+
+                # Same object, different collection = someone moved it on a
+                # client. That is a category change, not an edit.
+                if row["href"] != href:
+                    stats["moved"] += 1
+                    log.info("caldav: %r moved to %s", task["title"], t.href)
+
+                local_dirty = task["updated_at"] != row["local_rev"]
+                if local_dirty and row["href"] == href:
+                    stats["conflicts"] += 1
+                    remote_newer = (parsed["last_modified"] or "") > (task["updated_at"] or "")
+                    log.warning("caldav: conflict on %r — %s wins", task["title"],
+                                "server" if remote_newer else "local")
+                    if not remote_newer:
+                        continue                      # the push step overwrites it
+                apply_remote(conn, parsed, href, etag, task_id=row["task_id"],
+                             category_id=t.category)
+                stats["pulled"] += 1
+            except (CalDAVError, requests.RequestException, ET.ParseError) as e:
+                stats["errors"] += 1
+                log.warning("caldav: pull %s failed: %s", href, e)
+
+    # ---- 3. removals: a real delete, or the source half of a move? ----
+    for _t, _changed, removed, _tok in deltas:
+        for href in removed or []:
+            row = conn.execute("SELECT * FROM caldav_map WHERE href = ?", (href,)).fetchone()
+            if not row:
+                continue
+            if row["uid"] in seen_uids:
+                continue          # it turned up in another list: a move, already applied
+            task = conn.execute("SELECT title, updated_at FROM tasks WHERE id = ?",
+                                (row["task_id"],)).fetchone()
+            if task and task["updated_at"] != row["local_rev"]:
+                log.warning("caldav: %r was deleted on the server but had unsynced local "
+                            "edits — the local copy is being removed too", task["title"])
+            # Drop the mapping first so the delete trigger doesn't write a
+            # tombstone and bounce the deletion straight back at the server.
+            conn.execute("DELETE FROM caldav_map WHERE task_id = ?", (row["task_id"],))
+            conn.execute("DELETE FROM tasks WHERE id = ?", (row["task_id"],))
+            conn.execute("DELETE FROM caldav_tombstones WHERE uid = ?", (row["uid"],))
+            stats["deleted_local"] += 1
+
+    # ---- 4. relocate: tasks whose category no longer matches their list ----
+    # Covers the local half of a move, and the one-time migration when
+    # per-category mode is first switched on. MOVE keeps the object's identity,
+    # so a phone sees the task change list rather than vanish and reappear.
+    if per_category:
+        for row in conn.execute(
+                "SELECT m.*, t.category_id, t.title FROM caldav_map m "
+                "JOIN tasks t ON t.id = m.task_id").fetchall():
+            want = target_for_task(conn, row, targets)
+            if collection_of(row["href"]) == want.href:
+                continue
+            dst = want.href + row["href"].rsplit("/", 1)[1]
+            try:
+                etag = client.move(row["href"], dst)
+                conn.execute("UPDATE caldav_map SET href = ?, etag = ? WHERE task_id = ?",
+                             (dst, etag, row["task_id"]))
+                stats["moved"] += 1
+                log.info("caldav: moved %r into %s", row["title"], want.display
+                         if hasattr(want, "display") else want.href)
+            except (CalDAVError, requests.RequestException) as e:
+                stats["errors"] += 1
+                log.warning("caldav: could not move %r: %s", row["title"], e)
+        conn.commit()
+
+    # ---- 5. local -> remote ----
     dirty = conn.execute(
         "SELECT t.* FROM tasks t LEFT JOIN caldav_map m ON m.task_id = t.id "
         "WHERE m.task_id IS NULL OR m.local_rev IS NOT t.updated_at").fetchall()
     for task in dirty:
         row = conn.execute("SELECT * FROM caldav_map WHERE task_id = ?", (task["id"],)).fetchone()
         try:
-            result = push_task(conn, client, task, row)
+            target = target_for_task(conn, task, targets)
+            result = push_task(conn, client, task, row, target.href)
             if result == "ok":
                 stats["pushed"] += 1
             elif result == "conflict":
@@ -685,9 +984,19 @@ def sync_once(conn, client):
             stats["errors"] += 1
             log.warning("caldav: push %r failed: %s", task["title"], e)
 
-    if new_token and not stats["errors"]:
-        state_set(conn, "sync_token", new_token)
-    state_set(conn, "last_sync", datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"))
+    # ---- 6. tokens, only if the pass was clean ----
+    # A token saved after a failed pass would skip the changes we never handled.
+    if not stats["errors"]:
+        for t, _c, _r, new_token in deltas:
+            if not new_token:
+                continue
+            if per_category:
+                conn.execute("UPDATE caldav_collections SET sync_token = ? WHERE href = ?",
+                             (new_token, t.href))
+            else:
+                state_set(conn, "sync_token", new_token)
+    state_set(conn, "last_sync",
+              datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"))
     conn.commit()
     return stats
 
@@ -710,6 +1019,11 @@ def status(conn):
         # deliberately never the password itself
         "password_set": bool(CONFIG["password"]),
         "configured": bool(CONFIG["url"] and CONFIG["user"] and CONFIG["password"]),
+        "mode": CONFIG.get("mode", "single"),
+        "collections": [
+            {"category_id": r["category_id"], "display": r["display"], "href": r["href"]}
+            for r in conn.execute(
+                "SELECT * FROM caldav_collections ORDER BY category_id")],
         "interval": CONFIG["interval"],
         "last_sync": state_get(conn, "last_sync"),
         "last_result": state_get(conn, "last_result"),
@@ -740,10 +1054,24 @@ def test_connection(conn, values=None):
     if not cfg["url"].endswith("/"):
         cfg["url"] += "/"
 
+    mode = (values or {}).get("mode") or cfg.get("mode", "single")
     client = Client(cfg["url"], cfg["user"], cfg["password"],
                     auth=cfg["auth"], timeout=cfg["timeout"])
     try:
         scheme = client.probe()
+        if mode == "per-category":
+            # Here the URL is the calendar *home*; report what we'd create.
+            colls = client.list_collections(client.path_of(cfg["url"]))
+            cats = [r[0] for r in conn.execute("SELECT name FROM categories ORDER BY id")]
+            mine = [c["display"] for h, c in colls.items()
+                    if "senya-tasks-" in h]
+            return {
+                "ok": True, "scheme": scheme,
+                "message": f"Connected as {cfg['user']} ({scheme} auth) · "
+                           f"{len(colls)} calendars here · will manage "
+                           f"{len(cats) + 1} lists (Inbox + {', '.join(cats) or 'no categories yet'})",
+                "existing_lists": mine,
+            }
         info = client.describe()
     except CalDAVError as e:
         return {"ok": False, "message": str(e)}

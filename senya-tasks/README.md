@@ -151,6 +151,42 @@ loop rather than an error.
 | `GET /api/caldav` | last run, mapped task count, pending deletes |
 | `POST /api/caldav/sync` | run a pass now instead of waiting for the timer |
 
+### One list per category
+
+A Reminders **list is a CalDAV collection** — there is no folder concept inside
+one, and Apple ignores `CATEGORIES` for CalDAV accounts. So per-category lists
+mean one collection per category. Switch **Lists** to *one list per category* in
+the settings panel and point the URL at your calendar **home**
+(`…/dav.php/calendars/Senya/`, not one calendar).
+
+senya-tasks then manages the collections itself:
+
+- **Creates** a VTODO-only calendar per category plus an `Inbox` for
+  uncategorised tasks. VTODO-only matters — a calendar advertising `VEVENT` too
+  shows up in the Calendar app and litters the grid with tasks.
+- **Names** each list after its category, and renames it via `PROPPATCH` when
+  you rename the category. The collection URI is derived from the category
+  **id** (`senya-tasks-3/`), never its name, so a rename can't orphan the tasks
+  inside it.
+- **Moves** an object with `MOVE` when a task changes category — same object,
+  new list. Delete-and-recreate would look to a phone like the task vanishing
+  and an unrelated one appearing, losing any alarm set on it.
+- **Follows moves you make on the phone**: drag a reminder to another list and
+  its category changes here.
+- **Leaves collections alone** when you delete a category — it may hold items
+  added on the phone. Only the mapping is dropped.
+
+Nested categories flatten: CalDAV collections have no hierarchy, so `Home` and
+`Home / Garage` become two sibling lists.
+
+**The one subtle part** is that a move is indistinguishable from a delete plus a
+create: the server reports a `404` in the source collection and a new object in
+the destination. Handled collection-by-collection, the removal would destroy the
+task before the creation was seen, and it would come back as a *different* row
+with a new id, `created_at` and position. So every collection's delta is
+gathered **before any of it is acted on**, and a removal is only treated as a
+delete if that UID turned up nowhere else in the same pass.
+
 ### Field mapping
 
 | senya-tasks | VTODO |

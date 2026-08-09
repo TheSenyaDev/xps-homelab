@@ -1036,8 +1036,37 @@ async function refreshSyncStatus() {
   } catch { /* status is cosmetic; never break the page over it */ }
 }
 
+function syncModeChanged() {
+  const per = $i("sync-mode").value === "per-category";
+  // The URL means different things in the two modes, so say which is wanted
+  // rather than letting a plausible-looking wrong URL fail confusingly later.
+  $i("sync-url-label").textContent = per ? "Calendar home" : "Calendar URL";
+  $i("sync-url").placeholder = per
+    ? "http://192.168.2.100:5232/dav.php/calendars/Senya/"
+    : "http://192.168.2.100:5232/dav.php/calendars/Senya/default/";
+  $i("sync-mode-hint").textContent = per
+    ? "One Reminders list per category, created and named for you. Nested categories "
+      + "flatten — CalDAV lists have no hierarchy. Point this at the folder that holds "
+      + "your calendars, not at one calendar."
+    : "Every task in a single list. Categories stay a senya-tasks concept.";
+  renderSyncCollections();
+}
+
+function renderSyncCollections() {
+  const box = $i("sync-collections");
+  const per = $i("sync-mode").value === "per-category";
+  const cols = (syncStatus && syncStatus.collections) || [];
+  if (!per || !cols.length) { box.replaceChildren(); return; }
+  box.replaceChildren(
+    el("div", { class: "sync-collections-head", text: "lists in use" }),
+    ...cols.map((c) => el("div", { class: "sync-collection" },
+      el("span", { class: "sync-collection-name", text: c.display }),
+      el("span", { class: "sync-collection-href", text: c.href.split("/").filter(Boolean).pop() }))));
+}
+
 function fillSyncForm() {
   const s = syncStatus || {};
+  $i("sync-mode").value = s.mode || "single";
   $i("sync-url").value = s.url || "";
   $i("sync-user").value = s.user || "";
   $i("sync-auth").value = s.auth || "auto";
@@ -1046,6 +1075,7 @@ function fillSyncForm() {
   $i("sync-password").placeholder = s.password_set
     ? "leave blank to keep the saved one" : "required";
   $i("sync-state").textContent = s.enabled ? "on" : s.configured ? "paused" : "not configured";
+  syncModeChanged();
   $i("sync-stats").textContent = s.configured
     ? `${s.mapped} tasks linked · last sync ${relTime(s.last_sync)}`
       + (s.pending_deletes ? ` · ${s.pending_deletes} deletions pending` : "")
@@ -1054,6 +1084,7 @@ function fillSyncForm() {
 }
 
 const syncFormValues = () => ({
+  mode: $i("sync-mode").value,
   url: $i("sync-url").value.trim(),
   user: $i("sync-user").value.trim(),
   password: $i("sync-password").value,
@@ -1083,6 +1114,7 @@ document.getElementById("btn-sync-settings").onclick = async () => {
   $i("sync-url").focus();
 };
 $i("sync-chip").onclick = () => document.getElementById("btn-sync-settings").click();
+$i("sync-mode").onchange = syncModeChanged;
 $i("sync-close").onclick = () => { syncModal.hidden = true; };
 syncModal.onclick = (e) => { if (e.target === syncModal) syncModal.hidden = true; };
 

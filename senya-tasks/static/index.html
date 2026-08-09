@@ -169,7 +169,13 @@
         </p>
 
         <div class="form-grid">
-          <label for="sync-url">Calendar URL</label>
+          <label for="sync-mode">Lists</label>
+          <select id="sync-mode">
+            <option value="single">one list for everything</option>
+            <option value="per-category">one list per category</option>
+          </select>
+
+          <label for="sync-url"><span id="sync-url-label">Calendar URL</span></label>
           <input id="sync-url" type="text" spellcheck="false"
                  placeholder="http://192.168.2.100:5232/dav.php/calendars/Senya/default/" />
 
@@ -196,6 +202,8 @@
           <label class="opt"><input type="checkbox" id="sync-enabled" /> keep tasks in sync automatically</label>
         </div>
 
+        <p id="sync-mode-hint" class="hint"></p>
+        <div id="sync-collections" class="sync-collections"></div>
         <div id="sync-result" class="sync-result" hidden></div>
         <div id="sync-stats" class="sync-stats"></div>
       </section>

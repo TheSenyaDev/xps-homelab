@@ -565,3 +565,13 @@ input:-webkit-autofill:focus {
   -webkit-text-fill-color: var(--text);
   caret-color: var(--text);
 }
+
+.sync-collections:empty { display: none; }
+.sync-collections { margin-top: 10px; border-top: 1px solid var(--border-soft); padding-top: 8px; }
+.sync-collections-head {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); margin-bottom: 4px;
+}
+.sync-collection { display: flex; gap: 8px; align-items: baseline; padding: 1px 0; font-size: var(--fs-sm); }
+.sync-collection-name { color: var(--dim); }
+.sync-collection-href { color: var(--muted); font-family: ui-monospace, monospace; font-size: 10px; }
