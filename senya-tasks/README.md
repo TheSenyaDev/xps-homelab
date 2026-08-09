@@ -7,6 +7,14 @@ volume for the database.
 Directory / image / container are `senya-tasks` (matching `senya-daily`, `senya-notes`, …); the
 app still presents itself as **SenyaTasks**.
 
+| | |
+|---|---|
+| [Features](#features) · [UI notes](#ui-notes) | what it does |
+| [Data model](#data-model) · [Extending the schema](#extending-the-schema) | tables, migrations, adding a field |
+| [CalDAV sync](#caldav-sync-apple-reminders-davx5-thunderbird) → **[CALDAV.md](CALDAV.md)** | tasks in Apple Reminders |
+| [Obsidian sync](#obsidian-sync) · [Export](#export-on-demand) · [Import](#import-from-obsidian) | markdown in and out |
+| [Run](#run-with-docker-compose) · [API](#api) · [Config](#config) | operating it |
+
 ## Features
 
 - Create / rename (click a title) / complete / delete tasks
@@ -21,6 +29,9 @@ app still presents itself as **SenyaTasks**.
   frontmatter, nested headings and `- [ ]` / `- [x]` checkboxes
 - **On-demand export** (`↓ md`) of exactly what you're looking at, and **import** (`↑ md`) that
   parses pasted Obsidian markdown into a reviewable, editable list before anything is saved
+- **Calendar view** — a month grid of tasks by due date, sharing the list's filters
+- **Two-way CalDAV sync** so tasks live in Apple Reminders, optionally one Reminders list per
+  category ([CALDAV.md](CALDAV.md))
 
 ## UI notes
 
@@ -34,17 +45,23 @@ Three CSS variables at the top of [`static/style.css`](static/style.css) drive t
 
 | Variable | Default | Effect                          |
 |----------|---------|---------------------------------|
-| `--row`  | `28px`  | task and category row height    |
+| `--row`  | `30px`  | task and category row height    |
 | `--fs`   | `13px`  | body text size                  |
-| `--gap`  | `6px`   | spacing between row elements    |
+| `--gap`  | `8px`   | spacing between row elements    |
 
-Keyboard: `/` search · `n` new task · `\` toggle sidebar · `Esc` close open detail panels (or the
-import dialog).
-Selected category, filter, sort, tag and collapsed subtrees persist in `localStorage`.
+There are two views, switched with the `☰ | ▦` toggle in the toolbar. The **calendar** is a month
+grid of tasks by due date; it shows exactly what the list would show (same category, status, tag
+and search filters), undated tasks get their own strip beneath it, and clicking a chip jumps back
+to the list with that task open.
+
+Keyboard: `/` search · `n` new task · `c` list ⇄ calendar · `←`/`→` change month · `\` toggle
+sidebar · `Esc` close a detail panel or dialog.
+Selected category, filter, sort, tag, view and collapsed subtrees persist in `localStorage`.
 
 ## Data model
 
-`PRAGMA user_version` tracks the schema version (currently **3**).
+`PRAGMA user_version` tracks the schema version (currently **6**). Migrations M4–M6 add the
+CalDAV sync tables — see [CALDAV.md](CALDAV.md#schema).
 
 ### `tasks`
 
@@ -96,8 +113,8 @@ To add a field:
    it won't run it again):
 
    ```python
-   M4 = "ALTER TABLE tasks ADD COLUMN estimate_minutes INTEGER;"
-   MIGRATIONS = [M1, M2, M3, M4]
+   M7 = "ALTER TABLE tasks ADD COLUMN estimate_minutes INTEGER;"
+   MIGRATIONS = [M1, M2, M3, M4, M5, M6, M7]
    ```
 
    SQLite can't add a CHECK constraint to an existing table; if you need one, rebuild the table
@@ -126,109 +143,28 @@ the UI.
 
 ## CalDAV sync (Apple Reminders, DAVx5, Thunderbird…)
 
-Two-way sync between the `tasks` table and VTODOs in a CalDAV collection. Point it
-at the **same collection your phone's account uses** and tasks appear in Apple
-Reminders — Reminders reads `VTODO`, while the Calendar app reads `VEVENT`, which
-is why tasks land there and not in the calendar grid.
+Two-way sync between the `tasks` table and `VTODO`s in a CalDAV calendar. Point
+it at the collection your phone's account uses and tasks appear in **Apple
+Reminders** — they read `VTODO`, while the Calendar app reads `VEVENT`, which is
+why tasks land in Reminders and not in your calendar grid.
 
-Off by default. To switch it on, add to the homelab `.env`:
+Configure it in the app: **⚙** in the top bar → URL, username, password →
+**Test connection** → **Save**. Nothing is written to `.env` and no redeploy is
+needed; settings live in the database and override the `CALDAV_*` env defaults.
 
-```bash
-SENYA_TASKS_CALDAV_ENABLED=true
-SENYA_TASKS_CALDAV_URL=http://192.168.2.100:5232/dav.php/calendars/Senya/default/
-SENYA_TASKS_CALDAV_USER=Senya
-SENYA_TASKS_CALDAV_PASSWORD=<that DAV user's password>
-SENYA_TASKS_CALDAV_AUTH=auto        # auto | digest (Baikal) | basic (Nextcloud)
-SENYA_TASKS_CALDAV_INTERVAL=120     # seconds between polls
-```
+Two modes:
 
-then `docker compose up -d senya-tasks`. `CALDAV_AUTH=auto` probes the server's
-challenge once at startup, because picking the wrong scheme fails as a silent 401
-loop rather than an error.
+- **one list for everything** — every task in a single collection. Categories
+  stay a senya-tasks concept.
+- **one list per category** — a Reminders list per category, created and named
+  for you, with an `Inbox` for uncategorised tasks. Moving a reminder between
+  lists on your phone changes its category here.
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /api/caldav` | last run, mapped task count, pending deletes |
-| `POST /api/caldav/sync` | run a pass now instead of waiting for the timer |
+Status is visible at a glance from the **⇄ chip** beside the toolbar buttons:
+green with the time of the last sync, amber when overdue, grey when paused.
 
-### One list per category
-
-A Reminders **list is a CalDAV collection** — there is no folder concept inside
-one, and Apple ignores `CATEGORIES` for CalDAV accounts. So per-category lists
-mean one collection per category. Switch **Lists** to *one list per category* in
-the settings panel and point the URL at your calendar **home**
-(`…/dav.php/calendars/Senya/`, not one calendar).
-
-senya-tasks then manages the collections itself:
-
-- **Creates** a VTODO-only calendar per category plus an `Inbox` for
-  uncategorised tasks. VTODO-only matters — a calendar advertising `VEVENT` too
-  shows up in the Calendar app and litters the grid with tasks.
-- **Names** each list after its category, and renames it via `PROPPATCH` when
-  you rename the category. The collection URI is derived from the category
-  **id** (`senya-tasks-3/`), never its name, so a rename can't orphan the tasks
-  inside it.
-- **Moves** an object with `MOVE` when a task changes category — same object,
-  new list. Delete-and-recreate would look to a phone like the task vanishing
-  and an unrelated one appearing, losing any alarm set on it.
-- **Follows moves you make on the phone**: drag a reminder to another list and
-  its category changes here.
-- **Leaves collections alone** when you delete a category — it may hold items
-  added on the phone. Only the mapping is dropped.
-
-Nested categories flatten: CalDAV collections have no hierarchy, so `Home` and
-`Home / Garage` become two sibling lists.
-
-**The one subtle part** is that a move is indistinguishable from a delete plus a
-create: the server reports a `404` in the source collection and a new object in
-the destination. Handled collection-by-collection, the removal would destroy the
-task before the creation was seen, and it would come back as a *different* row
-with a new id, `created_at` and position. So every collection's delta is
-gathered **before any of it is acted on**, and a removal is only treated as a
-delete if that UID turned up nowhere else in the same pass.
-
-### Field mapping
-
-| senya-tasks | VTODO |
-|---|---|
-| `title` / `notes` | `SUMMARY` / `DESCRIPTION` |
-| `status` todo·doing·done | `NEEDS-ACTION` · `IN-PROCESS` · `COMPLETED` |
-| `status` **blocked** | `NEEDS-ACTION` + `X-SENYA-STATUS:blocked` (no iCalendar equivalent) |
-| `priority` high·medium·low | `PRIORITY` 1 · 5 · 9 |
-| `due_date` | `DUE;VALUE=DATE` |
-| `completed_at` | `COMPLETED` + `PERCENT-COMPLETE:100` |
-| `tags` | `CATEGORIES` |
-| `position` | `X-APPLE-SORT-ORDER` |
-| `category` | **not synced** — CalDAV collections have no folder tree |
-
-### How it stays consistent
-
-Every synced task keeps a bookmark in `caldav_map`: the local `updated_at` and
-the remote `LAST-MODIFIED` *as of the last time the two agreed*. A side is dirty
-when its current revision differs from its bookmark, which makes the four cases
-explicit instead of guessed — neither dirty (skip), local only (`PUT`, guarded by
-`If-Match`), remote only (write to SQLite), both (**conflict**: newest timestamp
-wins, and the loser is logged as a warning).
-
-Change detection uses WebDAV-Sync (RFC 6578), so an idle poll is one request
-rather than a full listing.
-
-Three things that are easy to get wrong and are handled deliberately:
-
-- **Deletes both ways.** A local delete leaves a row in `caldav_tombstones`,
-  written by a trigger so it outlives the task row, and becomes a remote
-  `DELETE`. A remote delete arrives as a `404` in the sync report.
-- **No resurrection.** Pending deletes are pushed *before* anything is pulled.
-  Otherwise the pull sees an object that is still on the server with its mapping
-  already gone, assumes it's new, and recreates the task you just deleted.
-- **No ping-pong.** Our own `PUT` bumps the collection's sync-token, so the
-  object comes straight back in the next delta. It's recognised by ETag and
-  skipped — without that, sync re-applies its own writes and bumps `updated_at`,
-  making tasks look edited when nothing touched them.
-
-Verified end to end against a live sabre/dav server (both Baikal and Nextcloud run
-it): push, pull, remote completion, both delete directions, a genuine
-both-sides-changed conflict, idempotency, and folded/escaped unicode.
+📖 **[CALDAV.md](CALDAV.md)** — field mapping, the consistency model, how moves
+and deletes are reconciled, schema, API, troubleshooting.
 
 ## Obsidian sync
 
@@ -398,6 +334,10 @@ All bodies are JSON. Errors come back as `{"error": "..."}` with a 4xx status.
 | GET    | `/api/export`           | markdown; same filters as `/api/tasks`, plus `?download=1`           |
 | POST   | `/api/import/preview`   | `{ markdown, default_status? }` → proposed tasks + warnings, no writes |
 | POST   | `/api/import/commit`    | `{ items: [...], create_categories? }` → inserts the reviewed items   |
+| GET    | `/api/caldav`           | sync status — mode, last run, mapped count, collections ([CALDAV.md](CALDAV.md#api)) |
+| PUT    | `/api/caldav/config`    | `{ url, user, password?, auth?, mode?, interval?, enabled? }`         |
+| POST   | `/api/caldav/test`      | check settings against the server without saving them                 |
+| POST   | `/api/caldav/sync`      | run a sync pass now                                                   |
 
 `?category_id=none` selects uncategorized tasks; `?q=` matches title **and** notes. `tags` on a
 write **replaces** the task's whole tag set. Import items accept every task field plus

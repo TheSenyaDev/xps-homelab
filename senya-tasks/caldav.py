@@ -1,31 +1,42 @@
-"""Two-way CalDAV sync: senya-tasks tasks ⇄ VTODOs in a calendar collection.
+"""Two-way CalDAV sync: senya-tasks tasks ⇄ VTODOs in calendar collections.
 
-Point it at the same collection your phone's account uses and tasks show up in
-Apple Reminders (Reminders reads VTODO; the Calendar app reads VEVENT, which is
-why tasks appear there and not in your calendar grid).
+Point it at the collection your phone's account uses and tasks show up in Apple
+Reminders (Reminders reads VTODO; the Calendar app reads VEVENT, which is why
+tasks appear there and not in your calendar grid).
 
-How it stays consistent
------------------------
-Both sides can change, so every synced task carries a bookmark in `caldav_map`:
-the local `updated_at` and the remote `LAST-MODIFIED` **as of the last time the
-two agreed**. A side is "dirty" when its current revision differs from its
-bookmark. That makes the four cases explicit rather than guessed:
+Full reference — field mapping, schema, API, troubleshooting: CALDAV.md.
+This docstring covers only what you need to read the code below.
+
+Consistency model
+-----------------
+Every synced task carries a bookmark in `caldav_map`: the local `updated_at` and
+the remote `LAST-MODIFIED` **as of the last time the two agreed**. A side is
+"dirty" when its current revision differs from its bookmark, which turns four
+vague situations into four explicit ones:
 
     neither dirty   nothing to do
-    local only      PUT (guarded by If-Match, so we lose the race rather than
-                    clobber a change that landed between poll and push)
+    local only      PUT (guarded by If-Match, so a change that landed between
+                    poll and push produces a 412 instead of being clobbered)
     remote only     write the VTODO into SQLite
     both            conflict → newest timestamp wins, and the loser is logged
 
-Deletes are the classic hole in naive syncs, and they get explicit handling in
-both directions: a local delete leaves a row in `caldav_tombstones` (written by
-a trigger, so it survives the row disappearing) which becomes a remote DELETE;
-a remote delete arrives as a 404 in the sync-collection report and removes the
-local task.
+Change detection uses WebDAV-Sync (RFC 6578), so an idle poll costs one request
+per collection rather than a full listing.
 
-Change detection uses WebDAV-Sync (RFC 6578) when the server offers a
-sync-token — both Baikal and Nextcloud do, being sabre/dav — so a poll costs one
-request when nothing changed, instead of listing the whole collection.
+Three things that break naive syncs, handled deliberately
+---------------------------------------------------------
+* Resurrection — pending deletes are pushed BEFORE anything is pulled, or the
+  pull sees an object whose mapping is already gone and recreates the task you
+  just deleted.
+* Ping-pong — our own PUT bumps the sync-token, so the object returns in the
+  next delta; it is recognised by ETag and skipped, otherwise sync re-applies
+  its own writes and bumps updated_at forever.
+* Move ≠ delete — moving between collections looks like a 404 here and a
+  creation there. Every collection's delta is gathered before any is acted on,
+  and a removal only counts as a delete if the UID appeared nowhere else.
+
+Layout: iCalendar text helpers → Client (HTTP/DAV) → collections → sync_once →
+background worker.
 """
 
 import datetime
