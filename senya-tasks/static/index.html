@@ -8,9 +8,13 @@
 </head>
 <body>
   <div class="app">
+    <!-- Only rendered as a hit target on narrow screens, where the sidebar
+         becomes an off-canvas drawer (see the mobile block in style.css). -->
+    <div class="drawer-scrim"></div>
+
     <aside class="sidebar">
       <div class="brand">
-        <span>📋 SenyaTasks</span>
+        <span>SENYA/TASKS</span>
         <button id="sidebar-toggle" class="icon-btn" title="Hide sidebar (\)">‹</button>
       </div>
 
@@ -37,11 +41,18 @@
 
     <main class="content">
       <header class="bar">
-        <button id="sidebar-show" class="icon-btn" title="Show sidebar (\)">›</button>
+        <button id="sidebar-show" class="icon-btn" title="Categories (\)">☰</button>
         <h2 id="current-title">All tasks</h2>
         <span id="current-count" class="count-chip"></span>
 
         <div class="filters" id="filters"></div>
+
+        <!-- View switch: same segmented shape as the filters beside it, so it
+             reads as part of the same control strip rather than a bolted-on button. -->
+        <div class="viewswitch" id="views">
+          <button data-view="list" class="active" title="List view">☰</button>
+          <button data-view="calendar" title="Calendar view">▦</button>
+        </div>
 
         <input id="search" type="search" placeholder="Search  /" autocomplete="off" />
 
@@ -54,6 +65,15 @@
             <option value="title">Title A–Z</option>
           </select>
         </label>
+
+        <span class="bar-tools">
+          <!-- Reads "synced 2m ago" once sync is on, so the state is visible
+               without opening anything. Hidden until configured. -->
+          <button id="sync-chip" class="ghost-btn sync-chip" title="CalDAV sync" hidden></button>
+          <button id="btn-export" class="ghost-btn" title="Download the tasks below as Obsidian markdown">↓&nbsp;Export</button>
+          <button id="btn-import" class="ghost-btn" title="Paste Obsidian markdown to import">↑&nbsp;Import</button>
+          <button id="btn-sync-settings" class="ghost-btn" title="CalDAV sync settings">⚙</button>
+        </span>
       </header>
 
       <form id="task-form" class="add-task">
@@ -68,7 +88,133 @@
       </form>
 
       <div id="task-groups"></div>
+
+      <!-- Month grid of tasks by due date. Shows whatever the list would show:
+           the same category, status, tag and search filters apply. -->
+      <section id="calendar" class="calendar" hidden>
+        <header class="cal-head">
+          <button id="cal-prev" class="ghost-btn" title="Previous month">‹</button>
+          <strong id="cal-title"></strong>
+          <button id="cal-next" class="ghost-btn" title="Next month">›</button>
+          <button id="cal-today" class="ghost-btn">Today</button>
+          <span class="spacer"></span>
+          <span id="cal-summary" class="count-chip"></span>
+        </header>
+        <div class="cal-dow" id="cal-dow"></div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-unscheduled" id="cal-unscheduled"></div>
+      </section>
     </main>
+  </div>
+
+  <!-- Import: paste → parse → review/edit → confirm. Nothing is written until
+       the reviewer presses Import, so a bad paste costs nothing. -->
+  <div id="import-modal" class="modal" hidden>
+    <div class="modal-card">
+      <header class="modal-head">
+        <strong>Import from Obsidian</strong>
+        <span id="import-step" class="count-chip">1 · paste</span>
+        <button id="import-close" class="icon-btn" title="Close (Esc)">✕</button>
+      </header>
+
+      <section id="import-paste" class="modal-body">
+        <p class="hint">
+          Paste a note, a task list, or a whole exported <code>Tasks.md</code>.
+          Headings become categories; <code>#tags</code>, <code>⏫🔼🔽</code> priority and
+          <code>📅 dates</code> are picked up. Nothing is saved until you confirm.
+        </p>
+        <textarea id="import-text" spellcheck="false"
+                  placeholder="## Work&#10;- [ ] something to do #tag ⏫ 📅 2026-09-01&#10;- [x] something finished ✅ 2026-08-01"></textarea>
+      </section>
+
+      <section id="import-review" class="modal-body" hidden>
+        <div class="review-toolbar">
+          <span id="import-summary"></span>
+          <span class="spacer"></span>
+          <button id="sel-all" class="ghost-btn">Select all</button>
+          <button id="sel-none" class="ghost-btn">None</button>
+          <button id="sel-clean" class="ghost-btn" title="Deselect anything with a warning">Only clean</button>
+        </div>
+        <div id="import-rows" class="review-rows"></div>
+      </section>
+
+      <footer class="modal-foot">
+        <label class="opt"><input type="checkbox" id="import-create-cats" checked /> create missing categories</label>
+        <label class="opt">items with no checkbox →
+          <select id="import-default-status"></select>
+        </label>
+        <span class="spacer"></span>
+        <button id="import-back" class="ghost-btn" hidden>← Back</button>
+        <button id="import-parse" class="primary-btn">Parse →</button>
+        <button id="import-commit" class="primary-btn" hidden>Import</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- CalDAV sync settings. Test before saving, so a wrong URL or password is
+       named here rather than discovered as silence hours later. -->
+  <div id="sync-modal" class="modal" hidden>
+    <div class="modal-card narrow">
+      <header class="modal-head">
+        <strong>CalDAV sync</strong>
+        <span id="sync-state" class="count-chip"></span>
+        <button id="sync-close" class="icon-btn" title="Close (Esc)">✕</button>
+      </header>
+
+      <section class="modal-body">
+        <p class="hint">
+          Point this at the <em>same calendar collection your phone uses</em> and tasks
+          appear in Apple Reminders. Tasks are <code>VTODO</code>s, so they show in
+          Reminders — not in the Calendar app.
+        </p>
+
+        <div class="form-grid">
+          <label for="sync-mode">Lists</label>
+          <select id="sync-mode">
+            <option value="single">one list for everything</option>
+            <option value="per-category">one list per category</option>
+          </select>
+
+          <label for="sync-url"><span id="sync-url-label">Calendar URL</span></label>
+          <input id="sync-url" type="text" spellcheck="false"
+                 placeholder="http://192.168.2.100:5232/dav.php/calendars/Senya/default/" />
+
+          <label for="sync-user">Username</label>
+          <input id="sync-user" type="text" spellcheck="false" placeholder="Senya" />
+
+          <label for="sync-password">Password</label>
+          <input id="sync-password" type="password" autocomplete="new-password"
+                 placeholder="leave blank to keep the saved one" />
+
+          <label for="sync-auth">Auth</label>
+          <div class="inline">
+            <select id="sync-auth">
+              <option value="auto">auto-detect</option>
+              <option value="digest">digest (Baikal)</option>
+              <option value="basic">basic (Nextcloud)</option>
+            </select>
+            <label class="opt" for="sync-interval">every</label>
+            <input id="sync-interval" type="number" min="30" step="30" value="120" />
+            <span class="opt">seconds</span>
+          </div>
+
+          <label for="sync-enabled">Sync</label>
+          <label class="opt"><input type="checkbox" id="sync-enabled" /> keep tasks in sync automatically</label>
+        </div>
+
+        <p id="sync-mode-hint" class="hint"></p>
+        <div id="sync-collections" class="sync-collections"></div>
+        <div id="sync-result" class="sync-result" hidden></div>
+        <div id="sync-stats" class="sync-stats"></div>
+      </section>
+
+      <footer class="modal-foot">
+        <button id="sync-test" class="ghost-btn">Test connection</button>
+        <button id="sync-now" class="ghost-btn">Sync now</button>
+        <span class="spacer"></span>
+        <button id="sync-save" class="primary-btn">Save</button>
+      </footer>
+    </div>
   </div>
 
   <script src="/app.js"></script>

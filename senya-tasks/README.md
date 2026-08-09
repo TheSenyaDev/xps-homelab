@@ -7,6 +7,14 @@ volume for the database.
 Directory / image / container are `senya-tasks` (matching `senya-daily`, `senya-notes`, …); the
 app still presents itself as **SenyaTasks**.
 
+| | |
+|---|---|
+| [Features](#features) · [UI notes](#ui-notes) | what it does |
+| [Data model](#data-model) · [Extending the schema](#extending-the-schema) | tables, migrations, adding a field |
+| [CalDAV sync](#caldav-sync-apple-reminders-davx5-thunderbird) → **[CALDAV.md](CALDAV.md)** | tasks in Apple Reminders |
+| [Obsidian sync](#obsidian-sync) · [Export](#export-on-demand) · [Import](#import-from-obsidian) | markdown in and out |
+| [Run](#run-with-docker-compose) · [API](#api) · [Config](#config) | operating it |
+
 ## Features
 
 - Create / rename (click a title) / complete / delete tasks
@@ -19,6 +27,11 @@ app still presents itself as **SenyaTasks**.
 - Data persisted in a SQLite file under `/data` (Docker volume)
 - **Live Obsidian export:** every change rewrites `/data/Tasks.md` (atomically) with YAML
   frontmatter, nested headings and `- [ ]` / `- [x]` checkboxes
+- **On-demand export** (`↓ md`) of exactly what you're looking at, and **import** (`↑ md`) that
+  parses pasted Obsidian markdown into a reviewable, editable list before anything is saved
+- **Calendar view** — a month grid of tasks by due date, sharing the list's filters
+- **Two-way CalDAV sync** so tasks live in Apple Reminders, optionally one Reminders list per
+  category ([CALDAV.md](CALDAV.md))
 
 ## UI notes
 
@@ -32,16 +45,23 @@ Three CSS variables at the top of [`static/style.css`](static/style.css) drive t
 
 | Variable | Default | Effect                          |
 |----------|---------|---------------------------------|
-| `--row`  | `28px`  | task and category row height    |
+| `--row`  | `30px`  | task and category row height    |
 | `--fs`   | `13px`  | body text size                  |
-| `--gap`  | `6px`   | spacing between row elements    |
+| `--gap`  | `8px`   | spacing between row elements    |
 
-Keyboard: `/` search · `n` new task · `\` toggle sidebar · `Esc` close open detail panels.
-Selected category, filter, sort, tag and collapsed subtrees persist in `localStorage`.
+There are two views, switched with the `☰ | ▦` toggle in the toolbar. The **calendar** is a month
+grid of tasks by due date; it shows exactly what the list would show (same category, status, tag
+and search filters), undated tasks get their own strip beneath it, and clicking a chip jumps back
+to the list with that task open.
+
+Keyboard: `/` search · `n` new task · `c` list ⇄ calendar · `←`/`→` change month · `\` toggle
+sidebar · `Esc` close a detail panel or dialog.
+Selected category, filter, sort, tag, view and collapsed subtrees persist in `localStorage`.
 
 ## Data model
 
-`PRAGMA user_version` tracks the schema version (currently **3**).
+`PRAGMA user_version` tracks the schema version (currently **6**). Migrations M4–M6 add the
+CalDAV sync tables — see [CALDAV.md](CALDAV.md#schema).
 
 ### `tasks`
 
@@ -93,8 +113,8 @@ To add a field:
    it won't run it again):
 
    ```python
-   M4 = "ALTER TABLE tasks ADD COLUMN estimate_minutes INTEGER;"
-   MIGRATIONS = [M1, M2, M3, M4]
+   M7 = "ALTER TABLE tasks ADD COLUMN estimate_minutes INTEGER;"
+   MIGRATIONS = [M1, M2, M3, M4, M5, M6, M7]
    ```
 
    SQLite can't add a CHECK constraint to an existing table; if you need one, rebuild the table
@@ -112,12 +132,39 @@ To add a field:
    That single table drives both `POST` and `PATCH`, so the field is now creatable, updatable and
    validated. Validators normalise the value or raise `ApiError(msg, status)`.
 
-3. Optionally surface it in `build_markdown()` and the frontend's `taskDetail()`.
+3. Optionally surface it in `build_markdown()` (export), `parse_task_text()` (import) and the
+   frontend's `taskDetail()`. Skipping these is fine — the field just won't round-trip through
+   markdown.
 
 New status or priority values go in the `STATUSES` / `PRIORITIES` tuples at the top of `app.py`
 **and** in a migration that widens the CHECK constraint. `GET /api/meta` serves those vocabularies
 to the frontend, which builds its filter buttons and dropdowns from them — no hardcoded lists in
 the UI.
+
+## CalDAV sync (Apple Reminders, DAVx5, Thunderbird…)
+
+Two-way sync between the `tasks` table and `VTODO`s in a CalDAV calendar. Point
+it at the collection your phone's account uses and tasks appear in **Apple
+Reminders** — they read `VTODO`, while the Calendar app reads `VEVENT`, which is
+why tasks land in Reminders and not in your calendar grid.
+
+Configure it in the app: **⚙** in the top bar → URL, username, password →
+**Test connection** → **Save**. Nothing is written to `.env` and no redeploy is
+needed; settings live in the database and override the `CALDAV_*` env defaults.
+
+Two modes:
+
+- **one list for everything** — every task in a single collection. Categories
+  stay a senya-tasks concept.
+- **one list per category** — a Reminders list per category, created and named
+  for you, with an `Inbox` for uncategorised tasks. Moving a reminder between
+  lists on your phone changes its category here.
+
+Status is visible at a glance from the **⇄ chip** beside the toolbar buttons:
+green with the time of the last sync, amber when overdue, grey when paused.
+
+📖 **[CALDAV.md](CALDAV.md)** — field mapping, the consistency model, how moves
+and deletes are reconciled, schema, API, troubleshooting.
 
 ## Obsidian sync
 
@@ -145,6 +192,85 @@ stays queryable there:
 ```
 
 Checkbox characters carry the status: `[ ]` todo, `[/]` doing, `[!]` blocked, `[x]` done.
+
+## Export on demand
+
+`Tasks.md` is rewritten on every change, but the **`↓ md`** button in the top bar downloads the
+current view as a dated `.md` file — whatever category, status filter, tag and search box are
+active. Categories that contributed no tasks are pruned, so a one-category export isn't padded
+with empty headings.
+
+Under the hood that's `GET /api/export`, which accepts every `GET /api/tasks` filter plus
+`?ids=1,2,3` and `?download=1`:
+
+```bash
+curl 'localhost:8000/api/export?status=done'                  # completed work
+curl 'localhost:8000/api/export?category_id=3&download=1' -OJ # one category, as a file
+```
+
+The UI passes explicit `ids` because its search box and tag chips filter in the browser — the id
+list is the only faithful description of what's on screen.
+
+## Import from Obsidian
+
+**`↑ md`** opens a two-step importer: paste markdown, hit **Parse**, then review a table of
+proposed tasks before anything is written.
+
+The parser is deliberately forgiving, because people paste whole notes rather than clean lists:
+
+| In the markdown                              | Becomes                                          |
+|----------------------------------------------|--------------------------------------------------|
+| `## Work`, `### Garage`                      | category, nested by heading level                 |
+| `- [ ]` `[/]` `[!]` `[x]`                    | status todo / doing / blocked / done              |
+| `🔺` `⏫` `🔼` `🔽` `⏬`                        | priority (highest and lowest fold into high/low)  |
+| `📅` `📆` `🗓` + `YYYY-MM-DD`                  | due date                                          |
+| `✅ YYYY-MM-DD`                               | completion date, preserved rather than re-stamped |
+| `#tag`                                       | tags (lowercased, spaces → `-`)                   |
+| indented lines under a task                  | notes                                             |
+| `- plain bullet`, `1. numbered`              | a candidate task, **unticked**, flagged           |
+
+Ignored outright: YAML frontmatter, prose paragraphs, `>` callouts and quotes, and a lone `#` H1
+before the first task (that's the note's title, not a category — otherwise every round-trip nests
+everything one level deeper).
+
+Obsidian Tasks fields with no equivalent here — `🔁` recurrence, `🛫` start, `⏳` scheduled, `➕`
+created, `🆔`/`⛔` dependencies — are stripped from the title and reported as a warning on that
+row, so you can see what was dropped instead of finding it glued into a task name.
+
+### The review step
+
+Every row is editable — title, status, priority, due date, tags, and a slash-separated category
+path (`Home / Garage`) that's created on import if it doesn't exist. Rows carrying a warning are
+tinted; duplicates of tasks you already have are tinted red and called out by name. Plain bullets
+arrive unticked, so junk needs an explicit opt-in rather than an opt-out. **Select all**, **None**
+and **Only clean** (everything without a warning) handle the bulk cases.
+
+Guarantees worth knowing:
+
+- **Preview writes nothing.** `POST /api/import/preview` only parses; the database is untouched
+  until you press Import.
+- **Your edits win.** The reviewed items are what get posted, not the original text.
+- **Same validation as any other write.** Committed items go through the same `TASK_FIELDS`
+  validators as `POST /api/tasks` — the import path has no shortcut into the database.
+- **All or nothing.** One bad row aborts the whole batch and rolls back, so a partial import can't
+  leave half a note behind.
+
+### Round trip
+
+Export → import is lossless for everything the schema holds: status, priority, due date, tags,
+notes, completion dates and category placement all survive, and re-importing your own export
+produces no warnings. It does create *duplicates* if the tasks are still there — that's what the
+duplicate flagging in the review step is for.
+
+```bash
+# import a note from the command line
+curl -X POST localhost:8000/api/import/preview -H 'Content-Type: application/json' \
+     -d '{"markdown":"## Work\n- [ ] ship it ⏫ 📅 2026-09-01"}'
+# feed the reviewed items straight back
+curl -X POST localhost:8000/api/import/commit -H 'Content-Type: application/json' \
+     -d '{"items":[{"title":"ship it","priority":"high","due_date":"2026-09-01",
+                    "category_path":["Work"],"tags":["ship"]}]}'
+```
 
 ## Deploying the rename (one time)
 
@@ -200,14 +326,22 @@ All bodies are JSON. Errors come back as `{"error": "..."}` with a 4xx status.
 | GET    | `/api/tags`             | — (each tag carries a `task_count`)                                  |
 | PATCH  | `/api/tags/:id`         | `name` and/or `color`                                                |
 | DELETE | `/api/tags/:id`         | — (removes the label everywhere; tasks are untouched)                |
-| GET    | `/api/tasks`            | filters: `?status= ?priority= ?category_id= ?tag= ?q= ?due_before=`  |
+| GET    | `/api/tasks`            | filters: `?status= ?priority= ?category_id= ?tag= ?q= ?due_before= ?ids=` |
 | POST   | `/api/tasks`            | `{ title, notes?, status?, priority?, category_id?, due_date?, position?, tags? }` |
 | PATCH  | `/api/tasks/:id`        | any subset of the same fields (plus `done` as a `status` shortcut)   |
 | POST   | `/api/tasks/reorder`    | `{ "ids": [3, 1, 2] }` — rewrites `position` in the order given      |
 | DELETE | `/api/tasks/:id`        | —                                                                    |
+| GET    | `/api/export`           | markdown; same filters as `/api/tasks`, plus `?download=1`           |
+| POST   | `/api/import/preview`   | `{ markdown, default_status? }` → proposed tasks + warnings, no writes |
+| POST   | `/api/import/commit`    | `{ items: [...], create_categories? }` → inserts the reviewed items   |
+| GET    | `/api/caldav`           | sync status — mode, last run, mapped count, collections ([CALDAV.md](CALDAV.md#api)) |
+| PUT    | `/api/caldav/config`    | `{ url, user, password?, auth?, mode?, interval?, enabled? }`         |
+| POST   | `/api/caldav/test`      | check settings against the server without saving them                 |
+| POST   | `/api/caldav/sync`      | run a sync pass now                                                   |
 
 `?category_id=none` selects uncategorized tasks; `?q=` matches title **and** notes. `tags` on a
-write **replaces** the task's whole tag set.
+write **replaces** the task's whole tag set. Import items accept every task field plus
+`category_path: ["Home", "Garage"]` and an `include` flag (items with `include: false` are skipped).
 
 ```bash
 # everything overdue, highest priority first

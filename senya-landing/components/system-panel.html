@@ -1,8 +1,15 @@
 <!-- System panel: live per-host CPU/RAM/disk/temp from each host's Glances API,
      with LAN/TS address chips beside the host name. Filled by
      js/sections/system.js; hosts come from HOSTS in /services.js. Internal
-     only — main.js removes this block off-network. -->
+     only — main.js removes this block off-network.
+     The header's chevron narrows the whole info pane to a thin strip that keeps
+     the bars but drops labels and values — see initInfoPane in js/layout.js. -->
 <div class="info-block">
-  <div class="info-head">System</div>
+  <div class="info-head">
+    <span class="info-head-long">System</span>
+    <span class="info-head-short" aria-hidden="true">Sys</span>
+    <button id="info-toggle" class="info-toggle" type="button"
+            aria-label="Collapse system panel" title="Collapse system panel">›</button>
+  </div>
   <div id="system" class="system"></div>
 </div>

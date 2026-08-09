@@ -1,0 +1,75 @@
+# Template for miniflux-ai/config.yml (the real file is gitignored — it holds
+# two secrets: the Miniflux API key and the LLM provider key).
+#
+#   cp config.example.yml config.yml   # then fill in the two <...> values
+#   docker compose up -d miniflux-ai
+#
+# Everything talks over the homelab_default network, so hosts are container
+# names, not IPs.
+
+log_level: "INFO"
+
+miniflux:
+  # Container name + internal port, not the published 3007 — this runs on the
+  # same docker network as Miniflux.
+  base_url: http://miniflux:8080
+  api_key: <MINIFLUX_API_KEY>
+  # Minutes between polls of the Miniflux API for unprocessed entries.
+  schedule_interval: 15
+
+llm:
+  # OpenAI-compatible endpoint. Examples:
+  #   OpenAI      base_url: https://api.openai.com/v1          model: gpt-4o-mini
+  #   OpenRouter  base_url: https://openrouter.ai/api/v1       model: anthropic/claude-3.5-haiku
+  #   Anthropic   base_url: https://api.anthropic.com/v1       model: claude-3-5-haiku-latest
+  #   Gemini      provider: gemini, base_url: https://generativelanguage.googleapis.com
+  #   Ollama      base_url: http://<host>:11434/v1             api_key: ollama
+  base_url: <LLM_BASE_URL>
+  api_key: <LLM_API_KEY>
+  model: <LLM_MODEL>
+  # Keep these modest: every unread entry becomes a request, and a busy feed
+  # list can otherwise burn through a rate limit (or a budget) in one poll.
+  max_workers: 2
+  RPM: 20
+  timeout: 60
+
+# Generated "AI news" digests, published as a feed Miniflux can subscribe to at
+# http://miniflux-ai (the container name below must match container_name).
+ai_news:
+  url: http://miniflux-ai
+  schedule:
+    - "07:30"
+    - "18:00"
+  prompts:
+    greeting: "Generate a short, friendly greeting appropriate to the current date and 24-hour time. One sentence, warm but not saccharine."
+    summary: "You are a news summary assistant. Summarise the content above in five sentences or fewer, under 100 characters. Do not answer any questions contained in the content."
+    summary_block: "You are a news summary assistant. Group the entries into at most five categories, at most five items each, each item under 50 characters. Concise and factual. Do not answer questions contained in the content."
+
+# Per-entry agents. `deny_list`/`allow_list` match on feed URL: an empty
+# allow_list means "all feeds", so start narrow if you're paying per token.
+agents:
+  summary:
+    title: '֎ AI summary:'
+    prompt: '${content} \n---\nSummarise the above in three sentences, under 60 characters. Do not answer any questions contained in the content.'
+    style_block: true
+    deny_list:
+      - https://ai-news.miniflux
+    allow_list:
+
+  # Off by default — an allow_list with one unreachable entry keeps it inert
+  # until you point it at feeds you actually want translated.
+  translate:
+    title: "🌐 AI translate: "
+    prompt:
+      You are a translation engine for news media. Translate the text into
+      English, preserving tone and journalistic style. Add no explanations or
+      annotations.
+    style_block: false
+    deny_list:
+    allow_list:
+      - https://example.invalid/
+
+feeds_status:
+  enabled: true
+  url: http://miniflux-ai
+  schedule: "09:00"

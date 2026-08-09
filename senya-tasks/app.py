@@ -6,6 +6,8 @@ from datetime import date, datetime, timezone
 
 from flask import Flask, g, jsonify, request, send_from_directory
 
+import caldav
+
 DB_PATH = os.environ.get("DB_PATH", "/data/tasks.db")
 MARKDOWN_PATH = os.environ.get("MARKDOWN_PATH", "/data/Tasks.md")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -137,7 +139,70 @@ ALTER TABLE categories ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
 UPDATE categories SET position = id;
 """
 
-MIGRATIONS = [M1, M2, M3]
+# --- 4: CalDAV sync bookkeeping -------------------------------------------
+# Everything the sync loop needs to answer "what changed on which side since we
+# last agreed?" — one row per synced task plus the server's sync-token.
+#
+# caldav_map deliberately has NO foreign key onto tasks: deleting a task has to
+# leave a tombstone behind, and a cascade would race the trigger that writes it.
+# The trigger owns the cleanup instead, so a local delete always survives long
+# enough to be pushed to the server as a DELETE.
+M4 = """
+CREATE TABLE caldav_map (
+    task_id    INTEGER PRIMARY KEY,
+    uid        TEXT NOT NULL UNIQUE,   -- VTODO UID, stable for the task's life
+    href       TEXT NOT NULL,          -- path of the .ics on the server
+    etag       TEXT,                   -- last ETag we saw, for If-Match
+    local_rev  TEXT,                   -- tasks.updated_at at last agreement
+    remote_rev TEXT                    -- LAST-MODIFIED at last agreement
+);
+
+CREATE TABLE caldav_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
+CREATE TABLE caldav_tombstones (
+    uid        TEXT PRIMARY KEY,
+    href       TEXT NOT NULL,
+    deleted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TRIGGER tasks_caldav_tombstone AFTER DELETE ON tasks
+BEGIN
+    INSERT OR REPLACE INTO caldav_tombstones (uid, href)
+        SELECT uid, href FROM caldav_map WHERE task_id = OLD.id;
+    DELETE FROM caldav_map WHERE task_id = OLD.id;
+END;
+"""
+
+# --- 5: per-object iCalendar SEQUENCE ------------------------------------
+# SEQUENCE must increase by one each time we publish a revision of an object.
+# It was derived from wall-clock time, which can jump or go backwards — clients
+# treat a lower SEQUENCE as a stale update and may ignore the change.
+M5 = """
+ALTER TABLE caldav_map ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0;
+"""
+
+# --- 6: one calendar collection per category ------------------------------
+# A Reminders list *is* a CalDAV collection, so per-category lists mean one
+# collection each. Sync tokens are per-collection in WebDAV-Sync, so the single
+# token in caldav_state moves in here alongside the mapping.
+#
+# category_id 0 is the uncategorized bucket: categories are AUTOINCREMENT from
+# 1, so 0 can never collide, and a NOT NULL primary key avoids SQLite's rule
+# that NULLs are distinct in a UNIQUE index (which would let duplicate
+# "uncategorized" rows pile up).
+M6 = """
+CREATE TABLE caldav_collections (
+    category_id INTEGER PRIMARY KEY,   -- 0 = uncategorized
+    href        TEXT NOT NULL,         -- server-relative, trailing slash
+    display     TEXT,
+    sync_token  TEXT
+);
+"""
+
+MIGRATIONS = [M1, M2, M3, M4, M5, M6]
 SCHEMA_VERSION = len(MIGRATIONS)
 
 
@@ -188,6 +253,8 @@ def init_db():
     migrate(conn)
     conn.execute("PRAGMA foreign_keys = ON")
     write_markdown(conn)
+    # Settings saved from the UI override the env defaults.
+    caldav.load_config(conn)
     conn.close()
 
 
@@ -349,11 +416,18 @@ PRIORITY_EMOJI = {"high": "⏫", "medium": "🔼", "low": "🔽"}
 STATUS_BOX = {"todo": " ", "doing": "/", "blocked": "!", "done": "x"}
 
 
-def build_markdown(conn):
+def build_markdown(conn, include_ids=None):
+    """Render the whole DB, or just `include_ids`, as Obsidian-flavoured markdown.
+
+    Filtered exports prune categories whose subtree contributed nothing, so a
+    one-category export doesn't carry the rest of the tree as empty headings.
+    """
     cats = [dict(r) for r in conn.execute(
         "SELECT * FROM categories ORDER BY position, name").fetchall()]
     tasks = [dict(r) for r in conn.execute(
         "SELECT * FROM tasks ORDER BY status = 'done', position, id").fetchall()]
+    if include_ids is not None:
+        tasks = [t for t in tasks if t["id"] in include_ids]
     tags = tags_by_task(conn)
 
     children = defaultdict(list)
@@ -363,6 +437,11 @@ def build_markdown(conn):
     tasks_by_cat = defaultdict(list)
     for t in tasks:
         tasks_by_cat[t["category_id"]].append(t)
+
+    def subtree_has_tasks(cat_id):
+        if tasks_by_cat.get(cat_id):
+            return True
+        return any(subtree_has_tasks(c["id"]) for c in children.get(cat_id, []))
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     total = len(tasks)
@@ -398,6 +477,8 @@ def build_markdown(conn):
 
     def walk(parent_id, level):
         for c in children.get(parent_id, []):
+            if include_ids is not None and not subtree_has_tasks(c["id"]):
+                continue
             lines.append(f"{'#' * min(level, 6)} {c['name']}")
             lines.append("")
             ctasks = tasks_by_cat.get(c["id"], [])
@@ -581,11 +662,12 @@ def delete_tag(tag_id):
 
 # ----- API: tasks -----
 
-@app.get("/api/tasks")
-def list_tasks():
-    """Optional filters: ?status= ?priority= ?category_id= ?tag= ?q= ?due_before="""
-    db = get_db()
-    args = request.args
+def task_filters(args):
+    """Turn query-string filters into a (WHERE fragment, params) pair.
+
+    Shared by GET /api/tasks and the markdown export so both understand exactly
+    the same filters — export what you're looking at, without a second dialect.
+    """
     where, params = [], []
 
     if "status" in args:
@@ -608,13 +690,29 @@ def list_tasks():
             "id IN (SELECT tt.task_id FROM task_tags tt JOIN tags g ON g.id = tt.tag_id "
             "WHERE g.name = ?)")
         params.append(v_tag_name(args["tag"]))
+    if "ids" in args:
+        # Lets the client export exactly what's on screen — its search box and
+        # tag chips filter client-side, so no server-side filter can reproduce
+        # that view. An empty list means "nothing", not "everything".
+        ids = [int(x) for x in args["ids"].split(",") if x.strip()]
+        where.append(f"id IN ({', '.join('?' * len(ids))})" if ids else "0")
+        params += ids
 
-    sql = "SELECT * FROM tasks"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY status = 'done', position, id"
+    return (" WHERE " + " AND ".join(where)) if where else "", params
 
-    rows = db.execute(sql, params).fetchall()
+
+def filtered_tasks(db, args):
+    where, params = task_filters(args)
+    return db.execute(
+        f"SELECT * FROM tasks{where} ORDER BY status = 'done', position, id", params
+    ).fetchall()
+
+
+@app.get("/api/tasks")
+def list_tasks():
+    """Optional filters: ?status= ?priority= ?category_id= ?tag= ?q= ?due_before="""
+    db = get_db()
+    rows = filtered_tasks(db, request.args)
     tags = tags_by_task(db, {r["id"] for r in rows})
     return jsonify([task_json(r, tags.get(r["id"], [])) for r in rows])
 
@@ -686,6 +784,391 @@ def delete_task(task_id):
     return "", 204
 
 
+# ----- API: export -----
+
+@app.get("/api/export")
+def export_markdown():
+    """The same markdown that lands in Tasks.md, on demand and filterable.
+
+    Accepts every GET /api/tasks filter, so "export what I'm looking at" is one
+    request. `?download=1` makes the browser save it instead of showing it.
+    """
+    db = get_db()
+    args = request.args
+    filters = {k: v for k, v in args.items() if k != "download"}
+    include = None if not filters else {r["id"] for r in filtered_tasks(db, args)}
+    text = build_markdown(db, include_ids=include)
+
+    resp = app.response_class(text, mimetype="text/markdown")  # Flask adds the charset
+    if args.get("download"):
+        name = f"senya-tasks-{date.today().isoformat()}.md"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{name}"'
+    return resp
+
+
+# ----- markdown import -----
+#
+# Parsing is deliberately forgiving — people paste whole Obsidian notes, not
+# clean fixtures — but nothing reaches the database from parsing alone. The
+# parser only ever *proposes* tasks (each carrying warnings about anything it
+# had to guess); the client reviews and edits them, then posts the confirmed
+# list back to /api/import/commit. That two-step split is what keeps garbage out.
+
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*$")
+CHECKBOX_RE = re.compile(r"^(?P<indent>[ \t]*)[-*+]\s+\[(?P<box>.)\]\s*(?P<rest>.*)$")
+BULLET_RE = re.compile(r"^(?P<indent>[ \t]*)[-*+]\s+(?P<rest>(?!\[.\]).*\S.*)$")
+NUMBERED_RE = re.compile(r"^(?P<indent>[ \t]*)\d+[.)]\s+(?P<rest>.*\S.*)$")
+TAG_RE = re.compile(r"(?:^|\s)#([A-Za-z0-9][A-Za-z0-9_/-]*)")
+DUE_EMOJI_RE = re.compile(r"[📅📆🗓]️?\s*(\d{4}-\d{2}-\d{2})")
+DONE_EMOJI_RE = re.compile(r"✅️?\s*(\d{4}-\d{2}-\d{2})")
+# Obsidian Tasks fields we understand well enough to strip but don't store.
+# Recurrence is the odd one out: its value is a free-text rule ("every 2 weeks
+# when done"), so it runs to the end of the line or to the next field emoji,
+# while the others take a single date or token.
+FIELD_EMOJI = "📅📆🗓✅🛫⏳⌛➕🔁🆔⛔❌🏁"
+RECUR_RE = re.compile(rf"(🔁)️?\s*([^{FIELD_EMOJI}]*)")
+DROPPED_EMOJI_RE = re.compile(r"([🛫⏳⌛➕🆔⛔❌🏁])️?\s*(\d{4}-\d{2}-\d{2}|\S+)?")
+BACKTICK_STATUS_RE = re.compile(r"`\s*(?:[🔺⏫🔼🔽⏬]️?\s*)?(todo|doing|blocked|done|high|medium|low)\s*`",
+                                re.IGNORECASE)
+PRIORITY_IN = {"🔺": "high", "⏫": "high", "🔼": "medium", "🔽": "low", "⏬": "low"}
+BOX_STATUS = {" ": "todo", "": "todo", "x": "done", "X": "done", "/": "doing",
+              ">": "doing", "!": "blocked", "?": "blocked"}
+DROPPED_LABEL = {"🛫": "start date", "⏳": "scheduled date", "⌛": "scheduled date",
+                 "➕": "created date", "🔁": "recurrence rule", "🆔": "id",
+                 "⛔": "dependency", "❌": "cancelled date", "🏁": "on-completion action"}
+
+
+def parse_markdown(text, default_status="todo"):
+    """Obsidian markdown → proposed tasks. Never touches the database."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    # Drop YAML frontmatter, which otherwise looks like headings and list items.
+    start = 0
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                start = i + 1
+                break
+
+    # A lone H1 before any task is the note's title (our own export writes one),
+    # not a category — otherwise every round-trip nests everything one deeper.
+    headings = [(i, m) for i, l in enumerate(lines[start:], start)
+                if (m := HEADING_RE.match(l))]
+    h1s = [h for h in headings if len(h[1].group(1)) == 1]
+    skip_h1 = (
+        len(h1s) == 1
+        and headings and headings[0][1] is h1s[0][1]
+        and not any(CHECKBOX_RE.match(l) for l in lines[start:h1s[0][0]])
+    )
+
+    items = []
+    stack = []  # [(heading level, name)] → category path
+    for lineno, raw in enumerate(lines[start:], start=start + 1):
+        line = raw.rstrip()
+        if not line.strip() or line.lstrip().startswith(">"):
+            continue  # blank lines and callouts/quotes carry no tasks
+
+        if (m := HEADING_RE.match(line)):
+            level, name = len(m.group(1)), m.group(2).strip()
+            if skip_h1 and level == 1:
+                stack = []
+                continue
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            if name:
+                stack.append((level, name))
+            continue
+
+        checkbox = CHECKBOX_RE.match(line)
+        bullet = None if checkbox else (BULLET_RE.match(line) or NUMBERED_RE.match(line))
+
+        if not checkbox and not bullet:
+            # An indented, non-list line continues the previous task as notes.
+            if items and raw[:1] in (" ", "\t") and line.strip():
+                items[-1]["notes"] = (items[-1]["notes"] + "\n" + line.strip()).strip()
+            continue
+
+        m = checkbox or bullet
+        warnings = []
+        if checkbox:
+            box = m.group("box")
+            status = BOX_STATUS.get(box if box.strip() else " ")
+            if status is None:
+                status = default_status
+                warnings.append(f"unrecognised checkbox “{box}” — treated as {status}")
+        else:
+            status = default_status
+            warnings.append("plain list item, not a checkbox")
+
+        rest = m.group("rest").strip()
+        item = parse_task_text(rest, warnings)
+        item.update({
+            "line": lineno,
+            "status": status,
+            "category_path": [name for _, name in stack],
+            # Plain bullets are the most likely source of junk (prose, nav
+            # lists), so they arrive unticked and the reviewer opts them in.
+            "include": bool(checkbox) and bool(item["title"]),
+        })
+        if not item["title"]:
+            item["warnings"].append("empty title")
+        items.append(item)
+
+    return items
+
+
+def parse_task_text(text, warnings):
+    """Pull tags, priority, dates and notes out of one task line's text."""
+    tags, priority, due, completed = [], None, None, None
+
+    if (m := DUE_EMOJI_RE.search(text)):
+        due = m.group(1)
+        text = text[:m.start()] + text[m.end():]
+    if (m := DONE_EMOJI_RE.search(text)):
+        completed = m.group(1)
+        text = text[:m.start()] + text[m.end():]
+
+    def note_dropped(m):
+        label = DROPPED_LABEL.get(m.group(1), "field")
+        value = (m.group(2) or "").strip()
+        warnings.append(f"dropped {label} “{value}”" if value else f"dropped {label}")
+        return " "
+
+    text = RECUR_RE.sub(note_dropped, text)
+    text = DROPPED_EMOJI_RE.sub(note_dropped, text)
+
+    for emoji, level in PRIORITY_IN.items():
+        if emoji in text:
+            priority = priority or level
+            text = text.replace(emoji, "")
+
+    # our own export writes `doing` / `blocked`; older files wrote `🔺 high`
+    for m in list(BACKTICK_STATUS_RE.finditer(text)):
+        word = m.group(1).lower()
+        if word in PRIORITIES:
+            priority = priority or word
+    text = BACKTICK_STATUS_RE.sub("", text)
+
+    for m in TAG_RE.finditer(text):
+        tags.append(m.group(1).lower())
+    text = TAG_RE.sub(" ", text)
+
+    title = re.sub(r"\s{2,}", " ", text.replace("️", "")).strip(" -–—\t")
+
+    if due:
+        try:
+            date.fromisoformat(due)
+        except ValueError:
+            warnings.append(f"invalid due date “{due}” — dropped")
+            due = None
+
+    return {
+        "title": title[:500],
+        "notes": "",
+        "priority": priority or "medium",
+        "due_date": due,
+        "completed_at": completed,
+        "tags": sorted(dict.fromkeys(tags)),
+        "warnings": warnings,
+    }
+
+
+@app.post("/api/import/preview")
+def import_preview():
+    """Parse pasted markdown and hand back proposed tasks. Writes nothing."""
+    data = request.get_json(force=True, silent=True) or {}
+    text = data.get("markdown")
+    if not isinstance(text, str) or not text.strip():
+        raise ApiError("markdown is required")
+
+    items = parse_markdown(text, default_status=v_enum("status", STATUSES)(
+        data.get("default_status") or "todo"))
+
+    db = get_db()
+    existing = {r["title"].strip().lower() for r in db.execute("SELECT title FROM tasks")}
+    known_paths = {}
+    for row in db.execute("SELECT id, name, parent_id FROM categories"):
+        known_paths[(row["parent_id"], row["name"].lower())] = row["id"]
+
+    seen = set()
+    for item in items:
+        key = item["title"].strip().lower()
+        if key and key in existing:
+            item["warnings"].append("a task with this title already exists")
+            item["duplicate"] = True
+        if key and key in seen:
+            item["warnings"].append("duplicated within this paste")
+            item["duplicate"] = True
+        seen.add(key)
+
+        # Tell the reviewer which categories the import would have to create.
+        parent, new_path = None, []
+        for name in item["category_path"]:
+            found = known_paths.get((parent, name.lower()))
+            if found is None:
+                new_path.append(name)
+                parent = None
+                break
+            parent = found
+        item["new_categories"] = new_path
+
+    return jsonify({
+        "items": items,
+        "counts": {
+            "parsed": len(items),
+            "selected": sum(1 for i in items if i["include"]),
+            "warnings": sum(1 for i in items if i["warnings"]),
+        },
+    })
+
+
+def resolve_category_path(db, path, created):
+    """Find (or create) the category chain for ['Work', 'Garage']; None = root."""
+    parent = None
+    for name in path:
+        name = name.strip()
+        if not name:
+            continue
+        row = db.execute(
+            "SELECT id FROM categories WHERE name = ? AND parent_id IS ?", (name, parent)
+        ).fetchone()
+        if row:
+            parent = row["id"]
+            continue
+        nxt = db.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM categories").fetchone()[0]
+        cur = db.execute(
+            "INSERT INTO categories (name, parent_id, position) VALUES (?, ?, ?)",
+            (name, parent, nxt),
+        )
+        parent = cur.lastrowid
+        created.append(name)
+    return parent
+
+
+@app.post("/api/import/commit")
+def import_commit():
+    """Insert the reviewed tasks. All or nothing — a bad row aborts the batch.
+
+    Items come from the client *after* editing, so every field goes back through
+    the same TASK_FIELDS validators used by POST /api/tasks; the import path has
+    no privileged shortcut into the database.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    items = data.get("items")
+    if not isinstance(items, list):
+        raise ApiError("items must be a list")
+    items = [i for i in items if i.get("include", True)]
+    if not items:
+        raise ApiError("nothing selected to import")
+    make_categories = bool(data.get("create_categories", True))
+
+    db = get_db()
+    created_categories = []
+    created_ids = []
+    try:
+        db.execute("BEGIN")
+        pos = db.execute("SELECT COALESCE(MAX(position), 0) FROM tasks").fetchone()[0]
+        for n, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                raise ApiError(f"item {n} is not an object")
+            cols = task_columns(item)
+            if not cols.get("title"):
+                raise ApiError(f"item {n}: title is required")
+
+            if "category_id" not in item and item.get("category_path"):
+                path = item["category_path"]
+                if not isinstance(path, list):
+                    raise ApiError(f"item {n}: category_path must be a list")
+                cols["category_id"] = (
+                    resolve_category_path(db, path, created_categories)
+                    if make_categories
+                    else lookup_category_path(db, path)
+                )
+
+            pos += 1
+            cols["position"] = pos
+            cur = db.execute(
+                f"INSERT INTO tasks ({', '.join(cols)}) "
+                f"VALUES ({', '.join('?' * len(cols))})",
+                list(cols.values()),
+            )
+            if item.get("tags"):
+                set_task_tags(db, cur.lastrowid, item["tags"])
+            # Keep the ✅ date from the file. The completed_at trigger stamps
+            # "now" on insert, which would silently rewrite history on import.
+            if item.get("completed_at") and cols.get("status") == "done":
+                db.execute(
+                    "UPDATE tasks SET completed_at = ? WHERE id = ?",
+                    (v_due_date(item["completed_at"]), cur.lastrowid),
+                )
+            created_ids.append(cur.lastrowid)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    sync()
+    return jsonify({
+        "created": len(created_ids),
+        "categories_created": created_categories,
+        "ids": created_ids,
+    }), 201
+
+
+def lookup_category_path(db, path):
+    """Resolve a category chain without creating anything; None if incomplete."""
+    parent = None
+    for name in path:
+        row = db.execute(
+            "SELECT id FROM categories WHERE name = ? AND parent_id IS ?",
+            (name.strip(), parent),
+        ).fetchone()
+        if row is None:
+            return None
+        parent = row["id"]
+    return parent
+
+
+# ----- API: CalDAV sync -----
+
+@app.get("/api/caldav")
+def caldav_status():
+    """Where sync stands: last run, how many tasks are mapped, pending deletes."""
+    return jsonify(caldav.status(get_db()))
+
+
+@app.put("/api/caldav/config")
+def caldav_save_config():
+    """Save connection settings from the UI.
+
+    The password is write-only: it is never returned by any endpoint, and an
+    empty field means "keep the stored one" so re-saving other settings can't
+    silently wipe it.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        caldav.save_config(get_db(), data)
+    except ValueError as e:
+        raise ApiError(str(e))
+    return jsonify(caldav.status(get_db()))
+
+
+@app.post("/api/caldav/test")
+def caldav_test():
+    """Check the settings against the real server without saving them."""
+    data = request.get_json(force=True, silent=True) or {}
+    return jsonify(caldav.test_connection(get_db(), data))
+
+
+@app.post("/api/caldav/sync")
+def caldav_sync_now():
+    """Run a pass immediately instead of waiting for the timer."""
+    result = caldav.run_once(connect)
+    if "skipped" in result:
+        raise ApiError(f"sync not run: {result['skipped']}")
+    return jsonify(result)
+
+
 # ----- static frontend -----
 
 @app.get("/")
@@ -699,6 +1182,9 @@ def static_files(path):
 
 
 init_db()
+# Polls in its own thread with its own connection — never on the request path,
+# so an unreachable CalDAV server can't stall the API.
+caldav.start_worker(connect)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)

@@ -68,6 +68,9 @@ window.SENYA_INTERNAL = {
     { name: "Obsidian", port: 8080, icon: "obsidian", container: "obsidian-remote" },
     { name: "Claude (Chromium)", port: 3003, icon: "claude-ai", container: "claude" },
     { name: "Baikal", port: 5232, icon: "baikal", container: "baikal" },
+    // Web CalDAV client for Baikal. No icon upstream on dashboardicons → _default.svg.
+    { name: "InfCloud", port: 5233, container: "infcloud" },
+    { name: "Nextcloud", port: 8088, icon: "nextcloud", container: "nextcloud" },
     { name: "Vaultwarden", port: 8222, icon: "vaultwarden", container: "vaultwarden" },
     { name: "Memos", port: 5230, icon: "memos", container: "memos" },
     { name: "Vikunja", port: 3456, icon: "vikunja", container: "vikunja" },

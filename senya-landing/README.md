@@ -134,10 +134,19 @@ rest — each `init` runs in its own try/catch.
   name carries small **LAN** / **TS** chips — click one for a popup with the
   address, click the address to copy it; set `ip`/`ts` per host in `HOSTS`
   (`services.js`).
-- **Services** (launcher rail) — click a service for its reachability links:
-  **LAN**, **TS** (Tailscale) and, if it has an `ext` subdomain, **EXT**
-  (`https://<ext>.senya.ca`) — each opens in a new tab. Whether you leave the
-  rail expanded or compact is remembered (`senya.rail.expanded`). Internal only.
+  The chevron in the panel header **collapses the whole right pane to a 64px
+  strip**: host names and every metric's bar stay, labels and readings drop out
+  (hover a bar for its number). The dashboard takes the reclaimed width, and the
+  choice is remembered (`senya.infopane.collapsed`). Desktop only — under 860px
+  the pane is a full-width row and the chevron is hidden.
+- **Services** (launcher rail) — shows **every service by default**, grouped
+  under its type (Senya Apps · Services · Public). The tabs at the top narrow it
+  to one type: **ALL** (default), **SA**, **SV**, **PB**; the type you pick is
+  remembered (`senya.rail.filter`), as is whether the rail is expanded or
+  compact (`senya.rail.expanded`). The list scrolls inside the rail rather than
+  stretching the page. Click a service for its reachability links: **LAN**,
+  **TS** (Tailscale) and, if it has an `ext` subdomain, **EXT**
+  (`https://<ext>.senya.ca`) — each opens in a new tab. Internal only.
 - **Bookmarks** — icon row under the top bar; the trailing **✎+** cell is edit
   and add at once (add form opens with edit mode; click a tile to edit it, ✕ to
   delete). Saved in `localStorage` over the `BOOKMARKS` defaults.
@@ -179,17 +188,8 @@ requests** (gated by `Host` header). The `/stats/` proxy is gated the same way.
 | How you reach it | `Host` | `services.js` | Internal sections |
 |---|---|---|---|
 | LAN | `192.168.2.100` | served | yes |
-| Tailscale (IP) | `100.121.230.17` | served | yes |
-| Tailscale (MagicDNS) | `xps-mint-server.tailbfafc9.ts.net` | served | yes |
-| Tailscale (short name) | `xps-mint-server` | served | yes |
+| Tailscale | `100.121.230.17` | served | yes |
 | Tunnel (public) | `home.senya.ca` | **404** | no |
-
-The two MagicDNS rows need your **tailnet name** hardcoded in the
-`$internal_client` map in [`nginx.conf`](nginx.conf) — a MagicDNS name carries no
-`100.x` address for the CGNAT regex to match, so without those entries browsing
-to the name loads the page but 404s every internal endpoint (empty System panel,
-no SearXNG option). Change `tailbfafc9` and `xps-mint-server` to yours; find them
-with `tailscale status --json | grep DNSName`.
 
 ## Hardening applied
 

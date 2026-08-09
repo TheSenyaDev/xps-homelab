@@ -110,6 +110,32 @@ function squarify(items, x, y, w, h) {
 }
 
 const fmtPct = (p) => `${p > 0 ? "+" : ""}${p.toFixed(p >= 100 || p <= -100 ? 0 : 1)}%`;
+const pctClass = (p) => (typeof p !== "number" ? "cx-flat" : p > 0 ? "cx-up" : p < 0 ? "cx-down" : "cx-flat");
+
+// Sector roll-up behind the hover panel: the sector's own performance plus its
+// biggest constituents.
+//
+// The headline number is **cap-weighted**, not a plain mean — it has to be, or it
+// wouldn't agree with the map it sits on. The treemap sizes every block by market
+// cap, so a move in a mega-cap is what actually moves the sector, whereas an
+// equal-weight average lets the smallest member shout as loudly as the largest.
+// Tickers with no quote are left out of the weighting rather than counted as 0%,
+// so a data gap can't drag the sector toward flat.
+const TOP_N = 10;
+
+function sectorStats(sector, perf) {
+  const rows = sector.tickers.map((t) => ({ ...t, pct: perf[t.t] }));
+  const cap = rows.reduce((s, r) => s + r.v, 0);
+  const priced = rows.filter((r) => typeof r.pct === "number");
+  const pricedCap = priced.reduce((s, r) => s + r.v, 0);
+  return {
+    cap,
+    count: rows.length,
+    missing: rows.length - priced.length,
+    weighted: pricedCap ? priced.reduce((s, r) => s + r.v * r.pct, 0) / pricedCap : null,
+    top: [...rows].sort((a, b) => b.v - a.v).slice(0, TOP_N),
+  };
+}
 
 export function initMarket() {
   const wrap = document.getElementById("market");
@@ -148,6 +174,106 @@ export function initMarket() {
       el("span", { class: "mk-legend-end", text: `+${period.steps.at(-1)}%` }));
   }
 
+  // ---- sector hover panel ----
+  // Lives on <body> with position:fixed: .mk-canvas is overflow:hidden, so a
+  // panel parented inside it would be clipped by the very box it overhangs.
+  const pop = el("div", { class: "mk-pop", hidden: "" });
+  document.body.append(pop);
+  let openSector = null;   // sector name, so a redraw can re-anchor and keep it
+  let showTimer = 0, hideTimer = 0;
+
+  const clearTimers = () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
+
+  function hidePop() {
+    clearTimers();
+    pop.hidden = true;
+    openSector = null;
+  }
+
+  function fillPop(sector) {
+    const s = sectorStats(sector, perf);
+    const rows = s.top.map((r) =>
+      el("div", { class: "mk-pop-row" },
+        el("span", { class: "mk-pop-t", text: r.t }),
+        el("span", { class: "mk-pop-n", text: r.n, title: `${r.n} · ${r.i}` }),
+        el("span", { class: "mk-pop-w", text: `${((r.v / s.cap) * 100).toFixed(1)}%` }),
+        el("span", {
+          class: `mk-pop-p ${pctClass(r.pct)}`,
+          text: typeof r.pct === "number" ? fmtPct(r.pct) : "—",
+        })));
+
+    pop.replaceChildren(
+      el("div", { class: "mk-pop-head" },
+        el("span", { class: "mk-pop-name", text: sector.sector }),
+        el("span", {
+          class: `mk-pop-agg ${pctClass(s.weighted)}`,
+          text: typeof s.weighted === "number" ? fmtPct(s.weighted) : "no data",
+        })),
+      el("div", {
+        class: "mk-pop-sub",
+        text: `cap-weighted · ${period.label} · ${s.count} companies`
+          + (s.missing ? ` · ${s.missing} unpriced` : ""),
+      }),
+      el("div", { class: "mk-pop-cols" },
+        el("span", { text: `top ${Math.min(TOP_N, s.count)} by market cap` }),
+        el("span", { class: "mk-pop-w", text: "weight" }),
+        el("span", { class: "mk-pop-p", text: period.label })),
+      el("div", { class: "mk-pop-rows" }, ...rows));
+  }
+
+  // Anchor under the label, then clamp into the viewport; flip above if the
+  // panel would run off the bottom.
+  function placePop(anchor) {
+    const a = anchor.getBoundingClientRect();
+    pop.hidden = false;
+    const p = pop.getBoundingClientRect();
+    const margin = 8;
+    let left = a.left;
+    left = Math.min(left, window.innerWidth - p.width - margin);
+    left = Math.max(margin, left);
+    let top = a.bottom + 4;
+    if (top + p.height > window.innerHeight - margin) {
+      const above = a.top - p.height - 4;
+      top = above >= margin ? above : Math.max(margin, window.innerHeight - p.height - margin);
+    }
+    pop.style.left = `${Math.round(left)}px`;
+    pop.style.top = `${Math.round(top)}px`;
+  }
+
+  function showPop(sector, anchor) {
+    if (!perf) return;
+    openSector = sector.sector;
+    fillPop(sector);
+    placePop(anchor);
+  }
+
+  // Hovering the panel keeps it up, so you can read (or scroll) it without it
+  // vanishing the moment the pointer leaves the label.
+  pop.addEventListener("mouseenter", clearTimers);
+  pop.addEventListener("mouseleave", () => { hideTimer = setTimeout(hidePop, 160); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hidePop(); });
+  window.addEventListener("scroll", () => { if (openSector) hidePop(); }, { passive: true });
+
+  function wireSectorLabel(label, sector) {
+    label.tabIndex = 0;
+    label.addEventListener("mouseenter", () => {
+      clearTimers();
+      showTimer = setTimeout(() => showPop(sector, label), 90);  // ignore sweeps
+    });
+    label.addEventListener("mouseleave", () => {
+      clearTimeout(showTimer);
+      hideTimer = setTimeout(hidePop, 160);
+    });
+    label.addEventListener("focus", () => showPop(sector, label));
+    label.addEventListener("blur", () => { hideTimer = setTimeout(hidePop, 160); });
+    // Touch has no hover: tap the label to toggle the same panel.
+    label.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (openSector === sector.sector) hidePop();
+      else { clearTimers(); showPop(sector, label); }
+    });
+  }
+
   function draw() {
     if (!structure || !perf) return;
     const w = canvas.clientWidth;
@@ -160,9 +286,18 @@ export function initMarket() {
       .sort((a, b) => b.value - a.value);
 
     const nodes = [];
+    const labels = new Map();   // sector name -> its label element, for re-anchoring
     for (const sec of squarify(sectors, 0, 0, w, h)) {
       const box = el("div", { class: "mk-sector", style: `left:${sec.x}px;top:${sec.y}px;width:${sec.w}px;height:${sec.h}px` });
-      if (sec.h > 26 && sec.w > 54) box.append(el("div", { class: "mk-sector-name", text: sec.sector }));
+      if (sec.h > 26 && sec.w > 54) {
+        const label = el("div", {
+          class: "mk-sector-name", text: sec.sector,
+          title: `${sec.sector} — hover for its top ${TOP_N} and sector performance`,
+        });
+        wireSectorLabel(label, sec);
+        labels.set(sec.sector, label);
+        box.append(label);
+      }
       nodes.push(box);
 
       // Tickers inside the sector, leaving room for its label strip.
@@ -185,6 +320,16 @@ export function initMarket() {
       }
     }
     canvas.replaceChildren(...nodes);
+
+    // A redraw (60s refresh, or a resize) throws away the element the panel was
+    // anchored to. Re-point it at the new one and refresh the numbers rather
+    // than yanking it out from under someone mid-read.
+    if (openSector) {
+      const sector = sectors.find((s) => s.sector === openSector);
+      const label = labels.get(openSector);
+      if (sector && label) showPop(sector, label);
+      else hidePop();
+    }
   }
 
   async function load() {

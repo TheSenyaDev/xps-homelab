@@ -1,6 +1,9 @@
 # Secrets
 .env
 cloudflared/credentials.json
+# miniflux-ai config holds the Miniflux API key and the LLM provider key —
+# the committed template is miniflux-ai/config.example.yml
+miniflux-ai/config.yml
 
 # Private keys
 *.key
@@ -62,3 +65,11 @@ senya-finance/data/
 
 # WebDAV — synced Boox notes/files (not config)
 webdav/data/
+
+# Nextcloud — both paths are bind mounts the container populates itself, so
+# there is nothing hand-written to keep. html/ is the unpacked Nextcloud app
+# (~1GB, reinstalled from the pinned image) and data/ is user files plus
+# config/config.php, which holds the DB password and instance secret.
+# The Postgres volume is the named `nextcloud-db`, already outside the repo.
+nextcloud/html/
+nextcloud/data/
