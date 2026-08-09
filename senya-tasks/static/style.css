@@ -48,7 +48,12 @@ body {
 }
 
 input, select, button, textarea { font: inherit; color: inherit; }
-input[type="text"], input[type="search"], input[type="date"], select, textarea {
+/* Every text-like input, by exclusion rather than by listing types. The old
+   list named text/search/date only, so `password` inherited the theme's light
+   text colour onto the browser's white background — invisible typing. A new
+   input type should never be able to reintroduce that. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),
+select, textarea {
   background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--text);
@@ -57,7 +62,8 @@ input[type="text"], input[type="search"], input[type="date"], select, textarea {
   outline: none;
   min-width: 0;
 }
-input:focus, select:focus, textarea:focus {
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+select:focus, textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
