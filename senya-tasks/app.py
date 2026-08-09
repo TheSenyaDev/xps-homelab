@@ -6,6 +6,8 @@ from datetime import date, datetime, timezone
 
 from flask import Flask, g, jsonify, request, send_from_directory
 
+import caldav
+
 DB_PATH = os.environ.get("DB_PATH", "/data/tasks.db")
 MARKDOWN_PATH = os.environ.get("MARKDOWN_PATH", "/data/Tasks.md")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
@@ -137,7 +139,52 @@ ALTER TABLE categories ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
 UPDATE categories SET position = id;
 """
 
-MIGRATIONS = [M1, M2, M3]
+# --- 4: CalDAV sync bookkeeping -------------------------------------------
+# Everything the sync loop needs to answer "what changed on which side since we
+# last agreed?" — one row per synced task plus the server's sync-token.
+#
+# caldav_map deliberately has NO foreign key onto tasks: deleting a task has to
+# leave a tombstone behind, and a cascade would race the trigger that writes it.
+# The trigger owns the cleanup instead, so a local delete always survives long
+# enough to be pushed to the server as a DELETE.
+M4 = """
+CREATE TABLE caldav_map (
+    task_id    INTEGER PRIMARY KEY,
+    uid        TEXT NOT NULL UNIQUE,   -- VTODO UID, stable for the task's life
+    href       TEXT NOT NULL,          -- path of the .ics on the server
+    etag       TEXT,                   -- last ETag we saw, for If-Match
+    local_rev  TEXT,                   -- tasks.updated_at at last agreement
+    remote_rev TEXT                    -- LAST-MODIFIED at last agreement
+);
+
+CREATE TABLE caldav_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
+CREATE TABLE caldav_tombstones (
+    uid        TEXT PRIMARY KEY,
+    href       TEXT NOT NULL,
+    deleted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TRIGGER tasks_caldav_tombstone AFTER DELETE ON tasks
+BEGIN
+    INSERT OR REPLACE INTO caldav_tombstones (uid, href)
+        SELECT uid, href FROM caldav_map WHERE task_id = OLD.id;
+    DELETE FROM caldav_map WHERE task_id = OLD.id;
+END;
+"""
+
+# --- 5: per-object iCalendar SEQUENCE ------------------------------------
+# SEQUENCE must increase by one each time we publish a revision of an object.
+# It was derived from wall-clock time, which can jump or go backwards — clients
+# treat a lower SEQUENCE as a stale update and may ignore the change.
+M5 = """
+ALTER TABLE caldav_map ADD COLUMN sequence INTEGER NOT NULL DEFAULT 0;
+"""
+
+MIGRATIONS = [M1, M2, M3, M4, M5]
 SCHEMA_VERSION = len(MIGRATIONS)
 
 
@@ -188,6 +235,8 @@ def init_db():
     migrate(conn)
     conn.execute("PRAGMA foreign_keys = ON")
     write_markdown(conn)
+    # Settings saved from the UI override the env defaults.
+    caldav.load_config(conn)
     conn.close()
 
 
@@ -1062,6 +1111,46 @@ def lookup_category_path(db, path):
     return parent
 
 
+# ----- API: CalDAV sync -----
+
+@app.get("/api/caldav")
+def caldav_status():
+    """Where sync stands: last run, how many tasks are mapped, pending deletes."""
+    return jsonify(caldav.status(get_db()))
+
+
+@app.put("/api/caldav/config")
+def caldav_save_config():
+    """Save connection settings from the UI.
+
+    The password is write-only: it is never returned by any endpoint, and an
+    empty field means "keep the stored one" so re-saving other settings can't
+    silently wipe it.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        caldav.save_config(get_db(), data)
+    except ValueError as e:
+        raise ApiError(str(e))
+    return jsonify(caldav.status(get_db()))
+
+
+@app.post("/api/caldav/test")
+def caldav_test():
+    """Check the settings against the real server without saving them."""
+    data = request.get_json(force=True, silent=True) or {}
+    return jsonify(caldav.test_connection(get_db(), data))
+
+
+@app.post("/api/caldav/sync")
+def caldav_sync_now():
+    """Run a pass immediately instead of waiting for the timer."""
+    result = caldav.run_once(connect)
+    if "skipped" in result:
+        raise ApiError(f"sync not run: {result['skipped']}")
+    return jsonify(result)
+
+
 # ----- static frontend -----
 
 @app.get("/")
@@ -1075,6 +1164,9 @@ def static_files(path):
 
 
 init_db()
+# Polls in its own thread with its own connection — never on the request path,
+# so an unreachable CalDAV server can't stall the API.
+caldav.start_worker(connect)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)

@@ -15,11 +15,18 @@ const STATUS_SOURCES = ["/stats/xps/containers"];
 const UP = new Set(["running", "healthy"]);
 const WARN = new Set(["starting", "restarting", "unhealthy", "created", "paused"]);
 
+// Rows are sorted by name here rather than in services.js, so a service added
+// to that file lands in the right place on its own instead of depending on
+// where it was pasted. Copies the arrays — sorting in place would reorder
+// window.SENYA_INTERNAL for anything else reading it.
+const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+const sorted = (items) => [...items].sort(byName);
+
 function sectionsData() {
   const s = [];
-  if (internal?.SENYA_APPS?.length) s.push({ key: "senya", name: "Senya Apps", mono: "SA", items: internal.SENYA_APPS });
-  if (internal?.SERVICES?.length) s.push({ key: "services", name: "Services", mono: "SV", items: internal.SERVICES });
-  if (PUBLIC_LINKS?.length) s.push({ key: "public", name: "Public", mono: "PB", items: PUBLIC_LINKS });
+  if (internal?.SENYA_APPS?.length) s.push({ key: "senya", name: "Senya Apps", mono: "SA", items: sorted(internal.SENYA_APPS) });
+  if (internal?.SERVICES?.length) s.push({ key: "services", name: "Services", mono: "SV", items: sorted(internal.SERVICES) });
+  if (PUBLIC_LINKS?.length) s.push({ key: "public", name: "Public", mono: "PB", items: sorted(PUBLIC_LINKS) });
   return s;
 }
 

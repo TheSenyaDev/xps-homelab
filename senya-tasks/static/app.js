@@ -46,6 +46,21 @@ const STATUS_RING = ["todo", "doing", "blocked"];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Tiny element builder: el("div", {class, text, onclick, …}, ...children).
+// Children that are null are dropped, so callers can inline conditionals.
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null) continue;
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  n.append(...kids.filter((k) => k != null));
+  return n;
+}
+
 async function load() {
   [meta, categories, tasks, tags] = await Promise.all([
     api.get("/api/meta"),
@@ -208,7 +223,7 @@ function renderFilters() {
       filter = value;
       store.set("filter", value);
       box.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.filter === value));
-      renderTasks();
+      renderView();
     };
     box.append(b);
   }
@@ -527,6 +542,149 @@ async function patch(id, body) {
   }
 }
 
+// ----- calendar view -----
+
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
+                     "August", "September", "October", "November", "December"];
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-` +
+                   `${String(d.getDate()).padStart(2, "0")}`;
+
+let view = store.get("view", "list");     // "list" | "calendar"
+let calCursor = null;                     // first of the displayed month
+
+function renderCalendar() {
+  const grid = document.getElementById("cal-grid");
+  const dow = document.getElementById("cal-dow");
+  if (!calCursor) {
+    const now = new Date();
+    calCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  document.getElementById("cal-title").textContent =
+    `${MONTH_NAMES[calCursor.getMonth()]} ${calCursor.getFullYear()}`;
+  if (!dow.children.length) {
+    dow.replaceChildren(...DOW.map((d) => el("span", { text: d })));
+  }
+
+  // Same task set the list would show, so switching views never changes what
+  // you're looking at — only how.
+  const list = visibleTasks();
+  const byDay = new Map();
+  const unscheduled = [];
+  for (const t of list) {
+    if (!t.due_date) { unscheduled.push(t); continue; }
+    if (!byDay.has(t.due_date)) byDay.set(t.due_date, []);
+    byDay.get(t.due_date).push(t);
+  }
+
+  // Full weeks: back to the Sunday on/before the 1st, forward to a whole grid.
+  const start = new Date(calCursor);
+  start.setDate(1 - start.getDay());
+  const cells = [];
+  const today = iso(new Date());
+  const monthOf = calCursor.getMonth();
+
+  for (let i = 0; i < 42; i++) {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    const key = iso(day);
+    const items = sortTasks(byDay.get(key) || []);
+    const open = items.filter((t) => !t.done).length;
+
+    const cell = el("div", {
+      class: "cal-day"
+        + (day.getMonth() === monthOf ? "" : " other-month")
+        + (key === today ? " today" : "")
+        + (key < today && open ? " overdue" : ""),
+    });
+    const head = el("div", { class: "cal-day-head" },
+      el("span", { class: "n", text: String(day.getDate()) }),
+      items.length ? el("span", { class: "cal-day-count", text: String(items.length) }) : null);
+    cell.append(head);
+
+    for (const t of items.slice(0, 4)) cell.append(calChip(t));
+    if (items.length > 4) {
+      cell.append(el("button", {
+        class: "cal-more", text: `+${items.length - 4} more`,
+        onclick: () => { activeDay = activeDay === key ? null : key; renderCalendar(); },
+      }));
+    }
+    if (activeDay === key) {
+      for (const t of items.slice(4)) cell.append(calChip(t));
+    }
+    // Clicking empty space schedules something for that day.
+    cell.addEventListener("click", (e) => {
+      if (e.target !== cell && e.target !== head) return;
+      const input = document.getElementById("task-title");
+      const due = document.getElementById("task-due");
+      due.value = key;
+      due.dispatchEvent(new Event("input"));
+      input.focus();
+    });
+    cells.push(cell);
+    // Stop after a complete week once the month is behind us (5 rows, not 6).
+    if (i >= 34 && (i + 1) % 7 === 0 && day.getMonth() !== monthOf) break;
+  }
+  grid.replaceChildren(...cells);
+
+  const box = document.getElementById("cal-unscheduled");
+  box.replaceChildren();
+  if (unscheduled.length) {
+    box.append(el("div", { class: "cal-unscheduled-head",
+                           text: `No due date · ${unscheduled.length}` }));
+    const strip = el("div", { class: "cal-unscheduled-items" });
+    for (const t of sortTasks(unscheduled)) strip.append(calChip(t));
+    box.append(strip);
+  }
+
+  document.getElementById("cal-summary").textContent =
+    `${list.filter((t) => !t.done).length} open · ${list.length} shown`;
+  document.getElementById("current-count").textContent =
+    `${list.filter((t) => !t.done).length} open · ${list.length} shown`;
+}
+
+let activeDay = null;   // day whose overflow tasks are expanded
+
+function calChip(t) {
+  const chip = el("button", {
+    class: `cal-chip ${t.priority}${t.done ? " done" : ""}`,
+    title: `${t.title}${t.notes ? "\n\n" + t.notes : ""}\n\nClick to open`,
+  },
+    el("span", { class: "prio " + t.priority }),
+    el("span", { class: "cal-chip-title", text: t.title }));
+  // Opening a task is the list view's job — jump there with it expanded rather
+  // than building a second, half-featured editor inside the calendar.
+  chip.addEventListener("click", (e) => {
+    e.stopPropagation();
+    expanded.add(t.id);
+    setView("list");
+    const row = [...document.querySelectorAll(".task .title")]
+      .find((n) => n.textContent === t.title);
+    row?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  });
+  return chip;
+}
+
+function setView(next) {
+  view = next;
+  store.set("view", next);
+  document.querySelectorAll("#views button").forEach(
+    (b) => b.classList.toggle("active", b.dataset.view === next));
+  // Sorting is a list-only idea; the calendar is ordered by date.
+  document.querySelector(".sort").hidden = next === "calendar";
+  renderView();
+}
+
+function renderView() {
+  const cal = document.getElementById("calendar");
+  const groups = document.getElementById("task-groups");
+  const isCal = view === "calendar";
+  groups.hidden = isCal;
+  cal.hidden = !isCal;
+  if (isCal) renderCalendar(); else renderTasks();
+}
+
 function render() {
   renderFilters();
   renderSidebar();
@@ -534,7 +692,7 @@ function render() {
     activeCategory === "all" ? "All tasks"
     : activeCategory === "none" ? "Uncategorized"
     : (categoryById(activeCategory)?.name ?? "Tasks");
-  renderTasks();
+  renderView();
 }
 
 // ----- events -----
@@ -585,11 +743,11 @@ document.getElementById("category-form").onsubmit = async (e) => {
 };
 
 const search = document.getElementById("search");
-search.oninput = () => { query = search.value; renderTasks(); };
+search.oninput = () => { query = search.value; renderView(); };
 
 const sortSel = document.getElementById("sort-by");
 sortSel.value = sortBy;
-sortSel.onchange = () => { sortBy = sortSel.value; store.set("sort", sortBy); renderTasks(); };
+sortSel.onchange = () => { sortBy = sortSel.value; store.set("sort", sortBy); renderView(); };
 
 const app = document.querySelector(".app");
 
@@ -816,16 +974,193 @@ $i("import-commit").onclick = async () => {
   }
 };
 
+// ----- view switch + month navigation -----
+
+for (const btn of document.querySelectorAll("#views button")) {
+  btn.onclick = () => setView(btn.dataset.view);
+}
+const shiftMonth = (delta) => {
+  calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + delta, 1);
+  activeDay = null;
+  renderCalendar();
+};
+document.getElementById("cal-prev").onclick = () => shiftMonth(-1);
+document.getElementById("cal-next").onclick = () => shiftMonth(1);
+document.getElementById("cal-today").onclick = () => {
+  const now = new Date();
+  calCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  activeDay = null;
+  renderCalendar();
+};
+
+// ----- CalDAV sync settings -----
+
+const syncModal = document.getElementById("sync-modal");
+let syncStatus = null;
+
+const relTime = (iso) => {
+  if (!iso) return "never";
+  const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 90) return `${Math.round(secs)}s ago`;
+  if (secs < 5400) return `${Math.round(secs / 60)}m ago`;
+  if (secs < 172800) return `${Math.round(secs / 3600)}h ago`;
+  return `${Math.round(secs / 86400)}d ago`;
+};
+
+// The chip is the at-a-glance confirmation: it only appears once sync is
+// configured, and says plainly whether it's on and when it last ran.
+function renderSyncChip() {
+  const chip = $i("sync-chip");
+  if (!syncStatus || !syncStatus.configured) { chip.hidden = true; return; }
+  chip.hidden = false;
+  if (!syncStatus.enabled) {
+    chip.textContent = "⇄ paused";
+    chip.className = "ghost-btn sync-chip paused";
+    chip.title = "CalDAV sync is configured but switched off";
+    return;
+  }
+  const stale = syncStatus.last_sync &&
+    (Date.now() - new Date(syncStatus.last_sync).getTime()) / 1000 > syncStatus.interval * 3;
+  chip.textContent = `⇄ ${relTime(syncStatus.last_sync)}`;
+  chip.className = "ghost-btn sync-chip" + (stale ? " stale" : " ok");
+  chip.title = `CalDAV sync · ${syncStatus.mapped} tasks linked`
+    + (syncStatus.last_result ? `\nlast run: ${syncStatus.last_result}` : "")
+    + (stale ? "\n\nOverdue — the last pass may have failed." : "");
+}
+
+async function refreshSyncStatus() {
+  try {
+    syncStatus = await api.get("/api/caldav");
+    renderSyncChip();
+    if (!syncModal.hidden) fillSyncForm();
+  } catch { /* status is cosmetic; never break the page over it */ }
+}
+
+function fillSyncForm() {
+  const s = syncStatus || {};
+  $i("sync-url").value = s.url || "";
+  $i("sync-user").value = s.user || "";
+  $i("sync-auth").value = s.auth || "auto";
+  $i("sync-interval").value = s.interval || 120;
+  $i("sync-enabled").checked = !!s.enabled;
+  $i("sync-password").placeholder = s.password_set
+    ? "leave blank to keep the saved one" : "required";
+  $i("sync-state").textContent = s.enabled ? "on" : s.configured ? "paused" : "not configured";
+  $i("sync-stats").textContent = s.configured
+    ? `${s.mapped} tasks linked · last sync ${relTime(s.last_sync)}`
+      + (s.pending_deletes ? ` · ${s.pending_deletes} deletions pending` : "")
+      + (s.auth_scheme ? ` · ${s.auth_scheme} auth` : "")
+    : "";
+}
+
+const syncFormValues = () => ({
+  url: $i("sync-url").value.trim(),
+  user: $i("sync-user").value.trim(),
+  password: $i("sync-password").value,
+  auth: $i("sync-auth").value,
+  interval: Number($i("sync-interval").value) || 120,
+  enabled: $i("sync-enabled").checked,
+});
+
+function showSyncResult(ok, message, detail) {
+  const box = $i("sync-result");
+  box.hidden = false;
+  box.className = "sync-result " + (ok ? "ok" : "bad");
+  // replaceChildren() stringifies null into a literal "null" text node, unlike
+  // el()'s children — filter before handing it the list.
+  box.replaceChildren(...[
+    el("strong", { text: ok ? "✓ " : "✕ " }),
+    el("span", { text: message }),
+    detail ? el("div", { class: "sync-result-detail", text: detail }) : null,
+  ].filter(Boolean));
+}
+
+document.getElementById("btn-sync-settings").onclick = async () => {
+  await refreshSyncStatus();
+  fillSyncForm();
+  $i("sync-result").hidden = true;
+  syncModal.hidden = false;
+  $i("sync-url").focus();
+};
+$i("sync-chip").onclick = () => document.getElementById("btn-sync-settings").click();
+$i("sync-close").onclick = () => { syncModal.hidden = true; };
+syncModal.onclick = (e) => { if (e.target === syncModal) syncModal.hidden = true; };
+
+$i("sync-test").onclick = async (e) => {
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Testing…";
+  try {
+    const r = await api.send("POST", "/api/caldav/test", syncFormValues());
+    showSyncResult(r.ok, r.message,
+      r.ok && r.components?.length ? `holds: ${r.components.join(", ")}` : null);
+  } catch (err) {
+    showSyncResult(false, err.message);
+  }
+  btn.disabled = false;
+  btn.textContent = "Test connection";
+};
+
+$i("sync-save").onclick = async (e) => {
+  const btn = e.target;
+  btn.disabled = true;
+  try {
+    syncStatus = await api.send("PUT", "/api/caldav/config", syncFormValues());
+    $i("sync-password").value = "";      // never keep it in the DOM
+    fillSyncForm();
+    renderSyncChip();
+    showSyncResult(true, syncStatus.enabled
+      ? "Saved. The first sync runs within a minute."
+      : "Saved. Sync is switched off.");
+  } catch (err) {
+    showSyncResult(false, err.message);
+  }
+  btn.disabled = false;
+};
+
+$i("sync-now").onclick = async (e) => {
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Syncing…";
+  try {
+    const r = await api.send("POST", "/api/caldav/sync", {});
+    const moved = ["pulled", "pushed", "deleted_remote", "deleted_local"]
+      .map((k) => (r[k] ? `${r[k]} ${k.replace("_", " ")}` : null)).filter(Boolean);
+    showSyncResult(!r.errors,
+      moved.length ? `Synced — ${moved.join(", ")}` : "Synced — already up to date",
+      [r.conflicts ? `${r.conflicts} conflict(s) resolved by newest-wins` : null,
+       r.errors ? `${r.errors} error(s) — see container logs` : null]
+        .filter(Boolean).join(" · ") || null);
+    await refreshSyncStatus();
+    await load();
+  } catch (err) {
+    showSyncResult(false, err.message);
+  }
+  btn.disabled = false;
+  btn.textContent = "Sync now";
+};
+
+refreshSyncStatus();
+setInterval(refreshSyncStatus, 30000);
+
 // Single-key shortcuts, but never while typing into something.
 document.onkeydown = (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
+  if (e.key === "Escape" && !syncModal.hidden) { syncModal.hidden = true; return; }
   if (e.key === "Escape" && !modal.hidden) { closeImport(); return; }
   if (e.key === "Escape" && !typing && expanded.size) { expanded.clear(); renderTasks(); return; }
-  if (!modal.hidden) return;
+  if (!modal.hidden || !syncModal.hidden) return;
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === "/") { e.preventDefault(); search.focus(); }
   if (e.key === "n") { e.preventDefault(); document.getElementById("task-title").focus(); }
   if (e.key === "\\") { e.preventDefault(); toggleSidebar(); }
+  if (e.key === "c") { e.preventDefault(); setView(view === "calendar" ? "list" : "calendar"); }
+  if (view === "calendar" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    shiftMonth(e.key === "ArrowLeft" ? -1 : 1);
+  }
 };
 
-load();
+// Restore the stored view after the first render, so the toggle, the sort
+// visibility and the rendered pane all start out agreeing with each other.
+load().then(() => setView(view));

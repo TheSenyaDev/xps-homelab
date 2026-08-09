@@ -124,6 +124,76 @@ New status or priority values go in the `STATUSES` / `PRIORITIES` tuples at the 
 to the frontend, which builds its filter buttons and dropdowns from them — no hardcoded lists in
 the UI.
 
+## CalDAV sync (Apple Reminders, DAVx5, Thunderbird…)
+
+Two-way sync between the `tasks` table and VTODOs in a CalDAV collection. Point it
+at the **same collection your phone's account uses** and tasks appear in Apple
+Reminders — Reminders reads `VTODO`, while the Calendar app reads `VEVENT`, which
+is why tasks land there and not in the calendar grid.
+
+Off by default. To switch it on, add to the homelab `.env`:
+
+```bash
+SENYA_TASKS_CALDAV_ENABLED=true
+SENYA_TASKS_CALDAV_URL=http://192.168.2.100:5232/dav.php/calendars/Senya/default/
+SENYA_TASKS_CALDAV_USER=Senya
+SENYA_TASKS_CALDAV_PASSWORD=<that DAV user's password>
+SENYA_TASKS_CALDAV_AUTH=auto        # auto | digest (Baikal) | basic (Nextcloud)
+SENYA_TASKS_CALDAV_INTERVAL=120     # seconds between polls
+```
+
+then `docker compose up -d senya-tasks`. `CALDAV_AUTH=auto` probes the server's
+challenge once at startup, because picking the wrong scheme fails as a silent 401
+loop rather than an error.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/caldav` | last run, mapped task count, pending deletes |
+| `POST /api/caldav/sync` | run a pass now instead of waiting for the timer |
+
+### Field mapping
+
+| senya-tasks | VTODO |
+|---|---|
+| `title` / `notes` | `SUMMARY` / `DESCRIPTION` |
+| `status` todo·doing·done | `NEEDS-ACTION` · `IN-PROCESS` · `COMPLETED` |
+| `status` **blocked** | `NEEDS-ACTION` + `X-SENYA-STATUS:blocked` (no iCalendar equivalent) |
+| `priority` high·medium·low | `PRIORITY` 1 · 5 · 9 |
+| `due_date` | `DUE;VALUE=DATE` |
+| `completed_at` | `COMPLETED` + `PERCENT-COMPLETE:100` |
+| `tags` | `CATEGORIES` |
+| `position` | `X-APPLE-SORT-ORDER` |
+| `category` | **not synced** — CalDAV collections have no folder tree |
+
+### How it stays consistent
+
+Every synced task keeps a bookmark in `caldav_map`: the local `updated_at` and
+the remote `LAST-MODIFIED` *as of the last time the two agreed*. A side is dirty
+when its current revision differs from its bookmark, which makes the four cases
+explicit instead of guessed — neither dirty (skip), local only (`PUT`, guarded by
+`If-Match`), remote only (write to SQLite), both (**conflict**: newest timestamp
+wins, and the loser is logged as a warning).
+
+Change detection uses WebDAV-Sync (RFC 6578), so an idle poll is one request
+rather than a full listing.
+
+Three things that are easy to get wrong and are handled deliberately:
+
+- **Deletes both ways.** A local delete leaves a row in `caldav_tombstones`,
+  written by a trigger so it outlives the task row, and becomes a remote
+  `DELETE`. A remote delete arrives as a `404` in the sync report.
+- **No resurrection.** Pending deletes are pushed *before* anything is pulled.
+  Otherwise the pull sees an object that is still on the server with its mapping
+  already gone, assumes it's new, and recreates the task you just deleted.
+- **No ping-pong.** Our own `PUT` bumps the collection's sync-token, so the
+  object comes straight back in the next delta. It's recognised by ETag and
+  skipped — without that, sync re-applies its own writes and bumps `updated_at`,
+  making tasks look edited when nothing touched them.
+
+Verified end to end against a live sabre/dav server (both Baikal and Nextcloud run
+it): push, pull, remote completion, both delete directions, a genuine
+both-sides-changed conflict, idempotency, and folded/escaped unicode.
+
 ## Obsidian sync
 
 `Tasks.md` is written into the same volume as the DB, so on the host it's at `./data/Tasks.md`.

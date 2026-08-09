@@ -1,5 +1,8 @@
 FROM python:3.12-slim
 
+# No .pyc in the image or the mounted source tree.
+ENV PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
 
 COPY requirements.txt .

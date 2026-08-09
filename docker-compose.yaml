@@ -475,6 +475,17 @@ services:
       - "8000:8000"
     volumes:
       - ./senya-tasks/data:/data
+    environment:
+      - TZ=${TZ}
+      # Two-way VTODO sync, so tasks show up in Apple Reminders. CALDAV_URL must
+      # be the same collection your phone's account uses or the two never meet.
+      # Inert until ..._ENABLED=true and a password is set (see senya-tasks/README).
+      - CALDAV_ENABLED=${SENYA_TASKS_CALDAV_ENABLED:-false}
+      - CALDAV_URL=${SENYA_TASKS_CALDAV_URL:-}
+      - CALDAV_USER=${SENYA_TASKS_CALDAV_USER:-}
+      - CALDAV_PASSWORD=${SENYA_TASKS_CALDAV_PASSWORD:-}
+      - CALDAV_AUTH=${SENYA_TASKS_CALDAV_AUTH:-auto}
+      - CALDAV_INTERVAL=${SENYA_TASKS_CALDAV_INTERVAL:-120}
     restart: unless-stopped
 
   senya-daily:

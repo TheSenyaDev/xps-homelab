@@ -11,6 +11,10 @@ miniflux-ai/config.yml
 *.p12
 *.pfx
 
+# Python bytecode — build artefacts, never source
+__pycache__/
+*.py[cod]
+
 # Databases
 *.db
 *.db-shm
