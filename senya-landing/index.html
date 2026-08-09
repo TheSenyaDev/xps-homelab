@@ -7,6 +7,32 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="styles/base.css" />
   <link rel="stylesheet" href="styles/components.css" />
+
+  <!-- Flatten the module waterfall. Without these the browser can only discover
+       an import once it has parsed the file that imports it, so js/main.js's
+       graph arrives in 6 sequential round trips (main → sections → registry →
+       utils → …). On the LAN that is invisible; over Tailscale from another
+       machine each wave costs a full RTT and it is most of the wait.
+       modulepreload starts all 16 in the first wave instead, and an unknown
+       rel is simply ignored by older browsers.
+       Keep in sync when adding a module — a missing entry costs speed, never
+       correctness, since the import still resolves normally. -->
+  <link rel="modulepreload" href="js/config.js" />
+  <link rel="modulepreload" href="js/layout.js" />
+  <link rel="modulepreload" href="js/page.js" />
+  <link rel="modulepreload" href="js/rail.js" />
+  <link rel="modulepreload" href="js/registry.js" />
+  <link rel="modulepreload" href="js/settings.js" />
+  <link rel="modulepreload" href="js/ui-scale.js" />
+  <link rel="modulepreload" href="js/utils.js" />
+  <link rel="modulepreload" href="js/sections/bookmarks.js" />
+  <link rel="modulepreload" href="js/sections/clock.js" />
+  <link rel="modulepreload" href="js/sections/crypto.js" />
+  <link rel="modulepreload" href="js/sections/daily.js" />
+  <link rel="modulepreload" href="js/sections/market.js" />
+  <link rel="modulepreload" href="js/sections/search.js" />
+  <link rel="modulepreload" href="js/sections/system.js" />
+  <link rel="modulepreload" href="js/sections/weather.js" />
 </head>
 <body>
   <!-- The page is a list of sections, top to bottom. Each one's markup lives in

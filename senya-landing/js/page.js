@@ -21,7 +21,11 @@ const CACHE = new Map(); // name -> Promise<string>
 
 function fetchComponent(name) {
   if (!CACHE.has(name)) {
-    CACHE.set(name, fetch(`components/${name}.html`, { cache: "no-store" }).then((res) => {
+    // No `cache: "no-store"`: that forced a full re-download of every component
+    // on every load, which off-LAN is the slowest part of the page. nginx sends
+    // these as no-cache, so the browser still revalidates and never shows a
+    // stale component — it just gets a 304 instead of the body.
+    CACHE.set(name, fetch(`components/${name}.html`).then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status} for components/${name}.html`);
       return res.text();
     }));
@@ -47,8 +51,23 @@ async function mount(scope) {
   }));
 }
 
+// Components nest three deep (index → main-table → info-pane → system-panel),
+// and mount() can only discover a nested slot after its parent's HTML has
+// arrived — so left alone the eight files land in three sequential round trips.
+// Naming them up front starts all eight at once instead, turning three waves
+// into one. This is a hint, not a source of truth: mount() still fetches
+// whatever a slot actually asks for, so a stale name here costs one wasted
+// request, and a missing one just falls back to the old behaviour.
+const PRELOAD = [
+  "top-bar", "bookmarks-bar", "main-table", "settings-drawer",
+  "launcher-rail", "dashboard-grid", "info-pane", "system-panel",
+];
+
 // Awaited by main.js before any section init runs, so every init finds its
 // container already in the document.
 export function renderPage(root = document.body) {
+  // Kick every fetch off before the first await; failures are handled by
+  // mount() when it awaits the same cached promise.
+  for (const name of PRELOAD) fetchComponent(name).catch(() => {});
   return mount(root);
 }
