@@ -708,6 +708,20 @@ let CURRENT_ITEM = null;
 
 $("item-close").addEventListener("click", () => itemDlg.close());
 
+// Click outside to close. A <dialog> backdrop is not a separate element — the
+// click lands on the dialog itself — so compare against its box rather than
+// testing `e.target === itemDlg`, which also fires on any padding inside it.
+// Only the item panel gets this: it is read-only, so a stray click costs
+// nothing. The search and settings forms deliberately do not, because
+// dismissing those on a misclick would throw away what you had typed.
+itemDlg.addEventListener("click", (e) => {
+  if (e.target !== itemDlg) return;           // a real child was clicked
+  const r = itemDlg.getBoundingClientRect();
+  const inside = e.clientX >= r.left && e.clientX <= r.right &&
+                 e.clientY >= r.top && e.clientY <= r.bottom;
+  if (!inside) itemDlg.close();
+});
+
 function openItem(item, marks = {}) {
   CURRENT_ITEM = item;
   $("item-title").textContent = item.title;
