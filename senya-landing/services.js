@@ -55,6 +55,7 @@ window.SENYA_INTERNAL = {
     { name: "SenyaFinance", port: 8002, container: "senya-finance" },
     { name: "SenyaNotes", port: 8003, container: "senya-notes" },
     { name: "SenyaBoox", port: 8004, container: "senya-boox" },
+    { name: "SenyaScraper", port: 8005, container: "senya-scraper" },
   ],
   SERVICES: [
     { name: "Homepage", port: 3010, icon: "homepage", container: "homepage" },
