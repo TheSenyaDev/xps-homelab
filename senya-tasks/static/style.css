@@ -501,3 +501,20 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .sync-collection { display: flex; gap: 8px; align-items: baseline; padding: 1px 0; font-size: var(--fs-sm); }
 .sync-collection-name { color: var(--dim); text-transform: uppercase; }
 .sync-collection-href { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+/* Subtasks: indented under their parent, with a leader so the relationship is
+   visible even when the parent scrolls out of view. */
+.task.subtask { padding-left: 26px; position: relative; }
+.task.subtask::before {
+  content: "";
+  position: absolute; left: 12px; top: 0; bottom: 50%;
+  border-left: 1px solid var(--border, #2a2d34);
+  border-bottom: 1px solid var(--border, #2a2d34);
+  width: 8px;
+}
+/* Progress of a parent's subtasks, e.g. 1/3. */
+.task[data-subs]::after {
+  content: attr(data-subs);
+  font-size: .72em; color: var(--muted, #6b7280);
+  font-variant-numeric: tabular-nums; margin-left: 6px; align-self: center;
+}

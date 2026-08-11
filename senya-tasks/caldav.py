@@ -222,8 +222,13 @@ def stamp_to_sql(stamp):
     return None
 
 
-def build_vtodo(task, tags, uid, sequence=0):
-    """Render a task as a VTODO. Only fields with a real value are emitted."""
+def build_vtodo(task, tags, uid, sequence=0, parent_uid=None):
+    """Render a task as a VTODO. Only fields with a real value are emitted.
+
+    Subtasks are expressed with RELATED-TO;RELTYPE=PARENT carrying the parent's
+    UID — the RFC 5545 relationship, and the one Apple Reminders reads, so a
+    subtask created here shows as a subtask there and vice versa.
+    """
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -251,6 +256,8 @@ def build_vtodo(task, tags, uid, sequence=0):
     # trip through the server doesn't quietly downgrade it to plain todo.
     if task["status"] == "blocked":
         lines.append("X-SENYA-STATUS:blocked")
+    if parent_uid:
+        lines.append(f"RELATED-TO;RELTYPE=PARENT:{ical_escape(parent_uid)}")
     if task["position"]:
         lines.append(f"X-APPLE-SORT-ORDER:{task['position']}")
     lines += ["END:VTODO", "END:VCALENDAR"]
@@ -295,8 +302,23 @@ def parse_vtodo(text):
     tags = [ical_unescape(c).strip().lower().replace(" ", "-")
             for c in cats.split(",") if c.strip()]
 
+    # RELATED-TO defaults to RELTYPE=PARENT when the parameter is absent
+    # (RFC 5545 §3.8.4.5), so a bare RELATED-TO is still a parent link. CHILD
+    # and SIBLING are relationships we do not model and are ignored rather than
+    # guessed at. `props` keeps one line per property, which is fine here: we
+    # emit at most one RELATED-TO, and a client that sends several parents is
+    # describing something we could not represent anyway.
+    parent_uid = None
+    if "RELATED-TO" in props:
+        value, params = props["RELATED-TO"]
+        reltype = next((p.split("=", 1)[1].upper()
+                        for p in params if p.upper().startswith("RELTYPE=")), "PARENT")
+        if reltype == "PARENT":
+            parent_uid = ical_unescape(value).strip() or None
+
     return {
         "uid": val("UID"),
+        "parent_uid": parent_uid,
         "title": ical_unescape(val("SUMMARY", "") or "").strip(),
         "notes": ical_unescape(val("DESCRIPTION", "") or "").strip(),
         "status": status,
@@ -614,15 +636,30 @@ def apply_remote(conn, parsed, href, etag, task_id=None, category_id=False):
         "priority": parsed["priority"],
         "due_date": parsed["due_date"],
     }
+    # Resolve the parent link, if the parent is something we already know. A
+    # subtask can arrive before its parent — the server returns hrefs in no
+    # particular order — so an unresolved link leaves parent_id alone rather
+    # than clearing it; the next sync, once the parent exists, sets it.
+    parent_id = None
+    if parsed.get("parent_uid"):
+        prow = conn.execute("SELECT task_id FROM caldav_map WHERE uid = ?",
+                            (parsed["parent_uid"],)).fetchone()
+        if prow:
+            parent_id = prow["task_id"]
+            # A parent cannot itself be a subtask here (one level), and cannot
+            # be the task being written.
+            if parent_id == task_id:
+                parent_id = None
     # category_id=False means "don't touch it" (single-collection mode); a real
     # value — including None for uncategorized — assigns it, which is how a
     # reminder dragged between lists on the phone changes category here.
     if task_id is None:
         pos = conn.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM tasks").fetchone()[0]
         cur = conn.execute(
-            "INSERT INTO tasks (title, notes, status, priority, due_date, position, category_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (*fields.values(), pos, None if category_id is False else category_id))
+            "INSERT INTO tasks (title, notes, status, priority, due_date, position, "
+            "category_id, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (*fields.values(), pos, None if category_id is False else category_id,
+             parent_id))
         task_id = cur.lastrowid
     else:
         conn.execute(
@@ -630,6 +667,12 @@ def apply_remote(conn, parsed, href, etag, task_id=None, category_id=False):
             "WHERE id = ?", (*fields.values(), task_id))
         if category_id is not False:
             conn.execute("UPDATE tasks SET category_id = ? WHERE id = ?", (category_id, task_id))
+        # Only when it resolved: an unresolved link means the parent has not
+        # synced yet, not that the task was promoted to top level.
+        if parent_id is not None:
+            conn.execute("UPDATE tasks SET parent_id = ? WHERE id = ?", (parent_id, task_id))
+        elif not parsed.get("parent_uid"):
+            conn.execute("UPDATE tasks SET parent_id = NULL WHERE id = ?", (task_id,))
 
     if parsed["status"] == "done" and parsed["completed_at"]:
         conn.execute("UPDATE tasks SET completed_at = ? WHERE id = ?",
@@ -655,7 +698,16 @@ def push_task(conn, client, task, row=None, collection=None):
     # Monotonic per object: a client that sees SEQUENCE go backwards treats the
     # update as stale and may ignore it entirely.
     seq = (row["sequence"] if row and row["sequence"] is not None else 0) + 1
-    ical = build_vtodo(task, tags, uid, sequence=seq)
+    # A subtask needs its parent's UID, which only exists once the parent has
+    # been pushed. If it has not been yet, the link is simply omitted this
+    # round and added on the next sync — better than inventing a UID the server
+    # has never seen, which would strand the subtask under nothing.
+    parent_uid = None
+    if task["parent_id"]:
+        prow = conn.execute("SELECT uid FROM caldav_map WHERE task_id = ?",
+                            (task["parent_id"],)).fetchone()
+        parent_uid = prow["uid"] if prow else None
+    ical = build_vtodo(task, tags, uid, sequence=seq, parent_uid=parent_uid)
 
     etag = client.put(href, ical, etag=row["etag"] if row else None)
     if etag is None:

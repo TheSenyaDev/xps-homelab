@@ -325,9 +325,32 @@ function renderTasks() {
     return;
   }
 
-  const byCat = new Map();
+  // Subtasks belong under their parent, not beside it. A subtask whose parent
+  // is filtered out is shown at top level rather than dropped — hiding a task
+  // because of something you cannot see would be worse than a stray row.
+  const shown = new Set(list.map((t) => t.id));
+  const kids = new Map();
+  const roots = [];
   for (const t of list) {
-    const key = t.category_id ?? "none";
+    if (t.parent_id != null && shown.has(t.parent_id)) {
+      if (!kids.has(t.parent_id)) kids.set(t.parent_id, []);
+      kids.get(t.parent_id).push(t);
+    } else {
+      roots.push(t);
+    }
+  }
+  const ordered = [];
+  for (const t of roots) {
+    ordered.push(t);
+    for (const k of kids.get(t.id) || []) ordered.push(k);
+  }
+
+  const byCat = new Map();
+  for (const t of ordered) {
+    // A subtask files under its parent's category, so the pair never splits
+    // across two groups.
+    const parent = t.parent_id != null ? list.find((x) => x.id === t.parent_id) : null;
+    const key = (parent ? parent.category_id : t.category_id) ?? "none";
     if (!byCat.has(key)) byCat.set(key, []);
     byCat.get(key).push(t);
   }
@@ -405,13 +428,24 @@ function dueCell(t) {
 
 function taskRow(t) {
   const row = document.createElement("div");
-  row.className = `task${t.done ? " done" : ""}${expanded.has(t.id) ? " open" : ""}`;
+  row.className = `task${t.done ? " done" : ""}${expanded.has(t.id) ? " open" : ""}`
+                + (t.parent_id != null ? " subtask" : "");
 
   const cb = document.createElement("input");
   cb.type = "checkbox";
   cb.checked = t.done;
   cb.title = "Toggle done";
   cb.onchange = () => patch(t.id, { done: cb.checked });
+
+  // Only top-level tasks may gain subtasks — one level, matching the API and
+  // what RELATED-TO can express.
+  if (t.parent_id == null) {
+    const kids = tasks.filter((x) => x.parent_id === t.id);
+    if (kids.length) {
+      const done = kids.filter((k) => k.done).length;
+      row.dataset.subs = `${done}/${kids.length}`;
+    }
+  }
 
   // Everything that describes the task rides next to the title rather than
   // being flung to the right edge of a wide screen.
@@ -476,11 +510,34 @@ function taskRow(t) {
   del.textContent = "✕";
   del.title = "Delete task";
   del.onclick = async () => {
+    const kids = tasks.filter((x) => x.parent_id === t.id).length;
+    // Deleting a parent takes its subtasks with it (ON DELETE CASCADE), which
+    // is worth saying before it happens rather than after.
+    if (kids && !confirm(`Delete “${t.title}” and its ${kids} subtask${kids > 1 ? "s" : ""}?`)) return;
     await api.send("DELETE", `/api/tasks/${t.id}`);
     expanded.delete(t.id);
     await load();
   };
-  actions.append(edit, del);
+
+  actions.append(edit);
+  if (t.parent_id == null) {
+    const add = document.createElement("button");
+    add.className = "icon-btn";
+    add.textContent = "+";
+    add.title = "Add a subtask";
+    add.onclick = async () => {
+      const title = prompt(`Subtask of “${t.title}”`);
+      if (!title || !title.trim()) return;
+      // Inherits the parent's category so the pair stays together in the list
+      // and, in per-category sync mode, in the same CalDAV collection.
+      await api.post("/api/tasks", {
+        title: title.trim(), parent_id: t.id, category_id: t.category_id,
+      });
+      await load();
+    };
+    actions.append(add);
+  }
+  actions.append(del);
 
   main.append(prio, title, metaBox);
   row.append(cb, main, dueCell(t), actions);

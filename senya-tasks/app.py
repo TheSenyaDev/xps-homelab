@@ -212,7 +212,21 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 """
 
-MIGRATIONS = [M1, M2, M3, M4, M5, M6, M7]
+# Subtasks. A task may hang off another; deleting a parent takes its children
+# with it, which is what "delete this task" means when the children only exist
+# to describe it.
+#
+# Self-referential rather than a separate table because a subtask *is* a task —
+# it has the same status, priority, due date and CalDAV identity, and splitting
+# them would mean duplicating all of that. One level is enforced in the API
+# rather than the schema: nesting deeper reads badly in a list and has no
+# CalDAV meaning, since RELATED-TO carries no depth.
+M8 = """
+ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
+"""
+
+MIGRATIONS = [M1, M2, M3, M4, M5, M6, M7, M8]
 SCHEMA_VERSION = len(MIGRATIONS)
 
 
@@ -345,6 +359,26 @@ def v_int(field):
     return check
 
 
+def v_parent_id(value):
+    """The parent task, or None to promote a subtask back to top level."""
+    if value in (None, "", 0):
+        return None
+    try:
+        parent_id = int(value)
+    except (TypeError, ValueError):
+        raise ApiError("parent_id must be a task id")
+    row = get_db().execute("SELECT id, parent_id FROM tasks WHERE id = ?",
+                           (parent_id,)).fetchone()
+    if row is None:
+        raise ApiError("parent task does not exist")
+    # One level only: a subtask cannot itself have subtasks. Deeper nesting
+    # reads badly in a flat list and has no CalDAV meaning — RELATED-TO carries
+    # no depth, so clients would flatten it anyway.
+    if row["parent_id"] is not None:
+        raise ApiError("a subtask cannot have subtasks")
+    return parent_id
+
+
 TASK_FIELDS = {
     "title": v_title,
     "notes": v_notes,
@@ -353,6 +387,7 @@ TASK_FIELDS = {
     "category_id": v_category_id,
     "due_date": v_due_date,
     "position": v_int("position"),
+    "parent_id": v_parent_id,
 }
 
 
@@ -814,6 +849,20 @@ def create_task():
     return jsonify(read_task(db, cur.lastrowid)), 201
 
 
+def guard_parenting(db, task_id, cols):
+    """Reject re-parenting that would create a cycle or a third level."""
+    if "parent_id" not in cols:
+        return
+    parent_id = cols["parent_id"]
+    if parent_id == task_id:
+        raise ApiError("a task cannot be its own parent")
+    if parent_id is not None:
+        kids = db.execute("SELECT COUNT(*) FROM tasks WHERE parent_id = ?",
+                          (task_id,)).fetchone()[0]
+        if kids:
+            raise ApiError("this task has subtasks, so it cannot become one")
+
+
 @app.patch("/api/tasks/<int:task_id>")
 def update_task(task_id):
     data = request.get_json(force=True, silent=True) or {}
@@ -821,6 +870,7 @@ def update_task(task_id):
     if not cols and "tags" not in data:
         raise ApiError("nothing to update")
     db = get_db()
+    guard_parenting(db, task_id, cols)
     if db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone() is None:
         raise ApiError("not found", 404)
     if cols:
