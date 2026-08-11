@@ -437,15 +437,7 @@ function taskRow(t) {
   cb.title = "Toggle done";
   cb.onchange = () => patch(t.id, { done: cb.checked });
 
-  // Only top-level tasks may gain subtasks — one level, matching the API and
-  // what RELATED-TO can express.
-  if (t.parent_id == null) {
-    const kids = tasks.filter((x) => x.parent_id === t.id);
-    if (kids.length) {
-      const done = kids.filter((k) => k.done).length;
-      row.dataset.subs = `${done}/${kids.length}`;
-    }
-  }
+
 
   // Everything that describes the task rides next to the title rather than
   // being flung to the right edge of a wide screen.
@@ -473,6 +465,20 @@ function taskRow(t) {
   status.onclick = () =>
     patch(t.id, { status: STATUS_RING[(STATUS_RING.indexOf(t.status) + 1) % STATUS_RING.length] });
   metaBox.append(status);
+
+  // Subtask progress, as a real element in the meta row. It cannot be a
+  // ::after on .task — that is a 4-column grid, and a pseudo-element becomes a
+  // fifth grid item and shifts the whole row.
+  if (t.parent_id == null) {
+    const kids = tasks.filter((x) => x.parent_id === t.id);
+    if (kids.length) {
+      const chip = document.createElement("span");
+      chip.className = "subs";
+      chip.textContent = `☰ ${kids.filter((k) => k.done).length}/${kids.length}`;
+      chip.title = "Subtasks";
+      metaBox.append(chip);
+    }
+  }
 
   for (const tag of t.tags) {
     const c = document.createElement("button");
@@ -525,16 +531,7 @@ function taskRow(t) {
     add.className = "icon-btn";
     add.textContent = "+";
     add.title = "Add a subtask";
-    add.onclick = async () => {
-      const title = prompt(`Subtask of “${t.title}”`);
-      if (!title || !title.trim()) return;
-      // Inherits the parent's category so the pair stays together in the list
-      // and, in per-category sync mode, in the same CalDAV collection.
-      await api.post("/api/tasks", {
-        title: title.trim(), parent_id: t.id, category_id: t.category_id,
-      });
-      await load();
-    };
+    add.onclick = () => addSubtask(t);
     actions.append(add);
   }
   actions.append(del);
@@ -542,6 +539,18 @@ function taskRow(t) {
   main.append(prio, title, metaBox);
   row.append(cb, main, dueCell(t), actions);
   return row;
+}
+
+async function addSubtask(t) {
+  const title = prompt(`Subtask of “${t.title}”`);
+  if (!title || !title.trim()) return;
+  // Inherits the parent's category so the pair stays together in the list and,
+  // in per-category sync mode, in the same CalDAV collection.
+  await api.post("/api/tasks", {
+    title: title.trim(), parent_id: t.id, category_id: t.category_id,
+  });
+  expanded.add(t.id);
+  await load();
 }
 
 function taskDetail(t) {
@@ -606,6 +615,26 @@ function taskDetail(t) {
   notes.placeholder = "Notes…";
   notes.onblur = () => { if (notes.value !== t.notes) patch(t.id, { notes: notes.value }); };
   field("notes", notes);
+
+  // Subtasks, with a labelled control — the icon in the row's hover actions is
+  // for speed once you know it exists, not for discovering the feature.
+  if (t.parent_id == null) {
+    const kids = tasks.filter((x) => x.parent_id === t.id);
+    const wrap = document.createElement("div");
+    wrap.className = "subs-box";
+    const add = document.createElement("button");
+    add.className = "ghost-btn";
+    add.textContent = "+ Subtask";
+    add.onclick = () => addSubtask(t);
+    wrap.append(add);
+    if (kids.length) {
+      const n = document.createElement("span");
+      n.className = "stamps";
+      n.textContent = `${kids.filter((k) => k.done).length} of ${kids.length} done`;
+      wrap.append(n);
+    }
+    field("subtasks", wrap);
+  }
 
   const stamps = document.createElement("div");
   stamps.className = "stamps";

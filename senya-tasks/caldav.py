@@ -760,9 +760,30 @@ def ensure_collections(conn, client, home):
     known = collection_rows(conn)
     created, renamed = [], []
 
+    # Category names are qualified with their ancestors — "Homelab / Network"
+    # rather than "Network".
+    #
+    # CalDAV has no hierarchy to map onto: RFC 4791 forbids a calendar
+    # collection containing another calendar collection, so one-list-per-
+    # category is necessarily flat. Two subcategories called "Network" under
+    # different parents are legal here (UNIQUE is on (parent_id, name)) and
+    # would otherwise produce two identically named lists on the phone with no
+    # way to tell them apart. The path keeps them distinct and shows the
+    # relationship, which is as close to nesting as the protocol allows.
+    rows = conn.execute("SELECT id, name, parent_id FROM categories ORDER BY id").fetchall()
+    by_id = {r["id"]: r for r in rows}
+
+    def qualified(row):
+        parts, seen = [row["name"]], {row["id"]}
+        parent = row["parent_id"]
+        while parent is not None and parent in by_id and parent not in seen:
+            seen.add(parent)                 # a cycle would loop forever
+            parts.append(by_id[parent]["name"])
+            parent = by_id[parent]["parent_id"]
+        return " / ".join(reversed(parts))
+
     wanted = [(UNCATEGORIZED, "Inbox")]
-    wanted += [(r["id"], r["name"]) for r in
-               conn.execute("SELECT id, name FROM categories ORDER BY id")]
+    wanted += [(r["id"], qualified(r)) for r in rows]
 
     problems = []
     for cat_id, name in wanted:

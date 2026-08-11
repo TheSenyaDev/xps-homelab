@@ -182,7 +182,11 @@ input[type="checkbox"]:checked::after {
 .tag-cloud:empty { display: none; }
 
 /* ---------- Content ---------- */
-.content { padding: 0; max-width: 1120px; width: 100%; }
+/* min-width: 0 because a grid item defaults to min-width: auto, so a wide row
+   would push the column past its track and overflow the page. The cap lifts
+   when the sidebar is collapsed — that space was reclaimed to be used. */
+.content { padding: 0; max-width: 1120px; width: 100%; min-width: 0; }
+.app.collapsed .content { max-width: none; }
 
 .bar {
   display: flex; align-items: center; gap: 0; flex-wrap: wrap;
@@ -294,7 +298,10 @@ button.chip { cursor: pointer; }
 .task .due.soon { color: var(--med); font-weight: 700; }
 .task .due.overdue { color: var(--high); font-weight: 700; }
 
-.task .row-actions { display: flex; gap: 1px; opacity: 0; min-width: 44px; justify-content: flex-end; }
+/* Three buttons now (details · +subtask · delete), so the reserved width grew
+   with them. Faintly visible rather than fully hidden: an action you cannot see
+   is an action nobody finds. */
+.task .row-actions { display: flex; gap: 1px; opacity: .28; min-width: 66px; justify-content: flex-end; }
 .task:hover .row-actions, .task.open .row-actions { opacity: 1; }
 .row-actions button:hover { color: var(--text); }
 .row-actions .del:hover { color: var(--high); }
@@ -512,9 +519,7 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
   border-bottom: 1px solid var(--border, #2a2d34);
   width: 8px;
 }
-/* Progress of a parent's subtasks, e.g. 1/3. */
-.task[data-subs]::after {
-  content: attr(data-subs);
-  font-size: .72em; color: var(--muted, #6b7280);
-  font-variant-numeric: tabular-nums; margin-left: 6px; align-self: center;
-}
+/* Subtask progress, in the meta row — never a pseudo-element on .task, which
+   is a 4-column grid where one would become a fifth item. */
+.subs { font-size: .72em; color: var(--muted, #6b7280); font-variant-numeric: tabular-nums; }
+.subs-box { display: flex; align-items: center; gap: 10px; }
