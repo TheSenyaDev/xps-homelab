@@ -25,6 +25,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
+from ..http import FetchPolicy
 from .base import (Category, Listing, Option, Scraper, ScrapeError, SearchOptions,
                    clean, parse_price)
 
@@ -47,6 +48,13 @@ class EbayCA(Scraper):
     domain = "www.ebay.ca"
     home_url = "https://www.ebay.ca/"
     supports_categories = True
+
+    # A cold hit on /sch/ is refused; landing on the homepage first earns a
+    # session, and the Referer on the search is then genuine. Pacing is jittered
+    # rather than a fixed floor — clicking at exactly 1.5s intervals is itself a
+    # signature.
+    policy = FetchPolicy(profile="chrome-mac", min_interval=1.5, max_interval=6.0,
+                         warmup_url="https://www.ebay.ca/")
 
     SORTS = {                # eBay's _sop codes, named for the UI
         "best": "12",

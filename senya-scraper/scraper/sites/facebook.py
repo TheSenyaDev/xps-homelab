@@ -37,6 +37,7 @@ from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 
+from ..http import FetchPolicy
 from .base import Listing, Option, Scraper, ScrapeError, SearchOptions, parse_price
 
 # The field that marks a node as a listing. Everything else is read relative to
@@ -56,9 +57,11 @@ class FacebookMarketplace(Scraper):
     label = "FB Marketplace"
     domain = "www.facebook.com"
     home_url = "https://www.facebook.com/"
-    # Facebook throttles far more aggressively than the others; a handful of
-    # quick requests is enough to start getting 400s on every URL.
-    min_interval = 6.0
+    # Facebook throttles far harder than the others — a handful of quick
+    # requests is enough to start getting 400s on every URL — so the gaps are
+    # both longer and more widely spread.
+    policy = FetchPolicy(profile="chrome-mac", min_interval=6.0, max_interval=18.0,
+                         warmup_url="https://www.facebook.com/")
 
     supports_categories = False
     supports_condition = False   # logged-out search exposes no condition filter

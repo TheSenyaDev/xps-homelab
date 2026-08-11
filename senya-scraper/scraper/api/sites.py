@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify
 
-from .. import notify, sites as site_registry
+from .. import http, notify, sites as site_registry
 
 bp = Blueprint("sites", __name__)
 
@@ -19,4 +19,9 @@ def health():
     return jsonify({
         "sites": site_registry.keys(),
         "notify": notify.describe(),
+        # Whether requests still look like Python on the wire — the one thing
+        # you cannot tell by reading the results.
+        "http": http.describe(),
+        "fetchers": {k: site_registry.get(k).describe_fetcher()
+                     for k in site_registry.keys()},
     })

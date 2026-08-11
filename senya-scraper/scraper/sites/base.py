@@ -22,26 +22,10 @@ from dataclasses import asdict, dataclass, field
 
 import requests
 
+from .. import http
+from ..http import FetchPolicy
+
 log = logging.getLogger(__name__)
-
-# A real browser string. Not an attempt to hide what we are: several of these
-# sites return 403 to anything that looks scripted, and the alternative is an app
-# that cannot fetch its own data.
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-)
-
-DEFAULT_HEADERS = {
-    "User-Agent": USER_AGENT,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-CA,en;q=0.9",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-}
-
 
 class ScrapeError(Exception):
     """Anything that stops us returning listings. The message reaches the UI, so
@@ -290,39 +274,6 @@ def load_cookie_source(env_var):
     return parse_cookies(os.environ.get(env_var, "")), env_var
 
 
-# ----- politeness -----
-
-class RateLimiter:
-    """A floor on the gap between requests to the same domain.
-
-    Global and blocking rather than per-session: two browser tabs searching at
-    once should still add up to a civil request rate, and a homelab app has no
-    reason to be fast enough to get itself blocked.
-    """
-
-    def __init__(self, min_interval=1.5):
-        self.min_interval = min_interval
-        self._last = {}
-        self._locks = {}
-        self._guard = threading.Lock()
-
-    def _lock_for(self, domain):
-        with self._guard:
-            return self._locks.setdefault(domain, threading.Lock())
-
-    def wait(self, domain, min_interval=None):
-        """Block until this domain may be hit again. `min_interval` lets a
-        thin-skinned site ask for a longer floor than the default."""
-        floor = self.min_interval if min_interval is None else min_interval
-        with self._lock_for(domain):
-            gap = time.monotonic() - self._last.get(domain, 0.0)
-            if gap < floor:
-                time.sleep(floor - gap)
-            self._last[domain] = time.monotonic()
-
-
-LIMITER = RateLimiter()
-
 
 class Scraper:
     """Base adapter.
@@ -370,13 +321,69 @@ class Scraper:
     #: rather than silently behaving like a logged-out scrape.
     required_cookies: tuple = ()
 
+    #: How this site is fetched. Override to give a site its own browser
+    #: profile, pacing, proxy or warm-up — data, not code. See scraper/http/.
+    policy: "FetchPolicy | None" = None
+
+    #: Cookie jars are persisted here between restarts, so a session looks
+    #: continuous instead of brand new on every container start.
+    cookie_dir = os.environ.get("COOKIE_DIR", "/data/cookies")
+
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update(DEFAULT_HEADERS)
-        self._primed = False
         self.cookie_source = ""
         self.authenticated = False
+        self.fetcher = self._build_fetcher()
         self._load_session_cookies()
+
+    def _build_fetcher(self):
+        """Assemble this site's Fetcher from its policy and class attributes.
+
+        `min_interval`, `home_url` and the block detectors are read off the
+        class so an adapter can stay declarative; a policy overrides any of them.
+        """
+        policy = self.policy or FetchPolicy()
+        policy = dataclasses.replace(
+            policy,
+            min_interval=(policy.min_interval if self.policy
+                          else self.min_interval),
+            max_interval=(policy.max_interval if self.policy
+                          else max(self.min_interval * 3, 5.0)),
+            warmup_url=policy.warmup_url or self.home_url,
+            cookie_file=policy.cookie_file or os.path.join(
+                self.cookie_dir, f"{self.key}.json"),
+            detectors=policy.detectors or self.detectors(),
+        )
+        return http.build(self.domain, policy)
+
+    def detectors(self):
+        """(name, fn(text, response) -> message | None) run on every 200.
+
+        The failures that matter arrive as valid responses: eBay's "Pardon Our
+        Interruption" and Facebook's logged-out shell are both HTTP 200 pages
+        with no data in them.
+        """
+        return (("interstitial", self._interstitial),)
+
+    #: Phrases that mark a challenge page.
+    INTERSTITIAL_MARKERS = (
+        "pardon our interruption",
+        "checking your browser",
+        "enable javascript and cookies to continue",
+        "verify you are a human",
+        "unusual traffic",
+    )
+
+    def _interstitial(self, text, res):
+        # Real result pages are large; challenge pages are a few KB. Checking
+        # size first keeps this off the hot path for genuine responses.
+        if len(text) > 60_000:
+            return None
+        head = text[:4000].lower()
+        if any(m in head for m in self.INTERSTITIAL_MARKERS):
+            return (f"{self.label} served a bot check instead of results — "
+                    f"usually too many requests too quickly. Waiting a few "
+                    f"minutes clears it.")
+        return None
 
     def _load_session_cookies(self):
         """Install signed-in cookies, if any were supplied.
@@ -397,11 +404,12 @@ class Scraper:
             log.warning("%s: ignoring cookies from %s — missing %s",
                         self.label, source, ", ".join(missing))
             return
-        for name, value in cookies.items():
-            self.session.cookies.set(name, value, domain=f".{self.domain.lstrip('www.')}")
+        self.fetcher.backend.set_cookies(
+            cookies, f".{self.domain.removeprefix('www.')}")
         self.cookie_source = source
         self.authenticated = True
-        self._primed = True      # a real session needs no anonymous priming
+        # A real signed-in session needs no anonymous warm-up.
+        self.fetcher._warmed = True
         log.info("%s: using signed-in session from %s (%d cookies)",
                  self.label, source, len(cookies))
 
@@ -447,67 +455,26 @@ class Scraper:
 
     # ---- fetching ----
 
-    def prime(self):
-        """Some sites 403 a cold hit on their search endpoint but hand out a
-        session on the homepage first (eBay does exactly this). Best-effort: if
-        it fails, the search still runs and produces the more useful error."""
-        if self._primed or not self.home_url:
-            return
+    def get(self, url, referer=None, **kw):
+        """A browser-shaped GET: impersonated TLS/HTTP2, realistic headers,
+        jittered pacing, persisted cookies, warm-up and retries.
+
+        All of that lives in scraper/http/ so adapters describe sites rather
+        than repeating evasion logic — and so improving realism improves every
+        site at once. Failures are re-raised as ScrapeError, which is what the
+        API already knows how to shape for the UI.
+        """
         try:
-            LIMITER.wait(self.domain, self.min_interval)
-            self.session.get(self.home_url, timeout=15)
-        except requests.RequestException:
-            pass
-        self._primed = True
+            return self.fetcher.get(url, referer=referer, **kw)
+        except http.BlockedError as e:
+            raise ScrapeError(str(e)) from e
+        except http.FetchError as e:
+            raise ScrapeError(str(e)) from e
 
-    def get(self, url, **kw):
-        """Rate-limited GET that turns transport failures into ScrapeError."""
-        self.prime()
-        LIMITER.wait(self.domain, self.min_interval)
-        kw.setdefault("timeout", 25)
-        try:
-            res = self.session.get(url, **kw)
-        except requests.Timeout:
-            raise ScrapeError(f"{self.label} timed out. It may be slow or blocking us.")
-        except requests.RequestException as e:
-            raise ScrapeError(f"Could not reach {self.label}: {e}")
-        if res.status_code == 403:
-            # The failure mode that actually happens. Drop the primed flag so the
-            # next attempt re-establishes a session, which often clears it.
-            self._primed = False
-            raise ScrapeError(
-                f"{self.label} refused the request (403) — its bot protection "
-                f"tripped. Trying again in a minute usually works."
-            )
-        if res.status_code != 200:
-            raise ScrapeError(f"{self.label} returned HTTP {res.status_code}.")
-        self.check_interstitial(res)
-        return res
-
-    #: Phrases that mark a bot-check page. These are served with HTTP 200 and a
-    #: normal content type, so without this they parse as a valid page with zero
-    #: results and get misreported as "the site changed its markup".
-    INTERSTITIAL_MARKERS = (
-        "pardon our interruption",
-        "checking your browser",
-        "before you access",
-        "enable javascript and cookies to continue",
-        "verify you are a human",
-        "unusual traffic",
-    )
-
-    def check_interstitial(self, res):
-        # Real result pages are large; the challenge pages are a few KB. Checking
-        # the size first keeps this off the hot path for genuine responses.
-        if len(res.content) > 60_000:
-            return
-        head = res.text[:4000].lower()
-        if any(m in head for m in self.INTERSTITIAL_MARKERS):
-            self._primed = False
-            raise ScrapeError(
-                f"{self.label} served a bot check instead of results — usually "
-                f"too many requests too quickly. Waiting a few minutes clears it."
-            )
+    def describe_fetcher(self):
+        """What this site's transport is actually doing — surfaced by
+        /api/health so "am I still fingerprintable as Python?" is answerable."""
+        return self.fetcher.describe()
 
     # ---- the one thing every adapter must implement ----
 

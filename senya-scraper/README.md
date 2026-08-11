@@ -142,6 +142,69 @@ On a saved search, a market that **errored** is skipped when flagging listings
 that, one throttled run would mark a whole market's history as vanished and then
 re-announce all of it as new.
 
+### Looking like a browser (`scraper/http/`)
+
+Everything about *appearing to be a person* lives in one place, so adapters
+describe sites rather than repeating evasion logic, and improving realism
+improves every site at once.
+
+```
+scraper/http/
+  profiles.py   one coherent browser identity (TLS target + UA + hints + order)
+  backends.py   the transport — owns the TLS and HTTP/2 fingerprints
+  fetcher.py    pacing, cookies, warm-up, Referer chains, retries, detection
+```
+
+Detection happens in layers, and the ones people skip are the ones that give
+them away:
+
+| Layer | What gives you away | What this does |
+|---|---|---|
+| **TLS (JA3/JA4)** | `requests`/`urllib3` produce a ClientHello matching no real browser, checked before a byte of HTTP is parsed | `curl_cffi` impersonates Chrome's actual handshake |
+| **HTTP/2** | `requests` cannot speak h2 at all, so "Chrome" arrives over HTTP/1.1 — encoded right in the JA4 (`…h1_` vs `…h2_`) | real Chrome SETTINGS, window sizes and `m,a,s,p` pseudo-header order |
+| **Headers** | wrong *order*, missing `Sec-Ch-Ua`, or a macOS UA with `Sec-Ch-Ua-Platform: "Windows"` | one profile fixes UA, hints, platform and order together |
+| **Pacing** | a fixed delay is a signature; humans are not metronomes | triangular jitter between `min_interval` and `max_interval` |
+| **Session** | a brand-new cookie jar every process start | jars persisted per site (0600), warm-up navigation, honest `Referer` |
+
+Measured on the wire (`tls.peet.ws`), before and after:
+
+```
+python-requests   JA4 t13d1713h1_ab0a1bf427ad_…   HTTP/1.1
+this fetcher      JA4 t13d1516h2_8daaf6152771_…   h2
+                  akamai 1:65536;2:0;4:6291456;6:262144|15663105|0|m,a,s,p
+```
+
+A profile is only useful if every layer agrees — claiming Chrome 131 while
+presenting Chrome 124's handshake is *more* identifying than sending nothing,
+because real traffic is never self-contradictory. That is why the TLS target,
+UA, hints and platform are bundled into one `BrowserProfile` rather than set
+independently.
+
+Per-site behaviour is data, not code:
+
+```python
+class Kijiji(Scraper):
+    policy = FetchPolicy(profile="chrome-win", min_interval=3, max_interval=9,
+                         warmup_url="https://www.kijiji.ca/", proxy=None)
+```
+
+Extending it: a browser → an entry in `profiles.PROFILES`; a transport (proxy
+pool, headless browser) → a `Backend` subclass in `backends.BACKENDS`; a knob →
+a `FetchPolicy` field. `GET /api/health` reports the active backend and whether
+it is actually impersonating, so "am I still fingerprintable as Python?" is
+answerable without guessing.
+
+If `curl_cffi` is missing the app degrades to plain `requests` and says so
+loudly in the log, rather than silently losing the protection.
+
+**On effectiveness.** None of this beats volume. A homelab running a handful of
+searches a day is indistinguishable from a person *by rate alone*, which is a
+stronger defence than any fingerprint trick — most scrapers get caught doing
+10k requests an hour, not because their JA3 was wrong. And on the signed-in
+Facebook path the calculus inverts: aggressive evasion on an authenticated
+session is what account-integrity systems look for, so being boring there is
+safer than being clever.
+
 ### Adding a notification channel
 
 Same shape. Configured channels are wired to the event bus at startup; an
