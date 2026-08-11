@@ -205,3 +205,11 @@ button:hover { border-color: var(--accent); color: #fff; }
 .seller { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .block { border: none; background: none; color: var(--muted); padding: 0 2px; cursor: pointer; line-height: 1; }
 .block:hover { color: var(--err); }
+
+/* ---- multi-market ---- */
+.sites-pick #f-sites { display: flex; flex-wrap: wrap; gap: 10px; }
+.opt-block { border-top: 1px solid var(--border-soft); padding-top: 7px; margin-top: 7px; }
+.opt-block:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.opt-block-head { color: var(--accent); font-size: calc(9px * var(--fs)); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 5px; }
+.chip.site { color: var(--accent); border-color: var(--accent); }
+.warn { color: var(--warn); font-size: calc(10px * var(--fs)); margin-top: 3px; }

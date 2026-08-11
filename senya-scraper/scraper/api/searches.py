@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
-from .. import events, sites
+from .. import aggregate, events, sites
 from ..db import get_db
 
 bp = Blueprint("searches", __name__)
@@ -82,13 +82,33 @@ def apply_blocklist(items, blocked):
     return kept, len(items) - len(kept)
 
 
+def _sites_for(row):
+    """Which marketplaces this saved search covers.
+
+    Falls back to the legacy single `site` column when `sites` is empty, so rows
+    created before multi-site existed keep working untouched.
+    """
+    try:
+        listed = json.loads(row["sites"] or "[]")
+    except (ValueError, TypeError, IndexError, KeyError):
+        listed = []
+    if not isinstance(listed, list) or not listed:
+        listed = [row["site"]]
+    try:
+        return aggregate.resolve(listed)
+    except sites.UnknownSite:
+        # A site was removed from the install since this was saved. Keep the
+        # ones that still exist rather than making the whole search unrunnable.
+        return [k for k in listed if k in sites.keys()] or [sites.keys()[0]]
+
+
 def _opts_for(row):
-    """SearchOptions from a stored row, carrying only that site's own params."""
+    """SearchOptions from a stored row. Per-site params are applied by
+    aggregate.search_many, which hands each adapter only its own."""
     return sites.SearchOptions.from_dict({
         "query": row["query"], "sort": row["sort"], "condition": row["condition"],
         "category": row["category"], "min_price": row["min_price"],
         "max_price": row["max_price"],
-        "params": _params_map(row).get(row["site"], {}),
     })
 
 
@@ -123,11 +143,18 @@ def _fields_from(body, defaults=None):
     if not opts.query:
         return None, "A saved search needs something to search for."
 
-    site = body.get("site", d.get("site") or "ebay-ca")
+    # A search can cover several marketplaces. `site` is kept as the first of
+    # them so the older column stays meaningful for anything still reading it.
+    requested = body.get("sites")
+    if requested is None:
+        requested = body.get("site") or json.loads(d.get("sites") or "[]") or d.get("site") or "ebay-ca"
     try:
-        sites.get(site)
+        keys = aggregate.resolve(requested)
     except sites.ScrapeError as e:
         return None, str(e)
+    if not keys:
+        return None, "Pick at least one site to search."
+    site = keys[0]
 
     if (opts.min_price is not None and opts.max_price is not None
             and opts.min_price > opts.max_price):
@@ -145,9 +172,15 @@ def _fields_from(body, defaults=None):
         if not isinstance(stored, dict):
             stored = {}
     if "params" in body:
-        # Validated against the target site's declared options, so unknown keys
-        # are dropped rather than stored and later smuggled into a URL.
-        stored[site] = sites.get(site).clean_params(body.get("params") or {})
+        # Either {site: {...}} for a multi-site search, or bare options for a
+        # single one. Each site validates its own, so unknown keys are dropped
+        # rather than stored and later smuggled into a URL.
+        incoming = body.get("params") or {}
+        if incoming and all(k in keys for k in incoming):
+            for key, values in incoming.items():
+                stored[key] = sites.get(key).clean_params(values or {})
+        elif len(keys) == 1:
+            stored[site] = sites.get(site).clean_params(incoming)
 
     blocked = parse_blocklist(body.get("blocked_sellers"))
     if blocked is None:                       # not mentioned → leave as-is
@@ -168,6 +201,7 @@ def _fields_from(body, defaults=None):
         "max_price": opts.max_price,
         "notify": 0 if notify in (False, 0, "0", "false") else 1,
         "params": json.dumps(stored),
+        "sites": json.dumps(keys),
     }, None
 
 
@@ -180,9 +214,9 @@ def create_search():
     cur = db.execute(
         """INSERT INTO searches
                (name, site, query, sort, condition, category, min_price, max_price,
-                notify, params, blocked_sellers)
+                notify, params, blocked_sellers, sites)
            VALUES (:name,:site,:query,:sort,:condition,:category,:min_price,:max_price,
-                   :notify,:params,:blocked_sellers)""",
+                   :notify,:params,:blocked_sellers,:sites)""",
         fields)
     db.commit()
     row = db.execute("SELECT * FROM searches WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -208,7 +242,7 @@ def update_search(sid):
         """UPDATE searches SET name=:name, site=:site, query=:query, sort=:sort,
                condition=:condition, category=:category, min_price=:min_price,
                max_price=:max_price, notify=:notify, params=:params,
-               blocked_sellers=:blocked_sellers
+               blocked_sellers=:blocked_sellers, sites=:sites
            WHERE id=:id""", {**fields, "id": sid})
     db.commit()
     return jsonify(dict(db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()))
@@ -268,14 +302,14 @@ def run_search(sid):
     row = db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()
     if not row:
         return fail("No such saved search.", 404)
-    try:
-        items = sites.get(row["site"]).search(_opts_for(row))
-    except sites.UnknownSite as e:
-        return fail(str(e))
-    except sites.ScrapeError as e:
-        # A blocked or restructured site is an upstream problem, not a bug here:
-        # 502 says so, and the message tells the user what to do about it.
-        return fail(str(e), 502)
+    keys = _sites_for(row)
+    items, site_errors = aggregate.search_many(keys, _opts_for(row), _params_map(row))
+    if site_errors and not items and len(site_errors) == len(keys):
+        # Every site failed — nothing to diff, and storing "everything vanished"
+        # would mark the whole history gone and then re-announce it all as new
+        # on the next successful run.
+        return jsonify({"error": "; ".join(e["error"] for e in site_errors),
+                        "errors": site_errors}), 502
 
     # Filter before storing: a blocked seller should never enter the history,
     # so unblocking later does not announce their whole back catalogue as new.
@@ -313,9 +347,14 @@ def run_search(sid):
 
     # Anything missing from this run has left the results: flagged, not deleted,
     # so it stops showing as live without being announced as new if it returns.
-    for r in db.execute("SELECT id, uid FROM listings WHERE search_id=? AND gone=0",
+    #
+    # Skipped for sites that errored: their listings are absent because we could
+    # not ask, not because they sold. Marking them gone would make a throttled
+    # Facebook look like every item vanished, then re-announce them all as new.
+    failed = {e["site"] for e in site_errors}
+    for r in db.execute("SELECT id, uid, url FROM listings WHERE search_id=? AND gone=0",
                         (sid,)).fetchall():
-        if r["uid"] not in seen:
+        if r["uid"] not in seen and r["uid"].split(":", 1)[0] not in failed:
             db.execute("UPDATE listings SET gone=1 WHERE id=?", (r["id"],))
 
     db.execute("UPDATE searches SET last_run_at=? WHERE id=?", (stamp, sid))
@@ -333,6 +372,8 @@ def run_search(sid):
         "ran_at": stamp,
         "total": len(items),
         "hidden": hidden,
+        "sites": keys,
+        "errors": site_errors,
         "new": new_items,
         "price_drops": drops,
         "results": [i.as_dict() for i in items],

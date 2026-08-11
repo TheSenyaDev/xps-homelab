@@ -14,6 +14,19 @@ const savedEl = $("saved");
 const money = (v, cur) =>
   v == null ? "" : new Intl.NumberFormat("en-CA", { style: "currency", currency: cur || "CAD" }).format(v);
 
+// A combined search can half-succeed, so the status line has to be able to say
+// "here are results, and also this site is down" at the same time.
+function statusLine(data, extra = []) {
+  const bits = [`<span class="k">${data.count ?? data.total ?? 0}</span> listings`];
+  if ((data.sites || []).length > 1) bits.push(`${data.sites.length} markets`);
+  bits.push(...extra);
+  let line = bits.join(" · ");
+  for (const e of data.errors || []) {
+    line += `<div class="warn">⚠ ${esc(e.label)}: ${esc(e.error)}</div>`;
+  }
+  return line;
+}
+
 function setStatus(msg, isError = false) {
   statusEl.classList.toggle("err", isError);
   statusEl.innerHTML = msg;
@@ -36,6 +49,9 @@ async function api(url, opts = {}) {
 // search to block the seller for. Null during a live search, where there is no
 // profile to store a blocklist on.
 let currentSearch = null;
+// Whether the results on screen came from more than one marketplace.
+let MULTI_SITE = false;
+const siteLabel = (key) => (siteByKey(key) || {}).label || key;
 
 function card(item, marks = {}) {
   const el = document.createElement("article");
@@ -47,7 +63,11 @@ function card(item, marks = {}) {
   const chips = [];
   if (marks.isNew) chips.push('<span class="chip new">NEW</span>');
   if (marks.was != null) chips.push('<span class="chip drop">DROP</span>');
+  // Only worth the space when results are mixed; on a single-site search every
+  // card would carry the same badge.
+  if (MULTI_SITE) chips.push(`<span class="chip site">${esc(siteLabel(item.site))}</span>`);
   if (item.condition) chips.push(`<span class="chip cond">${esc(item.condition)}</span>`);
+  if (item.location) chips.push(`<span class="chip ship">${esc(item.location)}</span>`);
   if (item.extra && item.extra.best_offer) chips.push('<span class="chip offer">OBO</span>');
   if (item.shipping) chips.push(`<span class="chip ship">${esc(item.shipping)}</span>`);
 
@@ -100,6 +120,7 @@ function esc(s) {
 }
 
 function render(items, { newUids = new Set(), drops = new Map() } = {}) {
+  MULTI_SITE = new Set(items.map((i) => i.site)).size > 1;
   grid.replaceChildren();
   if (!items.length) {
     setStatus("No listings matched.");
@@ -117,7 +138,7 @@ function render(items, { newUids = new Set(), drops = new Map() } = {}) {
 function formPayload() {
   return {
     query: $("q").value.trim(),
-    site: $("site").value,
+    sites: $("site").value === "all" ? "all" : [$("site").value],
     category: $("category").value,
     sort: $("sort").value,
     condition: $("condition").value,
@@ -197,7 +218,17 @@ function readOptions(host) {
 }
 
 function applySiteCapabilities() {
-  const site = siteByKey($("site").value);
+  const key = $("site").value;
+  if (key === "all") {
+    // Only the filters every site honours make sense across all of them;
+    // per-site options are configured on a saved profile instead.
+    $("sort").disabled = $("condition").disabled = false;
+    $("min_price").disabled = $("max_price").disabled = false;
+    $("category").hidden = true;
+    renderOptions($("site-opts"), null);
+    return;
+  }
+  const site = siteByKey(key);
   if (!site) return;
   const sup = site.supports || {};
   $("sort").disabled = !sup.sort;
@@ -225,7 +256,7 @@ form.addEventListener("submit", async (e) => {
   setStatus("searching…");
   try {
     const data = await api("/api/search", { method: "POST", body: JSON.stringify(payload) });
-    setStatus(`<span class="k">${data.count}</span> listings`);
+    setStatus(statusLine(data));
     render(data.results);
   } catch (err) {
     setStatus(esc(err.message), true);
@@ -248,13 +279,12 @@ function openDialog(row = null, prefill = null) {
   $("dlg-err").hidden = true;
 
   const src = row || prefill || {};
-  $("f-site").replaceChildren(...SITES.map((s) => {
-    const o = document.createElement("option");
-    o.value = s.key;
-    o.textContent = s.label;
-    return o;
-  }));
-  $("f-site").value = src.site || SITES[0]?.key || "";
+  // Which markets this profile covers. Stored as a JSON array; fall back to the
+  // legacy single `site` for profiles saved before multi-site existed.
+  let chosen = row ? safeList(row.sites) : (Array.isArray(src.sites) ? src.sites : []);
+  if (!chosen.length) chosen = [src.site || SITES[0]?.key].filter(Boolean);
+  if (chosen.includes("all")) chosen = SITES.map((s) => s.key);
+  renderSitePicker(chosen);
   $("f-name").value = row ? row.name : "";
   $("f-query").value = src.query || "";
   $("f-condition").value = src.condition || "any";
@@ -271,8 +301,34 @@ function openDialog(row = null, prefill = null) {
 
 // Category list and site-specific controls both depend on the chosen site, so
 // they are rebuilt together whenever it changes.
+// One checkbox per market. Changing the selection re-renders the per-site
+// option panels below, so each chosen site configures itself independently.
+function renderSitePicker(chosen) {
+  const host = $("f-sites");
+  host.replaceChildren(...SITES.map((s) => {
+    const label = document.createElement("label");
+    label.className = "opt opt-bool";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = s.key;
+    cb.checked = chosen.includes(s.key);
+    cb.dataset.siteKey = s.key;
+    cb.addEventListener("change", () => {
+      if (!chosenSites().length) cb.checked = true;   // never leave it empty
+      syncDialogSite();
+    });
+    label.append(cb, labelSpan({ label: s.label }));
+    return label;
+  }));
+}
+
+function chosenSites() {
+  return [...$("f-sites").querySelectorAll("input:checked")].map((c) => c.dataset.siteKey);
+}
+
 function syncDialogSite(category = "", overrideParams = null) {
-  const site = siteByKey($("f-site").value);
+  const keys = chosenSites();
+  const site = siteByKey(keys[0]);
   const cats = (site && site.categories) || [];
   $("f-category-row").hidden = !cats.length;
   $("f-category").replaceChildren(...cats.map((c) => {
@@ -283,25 +339,41 @@ function syncDialogSite(category = "", overrideParams = null) {
   }));
   if (category) $("f-category").value = category;
 
-  // A site with no seller data cannot honour a blocklist, so hide the field
-  // rather than let it be filled in and quietly do nothing.
-  const hasSeller = !site || site.supports?.seller !== false;
+  // Shown when at least one chosen market exposes sellers; hidden entirely when
+  // none do, rather than letting it be filled in and quietly do nothing.
+  const hasSeller = keys.some((k) => siteByKey(k)?.supports?.seller !== false);
   $("f-blocked").closest("label").hidden = !hasSeller;
 
-  const values = overrideParams || editingParams[$("f-site").value] || {};
-  renderOptions($("f-opts"), site, values);
-  $("f-opts-wrap").hidden = !((site && site.options) || []).length;
-  $("f-opts-legend").textContent = `${site ? site.label : "Site"} options`;
+  const host = $("f-opts");
+  host.replaceChildren();
+  let any = false;
+  for (const key of keys) {
+    const s = siteByKey(key);
+    if (!s || !(s.options || []).length) continue;
+    any = true;
+    const block = document.createElement("div");
+    block.className = "opt-block";
+    block.dataset.siteKey = key;
+    const h = document.createElement("div");
+    h.className = "opt-block-head";
+    h.textContent = s.label;
+    const body = document.createElement("div");
+    renderOptions(body, s, overrideParams || editingParams[key] || {});
+    block.append(h, body);
+    host.append(block);
+  }
+  $("f-opts-wrap").hidden = !any;
+  $("f-opts-legend").textContent = "Per-market options";
 }
 
-$("f-site").addEventListener("change", () => {
-  // Remember what was typed for the site being left, so flipping back restores it.
-  const prev = readOptions($("f-opts"));
-  if (Object.keys(prev).length) editingParams[lastDialogSite] = prev;
-  lastDialogSite = $("f-site").value;
-  syncDialogSite();
-});
-let lastDialogSite = "";
+// {site: {option: value}} across every rendered block.
+function readAllOptions() {
+  const out = {};
+  for (const block of $("f-opts").querySelectorAll(".opt-block")) {
+    out[block.dataset.siteKey] = readOptions(block);
+  }
+  return out;
+}
 
 function safeList(s) {
   const v = safeJson(s, []);
@@ -323,7 +395,7 @@ $("dlg-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const payload = {
     name: $("f-name").value.trim(),
-    site: $("f-site").value,
+    sites: chosenSites(),
     query: $("f-query").value.trim(),
     category: $("f-category").value,
     condition: $("f-condition").value,
@@ -331,7 +403,7 @@ $("dlg-form").addEventListener("submit", async (e) => {
     min_price: $("f-min").value || null,
     max_price: $("f-max").value || null,
     notify: $("f-notify").checked,
-    params: readOptions($("f-opts")),
+    params: readAllOptions(),
     blocked_sellers: $("f-blocked").value,
   };
   try {
@@ -355,7 +427,8 @@ async function loadSaved() {
   for (const s of rows) {
     // A one-line summary of the criteria, so a profile is identifiable without
     // opening it. Only the parts that are actually set are shown.
-    const bits = [esc(s.site)];
+    const chosen = safeList(s.sites);
+    const bits = [chosen.length > 1 ? `${chosen.length} markets` : esc(chosen[0] || s.site)];
     if (s.min_price != null || s.max_price != null) {
       bits.push(`$${s.min_price ?? 0}–${s.max_price ?? "∞"}`);
     }
@@ -394,11 +467,11 @@ async function runSaved(s) {
     const data = await api(`/api/searches/${s.id}/run`, { method: "POST" });
     const newUids = new Set(data.new.map((i) => i.uid));
     const drops = new Map(data.price_drops.map((i) => [i.uid, i.was]));
-    const bits = [`<span class="k">${data.total}</span> listings`];
-    if (newUids.size) bits.push(`<span class="k">${newUids.size}</span> new`);
-    if (drops.size) bits.push(`<span class="k">${drops.size}</span> price drop${drops.size > 1 ? "s" : ""}`);
-    if (data.hidden) bits.push(`<span class="k">${data.hidden}</span> hidden (blocked)`);
-    setStatus(bits.join(" · "));
+    const extra = [];
+    if (newUids.size) extra.push(`<span class="k">${newUids.size}</span> new`);
+    if (drops.size) extra.push(`<span class="k">${drops.size}</span> price drop${drops.size > 1 ? "s" : ""}`);
+    if (data.hidden) extra.push(`<span class="k">${data.hidden}</span> hidden (blocked)`);
+    setStatus(statusLine(data, extra));
     // New and discounted first — the whole reason for re-running.
     const rank = (i) => (newUids.has(i.uid) ? 0 : drops.has(i.uid) ? 1 : 2);
     render([...data.results].sort((a, b) => rank(a) - rank(b)), { newUids, drops });
@@ -412,7 +485,8 @@ async function runSaved(s) {
 
 (async function init() {
   SITES = await api("/api/sites").catch(() => []);
-  $("site").replaceChildren(...SITES.map((s) => {
+  const opts = [{ key: "all", label: "All markets" }, ...SITES];
+  $("site").replaceChildren(...opts.map((s) => {
     const o = document.createElement("option");
     o.value = s.key;
     o.textContent = s.label;

@@ -62,9 +62,12 @@
       <label>Search for<span class="sub">required</span>
         <input id="f-query" type="text" placeholder="dell xps 13" required />
       </label>
-      <label>Site
-        <select id="f-site"></select>
-      </label>
+      <!-- Several marketplaces at once. Each keeps its own options below, and a
+           site that fails is reported without costing you the others. -->
+      <fieldset class="opts sites-pick">
+        <legend>Markets</legend>
+        <div id="f-sites"></div>
+      </fieldset>
       <label id="f-category-row">Category
         <select id="f-category"></select>
       </label>

@@ -75,8 +75,18 @@ M2 = """
 ALTER TABLE searches ADD COLUMN blocked_sellers TEXT NOT NULL DEFAULT '[]';
 """
 
+# Sites this search covers, as a JSON array — e.g. ["ebay-ca","facebook"], or
+# ["all"] to follow whatever adapters are installed.
+#
+# The older single `site` column stays, holding the first entry, so anything
+# still reading it keeps working and existing rows need no backfill: an empty
+# `sites` falls back to [site].
+M3 = """
+ALTER TABLE searches ADD COLUMN sites TEXT NOT NULL DEFAULT '[]';
+"""
+
 #: Append only. Never edit an entry that has shipped.
-MIGRATIONS: list[str] = [M1, M2]
+MIGRATIONS: list[str] = [M1, M2, M3]
 
 
 def db_path():

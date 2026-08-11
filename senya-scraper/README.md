@@ -111,6 +111,37 @@ silently come up short. Blocked listings are dropped *before* anything is
 stored, so unblocking someone later does not announce their whole back catalogue
 as new.
 
+### Searching every market at once
+
+Pass `"sites": "all"` (or a list) instead of a single `site`, in a live search or
+on a saved profile. Each market keeps its own per-site options, so one profile
+can be Buy-It-Now-only on eBay *and* within 25 km of Calgary on Facebook.
+
+**A combined search is never all-or-nothing.** These sites throttle
+independently, so one being blocked while the others answer is the normal case.
+The response carries whatever came back plus a per-site `errors` list, and the
+UI shows which markets are missing — failing everything because Facebook is
+sulking would make the feature useless. Only when *every* site fails does it
+become a 502.
+
+Sites are queried in parallel. The rate limiter is per-domain, so hitting two
+marketplaces at once is no less polite to either, and serialising them would
+make a combined search as slow as the sum of its parts (Facebook alone holds a
+6 s floor).
+
+**Rankings do not merge**, so the strategy depends on the sort:
+
+| Sort | Strategy |
+|---|---|
+| `price-asc` / `price-desc` | A real shared scale — sorted across everything. Listings with no single price (auction ranges, "contact seller") sort last in **both** directions rather than pretending to be free. |
+| `newest` | Only meaningful where the site gives a date, and eBay gives none. Dated listings lead in order; undated ones follow, interleaved. |
+| `best` | No cross-site meaning at all. Round-robin, so the top of the page holds each site's own best few rather than one market burying the other. |
+
+On a saved search, a market that **errored** is skipped when flagging listings
+`gone`: they are absent because we could not ask, not because they sold. Without
+that, one throttled run would mark a whole market's history as vanished and then
+re-announce all of it as new.
+
 ### Adding a notification channel
 
 Same shape. Configured channels are wired to the event bus at startup; an
@@ -149,7 +180,7 @@ storage, **append** a string to `db.MIGRATIONS` — never edit a shipped one;
 |---|---|---|
 | `GET` | `/api/sites` | sites, their `supports` flags and category lists |
 | `GET` | `/api/health` | registered sites + notification channels |
-| `POST` | `/api/search` | live search, persists nothing |
+| `POST` | `/api/search` | live search, persists nothing; `sites` may be a list or `"all"` |
 | `GET`/`POST` | `/api/searches` | list / create saved searches |
 | `GET`/`PATCH` | `/api/searches/<id>` | read / edit one profile (partial payload) |
 | `DELETE` | `/api/searches/<id>` | |

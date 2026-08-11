@@ -11,6 +11,7 @@ adding a site is one new file in this package and no edit anywhere else.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
@@ -186,6 +187,11 @@ class SearchOptions:
 
     def param(self, key, default=None):
         return self.params.get(key, default)
+
+    def replace(self, **changes):
+        """A copy with fields overridden — the class is frozen, and a combined
+        search needs one variant per site (each with only its own params)."""
+        return dataclasses.replace(self, **changes)
 
 
 # ----- shared parsing -----
