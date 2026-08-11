@@ -123,3 +123,18 @@ body.settings-open .settings-panel { transform: translateX(0); }
   .settings-panel { top: auto; right: 0; left: 0; bottom: 0; width: auto; height: auto; max-height: 82vh; border-left: none; border-top: 1px solid var(--border); padding: 18px 16px calc(20px + env(safe-area-inset-bottom)); transform: translateY(100%); }
   body.settings-open .settings-panel { transform: translateY(0); }
 }
+
+/* Per-widget settings, revealed under a section's row in Customize. */
+.set-item { list-style: none; }
+.set-expand { border: none; background: none; color: var(--muted); cursor: pointer; padding: 0 4px; font-size: calc(10px * var(--fs)); }
+.set-expand:hover { color: var(--accent); }
+.set-widget { padding: 2px 0 8px 22px; display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid var(--border-soft); margin-bottom: 4px; }
+.set-widget-row { justify-content: space-between; gap: 10px; align-items: center; }
+.set-widget-row.tall { align-items: flex-start; }
+.set-input {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-family: inherit;
+  font-size: calc(10px * var(--fs)); padding: 2px 5px; max-width: 130px;
+}
+.set-input[multiple] { min-height: 68px; max-width: 150px; }
+.set-input:focus { outline: 1px solid var(--accent); outline-offset: -1px; }

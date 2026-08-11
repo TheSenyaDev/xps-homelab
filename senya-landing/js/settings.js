@@ -4,7 +4,10 @@
 // both mouse and touch — HTML5 drag-and-drop doesn't fire on touch.
 
 import { el } from "./utils.js";
-import { getSectionsState, setHidden, setOrder } from "./layout.js";
+import {
+  SIZE_LIMITS, getSectionsState, getWidgetConfig, getWidgetSchema,
+  setHidden, setOrder, setWidgetConfig,
+} from "./layout.js";
 import { getFont, setFont, getZoom, setZoom, LIMITS } from "./ui-scale.js";
 
 export function initSettings() {
@@ -66,13 +69,106 @@ export function initSettings() {
     toggle.checked = !s.hidden;
     toggle.addEventListener("change", () => setHidden(s.id, !toggle.checked));
 
+    // Size and any settings the widget declares live behind a disclosure, so
+    // the list stays a list until you want to configure something.
+    const body = el("div", { class: "set-widget", hidden: true });
+    const expander = el("button", {
+      type: "button", class: "set-expand", title: "Size and settings",
+      "aria-expanded": "false", text: "▸",
+    });
+    expander.addEventListener("click", () => {
+      const open = body.hidden;
+      body.hidden = !open;
+      expander.textContent = open ? "▾" : "▸";
+      expander.setAttribute("aria-expanded", String(open));
+      if (open) fillWidgetBody(s.id, body);
+    });
+
     const row = el("li", { class: "set-row", "data-id": s.id },
       handle,
       el("span", { class: "set-name", text: s.title }),
+      expander,
       el("label", { class: "set-switch" }, toggle, el("span", { class: "set-track" })));
 
     handle.addEventListener("pointerdown", (e) => startDrag(e, row));
-    return row;
+    return el("li", { class: "set-item", "data-id": s.id }, row, body);
+  }
+
+  // ---- per-widget size + settings ----
+
+  // Built on first expand rather than up front: a widget's choices can need a
+  // network call (the Tasks categories), and paying for that for every widget
+  // whenever the drawer opens would be wasteful.
+  async function fillWidgetBody(id, body) {
+    const cfg = getWidgetConfig(id);
+    body.replaceChildren(
+      stepper("Width", "columns", cfg.w, SIZE_LIMITS.w, (v) => setWidgetConfig(id, { w: v })),
+      stepper("Height", "rows", cfg.h, SIZE_LIMITS.h, (v) => setWidgetConfig(id, { h: v })));
+
+    let schema = [];
+    try {
+      schema = await getWidgetSchema(id);
+    } catch {
+      body.append(el("div", { class: "set-sub", text: "Settings unavailable." }));
+      return;
+    }
+    for (const spec of schema) {
+      body.append(settingRow(id, spec, cfg[spec.key]));
+    }
+  }
+
+  function stepper(name, unit, value, limits, onChange) {
+    const out = el("span", { class: "scale-value", text: String(value) });
+    let current = value;
+    const bump = (d) => {
+      const next = Math.max(limits.min, Math.min(limits.max, current + d));
+      if (next === current) return;
+      current = next;
+      out.textContent = String(current);
+      onChange(current);
+    };
+    return el("div", { class: "set-row set-scale" },
+      el("span", { class: "set-name" }, name, el("span", { class: "set-sub", text: unit })),
+      el("div", { class: "scale-ctl" },
+        el("button", { type: "button", class: "scale-btn", text: "−", "aria-label": `Fewer ${unit}`, onclick: () => bump(-1) }),
+        out,
+        el("button", { type: "button", class: "scale-btn", text: "+", "aria-label": `More ${unit}`, onclick: () => bump(1) })));
+  }
+
+  // A widget declares its settings; this renders them. No widget-specific code
+  // here, so adding a setting is one entry in the registry.
+  function settingRow(id, spec, value) {
+    let input;
+    if (spec.type === "select" || spec.type === "multi") {
+      input = el("select", { class: "set-input" },
+        ...(spec.choices || []).map((c) =>
+          el("option", { value: String(c.value), text: c.label })));
+      if (spec.type === "multi") input.multiple = true;
+      const chosen = spec.type === "multi"
+        ? String(value ?? "").split(",").filter(Boolean)
+        : [String(value ?? spec.default ?? "")];
+      for (const opt of input.options) opt.selected = chosen.includes(opt.value);
+      input.addEventListener("change", () => {
+        const picked = [...input.selectedOptions].map((o) => o.value);
+        setWidgetConfig(id, { [spec.key]: spec.type === "multi" ? picked.join(",") : picked[0] });
+      });
+    } else {
+      input = el("input", {
+        class: "set-input", type: spec.type === "number" ? "number" : "text",
+        ...(spec.min != null ? { min: spec.min } : {}),
+        ...(spec.max != null ? { max: spec.max } : {}),
+      });
+      input.value = value ?? spec.default ?? "";
+      input.addEventListener("change", () => {
+        setWidgetConfig(id, {
+          [spec.key]: spec.type === "number" ? Number(input.value) : input.value,
+        });
+      });
+    }
+    return el("div", { class: `set-row set-widget-row${spec.type === "multi" ? " tall" : ""}` },
+      el("span", { class: "set-name" }, spec.label,
+        spec.help ? el("span", { class: "set-sub", text: spec.help }) : null),
+      input);
   }
 
   // ---- pointer-drag reorder ----
@@ -81,7 +177,7 @@ export function initSettings() {
 
   function startDrag(e, row) {
     e.preventDefault();
-    dragRow = row;
+    dragRow = row.closest(".set-item") || row;
     row.classList.add("dragging");
     const handle = e.currentTarget;
     handle.setPointerCapture(e.pointerId);
@@ -93,7 +189,7 @@ export function initSettings() {
   // Slot the dragged row before whichever sibling its midpoint has passed.
   function onMove(e) {
     if (!dragRow) return;
-    const rows = [...list.querySelectorAll(".set-row:not(.dragging)")];
+    const rows = [...list.querySelectorAll(".set-item:not(.dragging)")];
     const after = rows.find((r) => {
       const box = r.getBoundingClientRect();
       return e.clientY < box.top + box.height / 2;
@@ -111,6 +207,6 @@ export function initSettings() {
     handle.removeEventListener("pointercancel", endDrag);
     dragRow.classList.remove("dragging");
     dragRow = null;
-    setOrder([...list.querySelectorAll(".set-row")].map((r) => r.dataset.id));
+    setOrder([...list.querySelectorAll(".set-item")].map((r) => r.dataset.id));
   }
 }

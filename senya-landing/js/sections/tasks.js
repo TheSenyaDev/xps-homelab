@@ -1,21 +1,57 @@
 // SenyaTasks widget — open todos, read through the same-origin /tasks/ proxy.
 //
 // Shows only what is open: the dashboard is a "what needs doing" surface, and
-// completed work belongs in the app itself. Which categories and how many are
-// chosen in the widget header and remembered per browser, because the useful
-// answer differs by person and by day and is not worth a round trip to change.
+// completed work belongs in the app itself.
+//
+// Which categories and how many are widget *settings*, configured in Customize
+// alongside size, not controls in the widget itself. A dashboard tile is for
+// reading at a glance; putting its configuration on its face costs the space
+// twice over — once for the controls, once for the header they need.
 
-import { el, fetchJSON, link, store } from "../utils.js";
+import { el, fetchJSON, link } from "../utils.js";
+import { configFor } from "../widget-config.js";
 
 const REFRESH_MS = 2 * 60 * 1000;
-const CAT_KEY = "senya.tasks.categories";   // "" = all
-const LIMIT_KEY = "senya.tasks.limit";
-const LIMITS = [5, 8, 12, 20];
-
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
 
-const getCats = () => (store.get(CAT_KEY, "") || "").split(",").filter(Boolean);
-const getLimit = () => parseInt(store.get(LIMIT_KEY, "8"), 10) || 8;
+// Defaults live here, beside the schema that declares them, and are read
+// through the leaf config module — importing layout.js would make the graph
+// circular (layout → registry → this file).
+const DEFAULTS = { categories: "", limit: 8 };
+const cfg = () => configFor("tasks", DEFAULTS);
+const getCats = () => String(cfg().categories || "").split(",").filter(Boolean);
+const getLimit = () => Number(cfg().limit) || 8;
+
+/**
+ * The widget's settings, for the Customize drawer.
+ *
+ * A function rather than a static list because the categories come from the
+ * API — the drawer awaits this when the widget is expanded, so the list is
+ * whatever exists right now rather than whatever existed at page load.
+ */
+export async function tasksSettings() {
+  let categories = [];
+  try {
+    categories = await fetchJSON("/tasks/api/categories");
+  } catch {
+    // Offline or off-network: still offer the count, just no category list.
+  }
+  return [
+    {
+      key: "categories", label: "Categories", type: "multi", default: "",
+      help: "none = all",
+      // Only top-level ones: choosing a parent already includes what is nested
+      // under it, so listing children too would be a longer list saying less.
+      choices: categories
+        .filter((c) => c.parent_id == null)
+        .map((c) => ({ value: c.id, label: c.name })),
+    },
+    {
+      key: "limit", label: "How many", type: "number", default: 8,
+      min: 1, max: 50, help: "rows shown",
+    },
+  ];
+}
 
 // A category filter should include everything nested under the chosen ones —
 // picking "Home" and not seeing "Home/Garden" tasks would look like a bug.
@@ -56,34 +92,13 @@ function taskRow(task, categoryName) {
     dueChip(task));
 }
 
-function header(wrap, categories, counts) {
-  const chosen = getCats();
-
-  // A multi-select would be fiddly at this size; one dropdown with "all" plus
-  // each top-level category covers what a dashboard needs.
-  const sel = el("select", { class: "tk-sel", title: "Categories" },
-    el("option", { value: "", text: `All (${counts.total})` }),
-    ...categories
-      .filter((c) => c.parent_id == null)
-      .map((c) => el("option", {
-        value: String(c.id),
-        text: `${c.name}${counts.byCat[c.id] ? ` (${counts.byCat[c.id]})` : ""}`,
-      })));
-  sel.value = chosen[0] || "";
-  sel.onchange = () => {
-    store.set(CAT_KEY, sel.value);
-    load(wrap);
-  };
-
-  const lim = el("select", { class: "tk-sel tk-lim", title: "How many to show" },
-    ...LIMITS.map((n) => el("option", { value: String(n), text: `${n}` })));
-  lim.value = String(getLimit());
-  lim.onchange = () => {
-    store.set(LIMIT_KEY, lim.value);
-    load(wrap);
-  };
-
-  return el("div", { class: "tk-head" }, sel, lim,
+// A one-line summary of what is being shown, so the widget still says what it
+// is filtered to now that the controls live in Customize.
+function header(scopeNames, showing, total) {
+  const scope = scopeNames.length ? scopeNames.join(" · ") : "all categories";
+  return el("div", { class: "tk-head" },
+    el("span", { class: "tk-scope", text: scope, title: scope }),
+    el("span", { class: "tk-count", text: `${showing}/${total}` }),
     link("open", `http://${location.hostname}:8000`, "pill"));
 }
 
@@ -98,15 +113,6 @@ async function load(wrap) {
 
     const open = tasks.filter((t) => !t.done);
     const byId = new Map(categories.map((c) => [c.id, c]));
-    const counts = { total: open.length, byCat: {} };
-    for (const t of open) {
-      // Count against the top-level ancestor, so the dropdown's numbers match
-      // what picking that entry would show.
-      let c = byId.get(t.category_id);
-      while (c && c.parent_id != null) c = byId.get(c.parent_id);
-      if (c) counts.byCat[c.id] = (counts.byCat[c.id] || 0) + 1;
-    }
-
     const chosen = getCats();
     const scope = chosen.length ? withDescendants(chosen, categories) : null;
     let list = scope ? open.filter((t) => scope.has(t.category_id)) : open;
@@ -118,7 +124,10 @@ async function load(wrap) {
     const limit = getLimit();
     const shown = list.slice(0, limit);
 
-    wrap.replaceChildren(header(wrap, categories, counts));
+    const scopeNames = chosen
+      .map((id) => byId.get(Number(id))?.name)
+      .filter(Boolean);
+    wrap.replaceChildren(header(scopeNames, Math.min(shown.length, list.length), list.length));
     if (!shown.length) {
       wrap.append(el("div", { class: "tk-empty", text: "Nothing open." }));
       return;
@@ -134,9 +143,16 @@ async function load(wrap) {
   }
 }
 
+let container = null;
+
 export function initTasks() {
-  const wrap = document.getElementById("tasks");
-  if (!wrap) return;
-  load(wrap);
-  setInterval(() => load(wrap), REFRESH_MS);
+  container = document.getElementById("tasks");
+  if (!container) return;
+  load(container);
+  setInterval(() => load(container), REFRESH_MS);
+}
+
+/** Called by layout.js when a setting changes, so the change is immediate. */
+export function onTasksConfigChange() {
+  if (container) load(container);
 }
