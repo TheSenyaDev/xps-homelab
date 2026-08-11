@@ -48,6 +48,7 @@ class EbayCA(Scraper):
     domain = "www.ebay.ca"
     home_url = "https://www.ebay.ca/"
     supports_categories = True
+    supports_detail = True
 
     # A cold hit on /sch/ is refused; landing on the homepage first earns a
     # session, and the Referer on the search is then genuine. Pacing is jittered
@@ -261,3 +262,65 @@ class EbayCA(Scraper):
         and the bare /itm/<id> URL resolves fine."""
         p = urlsplit(href)
         return urlunsplit((p.scheme, p.netloc, p.path, "", ""))
+
+    # ----- detail -----
+
+    def fetch_detail(self, url):
+        """Description, full photo set and item specifics from an /itm/ page.
+
+        eBay puts the seller's description in a same-origin iframe rather than
+        the page body, so it is fetched separately — reading the placeholder
+        div returns an empty shell.
+        """
+        soup = BeautifulSoup(self.get(url).text, "lxml")
+        out = {"url": url}
+
+        subtitle = soup.select_one(".x-item-title__subtitle, .x-item-title-subtitle")
+        if subtitle:
+            out["subtitle"] = clean(subtitle.get_text(" "))
+
+        # Item specifics. eBay has shipped several markups for this grid and
+        # serves different ones to different sessions, so try each known shape
+        # and take the first that yields anything. A missing spec block is not
+        # worth failing over — the description is the part that matters.
+        specs = {}
+        for label_sel, value_sel in (
+            (".ux-labels-values__labels", ".ux-labels-values__values"),
+            ("dt", "dd"),
+        ):
+            for row in soup.select(".ux-layout-section--features .ux-labels-values, "
+                                   ".ux-layout-section-evo dl, dl.ux-labels-values"):
+                label = row.select_one(label_sel)
+                value = row.select_one(value_sel)
+                if not (label and value):
+                    continue
+                k = clean(label.get_text(" ")).rstrip(":")
+                v = clean(value.get_text(" "))
+                if k and v and len(k) < 40 and len(specs) < 24:
+                    specs.setdefault(k, v)
+            if specs:
+                break
+        if specs:
+            out["specs"] = specs
+
+        photos = []
+        for img in soup.select("img[data-zoom-src], .ux-image-carousel-item img"):
+            src = img.get("data-zoom-src") or img.get("src") or ""
+            if src.startswith("http") and src not in photos:
+                photos.append(re.sub(r"/s-l\d+\.", "/s-l800.", src))
+        if photos:
+            out["photos"] = photos[:12]
+
+        frame = soup.select_one("iframe#desc_ifr, iframe[title*='escription']")
+        if frame and frame.get("src"):
+            try:
+                desc = BeautifulSoup(self.get(frame["src"], referer=url).text, "lxml")
+                for junk in desc(["script", "style"]):
+                    junk.decompose()
+                text = clean(desc.get_text(" "))
+                if text:
+                    out["description"] = text[:4000]
+            except ScrapeError:
+                # A missing description is not worth failing the whole panel.
+                pass
+        return out

@@ -63,14 +63,36 @@ each one's configuration independently.
 - A market that **errored** is skipped when flagging listings gone — they are
   absent because we could not ask, not because they sold.
 
-### 1.4 Seller blocklist
+### 1.4 Item panel
 
-Per search, not global: a seller who floods one query with junk may be exactly
-who you want for another. Set it in the dialog or click **⊘** on a result card.
+Clicking a result opens it. Shows everything the search returned — price and
+previous price, condition, shipping, seller, location, posted date, market —
+plus:
+
+- **Open on site** — the listing itself.
+- **Block this seller** — scoped to that listing's market (§1.5).
+- **Load full details** — fetches the listing's own page for the description,
+  full photo set and item specifics. On demand, not automatic: it is one request
+  per item, and doing it for 60 results would get the session throttled at once.
+  eBay only; Facebook's detail pages need real JS.
+
+### 1.5 Seller blocklist
+
+**Per search and per marketplace.** Per search because a seller who floods one
+query with junk may be exactly who you want for another. Per marketplace because
+seller identities are not shared — `acme` on eBay is an account handle, *Acme* on
+Facebook is a display name, and they are unrelated. Blocking one never blocks
+the other, and the API refuses a block that does not name its market.
+
+Set it from the ⊘ on a card, the button in the item panel, or one box per market
+in the edit dialog. Legacy flat lists are still read, attributed to the search's
+primary site.
 
 Filtered locally rather than via a site-side exclusion, since not every
-marketplace has one. Blocked listings are dropped **before** storage, so
-unblocking later does not announce a seller's whole back catalogue as new.
+marketplace has one. Blocked listings are **never stored**, so unblocking later
+cannot announce a seller's whole back catalogue as new — but they *are* returned
+to the UI, where a **Show blocked** switch reveals them greyed out with an
+unblock button. Seeing what a block costs you is how you notice it was too broad.
 
 Requires seller data: Facebook exposes none when logged out, so the field is
 hidden there until a session is supplied.
@@ -223,7 +245,8 @@ a control that silently does nothing.
 | `GET`/`POST` | `/api/searches` | list / create |
 | `GET`/`PATCH`/`DELETE` | `/api/searches/<id>` | PATCH takes a partial payload |
 | `POST` | `/api/searches/<id>/run` | → `{new, price_drops, hidden, errors, results}` |
-| `POST` | `/api/searches/<id>/block` | `{seller}`, or `{seller, unblock: true}` |
+| `POST` | `/api/searches/<id>/block` | `{seller, site}`; add `unblock: true` to reverse |
+| `POST` | `/api/detail` | `{site, url}` → description, photos, specs |
 | `GET` | `/api/searches/<id>/results` | stored listings (`?include_gone=1`) |
 
 **Status codes.** `400` is your mistake (no query, unknown site). `502` means
@@ -273,8 +296,8 @@ Roughly by value per unit of work.
   adapter written yet. Each is one file.
 - **Pagination** — every adapter returns page 1 only. `SearchOptions.page`
   exists and is unused by the API.
-- **Detail-page enrichment** — description, full photo set, seller history,
-  exact location. One extra request per listing, so it belongs behind a setting.
+- **Facebook detail pages** — eBay's are implemented; Facebook's need real JS,
+  so they wait on a headless backend.
 - **Currency normalisation** — eBay returns USD listings on `.ca`. `Listing`
   carries `currency`, but cross-site price sorting compares the numbers without
   converting. Correctly a daily FX fetch plus a `price_cad` field.

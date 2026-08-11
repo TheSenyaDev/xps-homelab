@@ -38,19 +38,40 @@ def _params_map(row):
 
 
 def _blocked(row):
-    """The search's seller blocklist, lowercased for matching."""
+    """The search's blocklist as {site: {lowercased names}}.
+
+    Scoped per marketplace because seller identities are not shared: "acme" on
+    eBay is an account handle, "Acme" on Facebook is a person's display name,
+    and they are unrelated. Blocking one should never silently block the other.
+
+    Accepts the older flat list too, attributing it to the search's primary
+    site, so blocklists saved before this existed keep working.
+    """
     try:
-        raw = json.loads(row["blocked_sellers"] or "[]")
+        raw = json.loads(row["blocked_sellers"] or "{}")
     except (ValueError, TypeError, IndexError, KeyError):
-        return set()
-    if not isinstance(raw, list):
-        return set()
-    return {str(s).strip().lower() for s in raw if str(s).strip()}
+        return {}
+    if isinstance(raw, list):
+        return {row["site"]: {str(x).strip().lower() for x in raw if str(x).strip()}}
+    if not isinstance(raw, dict):
+        return {}
+    return {site: {str(x).strip().lower() for x in (names or []) if str(x).strip()}
+            for site, names in raw.items()}
 
 
-def parse_blocklist(value):
-    """Accept a JSON array or a free-typed string (commas/newlines), since the
-    dialog is a textarea and pasting a list should just work."""
+def _blocked_display(row):
+    """Same, preserving original casing, for the edit form."""
+    try:
+        raw = json.loads(row["blocked_sellers"] or "{}")
+    except (ValueError, TypeError, IndexError, KeyError):
+        return {}
+    if isinstance(raw, list):
+        return {row["site"]: list(raw)}
+    return raw if isinstance(raw, dict) else {}
+
+
+def parse_names(value):
+    """A free-typed string (commas/newlines) or a list -> deduped list."""
     if value is None:
         return None
     if isinstance(value, str):
@@ -68,18 +89,40 @@ def parse_blocklist(value):
     return out
 
 
-def apply_blocklist(items, blocked):
-    """Drop listings from blocked sellers.
+def parse_blocklist(value, sites_in_scope=None):
+    """Normalise a blocklist payload to {site: [names]}.
 
-    Filtered here rather than by asking the site to exclude them: not every
-    marketplace supports it, and doing it locally means one behaviour for all of
-    them. Returns (kept, dropped_count) so the UI can say what it hid instead of
-    the results silently coming up short.
+    Accepts {site: "a, b"} from the per-market textareas, or a bare string/list
+    which is attributed to the only site in scope — anything else would have to
+    guess which marketplace a name belongs to.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {site: parse_names(names) or [] for site, names in value.items()}
+    names = parse_names(value) or []
+    if not names:
+        return {}
+    if sites_in_scope and len(sites_in_scope) == 1:
+        return {sites_in_scope[0]: names}
+    return {}
+
+
+def apply_blocklist(items, blocked):
+    """Split listings into (kept, hidden) by their own site's blocklist.
+
+    Hidden ones are returned rather than counted so the UI can reveal them on
+    demand — seeing what a block is actually costing you is how you notice it
+    was too broad. They are still never stored (see run_search), so unblocking
+    later cannot re-announce a seller's back catalogue as new.
     """
     if not blocked:
-        return items, 0
-    kept = [i for i in items if (i.seller_name or "").lower() not in blocked]
-    return kept, len(items) - len(kept)
+        return items, []
+    kept, hidden = [], []
+    for i in items:
+        names = blocked.get(i.site) or set()
+        (hidden if (i.seller_name or "").lower() in names else kept).append(i)
+    return kept, hidden
 
 
 def _sites_for(row):
@@ -182,11 +225,11 @@ def _fields_from(body, defaults=None):
         elif len(keys) == 1:
             stored[site] = sites.get(site).clean_params(incoming)
 
-    blocked = parse_blocklist(body.get("blocked_sellers"))
+    blocked = parse_blocklist(body.get("blocked_sellers"), keys)
     if blocked is None:                       # not mentioned → leave as-is
-        blocked_json = d.get("blocked_sellers") or "[]"
+        blocked_json = d.get("blocked_sellers") or "{}"
     else:
-        blocked_json = json.dumps(blocked)
+        blocked_json = json.dumps({k: v for k, v in blocked.items() if v})
 
     notify = body.get("notify", d.get("notify", 1))
     return {
@@ -250,34 +293,46 @@ def update_search(sid):
 
 @bp.post("/searches/<int:sid>/block")
 def block_seller(sid):
-    """Add (or with `unblock`, remove) one seller — what the ⊘ on a result card
-    calls, so blocking is one click rather than a trip through the edit form."""
+    """Block or unblock one seller, **on one marketplace**.
+
+    What the ⊘ on a card and the button in the item panel call, so blocking is
+    one click. `site` is required and not inferred: the same name on two
+    marketplaces is two unrelated sellers.
+    """
     body = request.get_json(silent=True) or {}
     seller = (body.get("seller") or "").strip().lstrip("@")
+    site = (body.get("site") or "").strip()
     if not seller:
         return fail("No seller given.")
+    if not site:
+        return fail("No marketplace given — a seller is blocked per site.")
+
     db = get_db()
     row = db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()
     if not row:
         return fail("No such saved search.", 404)
 
-    current = parse_blocklist(row["blocked_sellers"] and json.loads(row["blocked_sellers"])) or []
-    lowered = {s.lower() for s in current}
+    current = _blocked_display(row)
+    names = list(current.get(site) or [])
+    lowered = {n.lower() for n in names}
     if body.get("unblock"):
-        current = [s for s in current if s.lower() != seller.lower()]
+        names = [n for n in names if n.lower() != seller.lower()]
     elif seller.lower() not in lowered:
-        current.append(seller)
+        names.append(seller)
+    current[site] = names
+    current = {k: v for k, v in current.items() if v}
 
     db.execute("UPDATE searches SET blocked_sellers=? WHERE id=?",
                (json.dumps(current), sid))
-    # Hide anything already stored from that seller, so the list updates without
-    # waiting for the next run.
     if not body.get("unblock"):
+        # Hide anything already stored from that seller on that site, so the
+        # list updates without waiting for the next run.
         db.execute("""UPDATE listings SET gone=1
-                       WHERE search_id=? AND lower(substr(seller, 1, instr(seller || ' ', ' ') - 1))=?""",
-                   (sid, seller.lower()))
+                       WHERE search_id=? AND uid LIKE ?
+                         AND lower(substr(seller, 1, instr(seller || ' ', ' ') - 1))=?""",
+                   (sid, f"{site}:%", seller.lower()))
     db.commit()
-    return jsonify({"blocked_sellers": current})
+    return jsonify({"blocked_sellers": current, "site": site, "seller": seller})
 
 
 @bp.get("/searches/<int:sid>")
@@ -313,7 +368,7 @@ def run_search(sid):
 
     # Filter before storing: a blocked seller should never enter the history,
     # so unblocking later does not announce their whole back catalogue as new.
-    items, hidden = apply_blocklist(items, _blocked(row))
+    items, hidden_items = apply_blocklist(items, _blocked(row))
 
     stamp = now()
     seen, new_items, drops = set(), [], []
@@ -371,7 +426,8 @@ def run_search(sid):
     return jsonify({
         "ran_at": stamp,
         "total": len(items),
-        "hidden": hidden,
+        "hidden": len(hidden_items),
+        "blocked_listings": [i.as_dict() for i in hidden_items],
         "sites": keys,
         "errors": site_errors,
         "new": new_items,

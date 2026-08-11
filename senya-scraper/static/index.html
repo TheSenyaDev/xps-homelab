@@ -46,7 +46,15 @@
     </aside>
 
     <section class="results">
-      <div id="status" class="status"></div>
+      <div class="results-bar">
+        <div id="status" class="status"></div>
+        <!-- Only meaningful once a run has hidden something, so it stays hidden
+             until then rather than sitting there greyed out. -->
+        <label id="show-blocked-wrap" class="toggle" hidden>
+          <input type="checkbox" id="show-blocked" />
+          <span>Show blocked <span id="blocked-count" class="k"></span></span>
+        </label>
+      </div>
       <div id="grid" class="grid"></div>
     </section>
   </main>
@@ -101,9 +109,12 @@
         <div id="f-opts"></div>
       </fieldset>
 
-      <label>Blocked sellers<span class="sub">one per line or comma-separated — hidden from this search only</span>
-        <textarea id="f-blocked" rows="2" placeholder="spammy-seller, another-one"></textarea>
-      </label>
+      <!-- One box per market: seller identities are not shared between them,
+           so a single list could not say which site a name belongs to. -->
+      <fieldset id="f-blocked-wrap" class="opts">
+        <legend>Blocked sellers</legend>
+        <div id="f-blocked"></div>
+      </fieldset>
 
       <label class="check">
         <input id="f-notify" type="checkbox" checked />
@@ -116,6 +127,36 @@
         <button type="submit" id="dlg-save" class="go">SAVE</button>
       </menu>
     </form>
+  </dialog>
+
+  <!-- Item panel: everything the search returned, plus an on-demand fetch of
+       the listing's own page for the description. -->
+  <dialog id="item-dlg" class="dlg dlg-wide item-dlg">
+    <div class="item-head">
+      <h2 id="item-title" class="item-title"></h2>
+      <button type="button" id="item-close" class="icon-x" aria-label="Close">✕</button>
+    </div>
+    <div class="item-body">
+      <div class="item-media">
+        <img id="item-img" alt="" />
+        <div id="item-thumbs" class="item-thumbs"></div>
+      </div>
+      <div class="item-info">
+        <div id="item-price" class="item-price"></div>
+        <div id="item-chips" class="row"></div>
+        <dl id="item-facts" class="facts"></dl>
+        <div id="item-desc-wrap" class="item-desc" hidden>
+          <h3 class="head">DESCRIPTION</h3>
+          <p id="item-desc"></p>
+        </div>
+        <p id="item-detail-msg" class="dlg-note"></p>
+      </div>
+    </div>
+    <menu class="dlg-actions item-actions">
+      <button type="button" id="item-block" class="ghost danger"></button>
+      <button type="button" id="item-detail" class="ghost">LOAD FULL DETAILS</button>
+      <a id="item-open" class="go" target="_blank" rel="noopener noreferrer">OPEN ON SITE ↗</a>
+    </menu>
   </dialog>
 
   <!-- Settings. Every control is rendered from /api/settings' schema, so adding

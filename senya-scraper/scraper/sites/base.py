@@ -303,6 +303,10 @@ class Scraper:
     #: seller blocklist in the UI, rather than letting it be configured and then
     #: silently match nothing (Facebook hides sellers from logged-out requests).
     supports_seller = True
+    #: Whether `fetch_detail` is implemented. The item panel shows what the
+    #: search already returned either way; this only controls the button that
+    #: costs an extra request.
+    supports_detail = False
 
     #: Registry of every concrete adapter, keyed by `key`.
     registry: dict[str, type["Scraper"]] = {}
@@ -470,6 +474,7 @@ class Scraper:
                 "price_range": self.supports_price_range,
                 "categories": self.supports_categories,
                 "seller": self.supports_seller,
+                "detail": self.supports_detail,
             },
             "categories": [asdict(c) for c in self.categories()],
             "options": [o.as_dict() for o in self.options()],
@@ -501,4 +506,13 @@ class Scraper:
     # ---- the one thing every adapter must implement ----
 
     def search(self, opts: SearchOptions) -> list[Listing]:
+        raise NotImplementedError
+
+    def fetch_detail(self, url) -> dict:
+        """Extra fields from one listing's own page — description above all.
+
+        Optional: search results are enough to browse, and this costs a request
+        per item. Return whatever the site gives; the panel renders what it
+        receives and skips what is missing.
+        """
         raise NotImplementedError

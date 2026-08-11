@@ -5,10 +5,10 @@ Adding an endpoint group (categories, notification settings, run history) is a
 new module here plus one line in `MODULES` — no edits to the app factory.
 """
 
-from . import search, searches, settings, sites
+from . import detail, search, searches, settings, sites
 
 #: Modules exposing a `bp` Blueprint.
-MODULES = (sites, search, searches, settings)
+MODULES = (sites, search, searches, settings, detail)
 
 
 def register(app, url_prefix="/api"):
