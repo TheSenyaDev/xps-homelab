@@ -97,7 +97,7 @@ unblock button. Seeing what a block costs you is how you notice it was too broad
 Requires seller data: Facebook exposes none when logged out, so the field is
 hidden there until a session is supplied.
 
-### 1.5 Anti-detection (`scraper/http/`)
+### 1.6 Anti-detection (`scraper/http/`)
 
 Detection works in layers. The ones people skip are the ones that identify them.
 
@@ -126,7 +126,7 @@ Safari.
 Requests are paced per domain, globally across threads, so several tabs still
 add up to a civil rate.
 
-### 1.6 Signed-in sessions
+### 1.7 Signed-in sessions
 
 Optional. Reuses a session **you** established in a browser, supplied as cookies
 (Cookie header or exported JSON).
@@ -151,7 +151,7 @@ than an error, so the adapter checks the embedded viewer id (`"USER_ID":"0"`).
 
 **Treat the file as a password** — a session cookie grants full account access.
 
-### 1.7 Settings (⚙)
+### 1.8 Settings (⚙)
 
 Runtime settings, no restart. Every control is rendered from a server-side
 schema, so adding one never touches the frontend. Stored in
@@ -171,7 +171,7 @@ under `http.` rebuilds the fetchers immediately. The page shows live transport
 state, so "am I still fingerprintable as Python?" is verifiable rather than
 assumed.
 
-### 1.8 Notifications
+### 1.9 Notifications
 
 Event bus: a run emits `listings.new` / `listings.price_drop` and never learns
 who is listening. Handlers cannot fail the request that triggered them.
