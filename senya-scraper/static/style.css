@@ -185,7 +185,21 @@ button:hover { border-color: var(--accent); color: #fff; }
 /* ---- create/edit dialog ---- */
 
 .dlg { border: 2px solid var(--border); background: var(--panel); color: var(--text); padding: 0; width: min(460px, 94vw); }
-.dlg::backdrop { background: rgba(0, 0, 0, .6); }
+/* Dim *and* blur what is behind, so the panel reads as the only live thing on
+   screen. backdrop-filter is ignored by browsers that lack it, which leaves the
+   plain dim — a graceful floor, not a broken layout. */
+.dlg::backdrop {
+  background: rgba(8, 10, 14, .62);
+  backdrop-filter: blur(3px) saturate(.75);
+  -webkit-backdrop-filter: blur(3px) saturate(.75);
+}
+
+/* showModal() already makes the rest of the page inert, so nothing behind can
+   be clicked or focused. These add what inertness does not cover: a stray drag
+   selecting text through the backdrop, and the page scrolling underneath. */
+body.modal-open { overflow: hidden; }
+body.modal-open .bar,
+body.modal-open .wrap { user-select: none; }
 .dlg form { padding: 14px; display: flex; flex-direction: column; gap: 9px; }
 .dlg .head { margin: 0 0 4px; color: var(--accent); }
 .dlg label { display: flex; flex-direction: column; gap: 3px; font-size: calc(11px * var(--fs)); color: var(--dim); }

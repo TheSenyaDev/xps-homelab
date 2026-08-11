@@ -6,6 +6,26 @@
 // down as a set of uids and rendered as chips rather than a separate list.
 
 const $ = (id) => document.getElementById(id);
+
+// ----- modals -----
+// One place opens dialogs, so the background lock is always paired with a
+// close. `close` fires however the dialog goes away — button, Escape, or an
+// outside click — which is why the class is cleared from the event rather than
+// from each call site.
+function openModal(dlg) {
+  dlg.showModal();
+  document.body.classList.add("modal-open");
+}
+
+function modalsOpen() {
+  return document.querySelectorAll("dialog[open]").length;
+}
+
+document.addEventListener("close", (e) => {
+  if (e.target instanceof HTMLDialogElement && !modalsOpen()) {
+    document.body.classList.remove("modal-open");
+  }
+}, true);   // capture: `close` does not bubble
 const form = $("search-form");
 const grid = $("grid");
 const statusEl = $("status");
@@ -316,7 +336,7 @@ function openDialog(row = null, prefill = null) {
   if (Array.isArray(editingBlocked)) editingBlocked = {};   // legacy flat list
 
   syncDialogSite(src.category || "", prefill?.params);
-  dlg.showModal();
+  openModal(dlg);
   $("f-query").focus();
 }
 
@@ -586,7 +606,7 @@ async function openSettings() {
   $("settings-err").hidden = true;
   $("settings-body").replaceChildren();
   $("settings-status").textContent = "loading…";
-  settingsDlg.showModal();
+  openModal(settingsDlg);
   try {
     const { schema, values } = await api("/api/settings");
     renderSettings(schema, values);
@@ -759,7 +779,7 @@ function openItem(item, marks = {}) {
   $("item-detail").textContent = "LOAD FULL DETAILS";
 
   paintBlockButton(item, marks);
-  itemDlg.showModal();
+  openModal(itemDlg);
 }
 
 // Only what this listing actually has — an empty row is worse than no row.
