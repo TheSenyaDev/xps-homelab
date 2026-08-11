@@ -353,7 +353,29 @@ class Scraper:
                 self.cookie_dir, f"{self.key}.json"),
             detectors=policy.detectors or self.detectors(),
         )
+        # User settings overlay the adapter's baseline rather than replacing it:
+        # Facebook still needs longer gaps than eBay whatever the preference.
+        from .. import settings
+        policy = settings.apply_to(policy, domain=self.domain)
         return http.build(self.domain, policy)
+
+    def rebuild_fetcher(self):
+        """Re-read settings into a fresh fetcher, so a changed profile or pace
+        applies on the next request rather than the next restart.
+
+        Signed-in cookies are re-installed afterwards; dropping them here would
+        silently log a Facebook session out on an unrelated settings change.
+        """
+        old = getattr(self, "fetcher", None)
+        self.authenticated = False
+        self.cookie_source = ""
+        self.fetcher = self._build_fetcher()
+        self._load_session_cookies()
+        if old is not None:
+            try:
+                old.close()
+            except Exception:                       # noqa: BLE001
+                pass
 
     def detectors(self):
         """(name, fn(text, response) -> message | None) run on every 200.

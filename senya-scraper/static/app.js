@@ -497,3 +497,128 @@ async function runSaved(s) {
   await loadSaved();
   $("q").focus();
 })();
+
+// ----- settings -----
+// Rendered entirely from /api/settings' schema: the server owns what exists,
+// this owns how it looks. Adding a setting server-side needs nothing here.
+
+const settingsDlg = $("settings-dlg");
+
+$("open-settings").addEventListener("click", openSettings);
+$("settings-close").addEventListener("click", () => settingsDlg.close());
+
+async function openSettings() {
+  $("settings-err").hidden = true;
+  $("settings-body").replaceChildren();
+  $("settings-status").textContent = "loading…";
+  settingsDlg.showModal();
+  try {
+    const { schema, values } = await api("/api/settings");
+    renderSettings(schema, values);
+    await paintFetcherStatus();
+  } catch (err) {
+    $("settings-err").textContent = err.message;
+    $("settings-err").hidden = false;
+    $("settings-status").textContent = "";
+  }
+}
+
+function renderSettings(schema, values) {
+  const host = $("settings-body");
+  const groups = [];
+  for (const s of schema) {
+    let g = groups.find((x) => x.name === s.group);
+    if (!g) groups.push((g = { name: s.group, items: [] }));
+    g.items.push(s);
+  }
+  host.replaceChildren(...groups.map((g) => {
+    const fs = document.createElement("fieldset");
+    fs.className = "opts";
+    const lg = document.createElement("legend");
+    lg.textContent = g.name;
+    fs.append(lg);
+    for (const s of g.items) fs.append(settingRow(s, values[s.key]));
+    return fs;
+  }));
+}
+
+function settingRow(s, value) {
+  const wrap = document.createElement("label");
+  wrap.className = `set-row set-${s.type}`;
+
+  const name = document.createElement("span");
+  name.className = "set-name";
+  name.textContent = s.label;
+  if (s.inert) name.append(Object.assign(document.createElement("span"),
+    { className: "set-inert", textContent: "not wired" }));
+  if (s.help) {
+    const h = document.createElement("span");
+    h.className = "set-help";
+    h.textContent = s.help;
+    name.append(h);
+  }
+
+  let input;
+  if (s.type === "choice") {
+    input = document.createElement("select");
+    input.replaceChildren(...s.choices.map((c) => {
+      const o = document.createElement("option");
+      o.value = c.value; o.textContent = c.label;
+      return o;
+    }));
+    input.value = value ?? s.default;
+  } else if (s.type === "bool") {
+    input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = !!value;
+  } else {
+    input = document.createElement("input");
+    input.type = s.type === "number" ? "number" : "text";
+    if (s.type === "number") input.step = "any";
+    input.value = value ?? s.default ?? "";
+  }
+  input.dataset.setKey = s.key;
+  input.dataset.setType = s.type;
+
+  // Checkbox reads left-to-right; everything else is label-then-control.
+  if (s.type === "bool") wrap.append(input, name);
+  else wrap.append(name, input);
+  return wrap;
+}
+
+$("settings-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {};
+  for (const el of $("settings-body").querySelectorAll("[data-set-key]")) {
+    payload[el.dataset.setKey] =
+      el.dataset.setType === "bool" ? el.checked
+      : el.dataset.setType === "number" ? (el.value === "" ? null : Number(el.value))
+      : el.value;
+  }
+  try {
+    const res = await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
+    $("settings-status").textContent =
+      res.changed.length ? `Applied ${res.changed.length} change${res.changed.length > 1 ? "s" : ""}.`
+                         : "No changes.";
+    await paintFetcherStatus();
+    // Markets may have been toggled, which changes what "All markets" means.
+    SITES = await api("/api/sites").catch(() => SITES);
+  } catch (err) {
+    $("settings-err").textContent = err.message;
+    $("settings-err").hidden = false;
+  }
+});
+
+// Show what the transport is actually doing, so the fingerprint settings are
+// verifiable rather than taken on faith.
+async function paintFetcherStatus() {
+  const h = await api("/api/health").catch(() => null);
+  if (!h) return;
+  const tls = h.http.impersonates_tls;
+  const rows = Object.entries(h.fetchers || {})
+    .map(([k, v]) => `${k}: ${v.tls_target} · ${v.min_interval}–${v.max_interval ?? "fixed"}s`)
+    .join(" · ");
+  $("settings-status").innerHTML =
+    `<span class="${tls ? "ok" : "bad"}">${tls ? "✓" : "✗"} TLS/HTTP2 impersonation via ${esc(h.http.backend)}</span>` +
+    (rows ? `<br><span class="dim">${esc(rows)}</span>` : "");
+}

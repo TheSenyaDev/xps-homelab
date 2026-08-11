@@ -213,3 +213,19 @@ button:hover { border-color: var(--accent); color: #fff; }
 .opt-block-head { color: var(--accent); font-size: calc(9px * var(--fs)); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 5px; }
 .chip.site { color: var(--accent); border-color: var(--accent); }
 .warn { color: var(--warn); font-size: calc(10px * var(--fs)); margin-top: 3px; }
+
+/* ---- settings ---- */
+.gear { padding: 4px 8px; font-size: calc(14px * var(--fs)); line-height: 1; }
+.dlg-wide { width: min(620px, 96vw); max-height: 88vh; }
+.dlg-wide form { overflow: auto; }
+.dlg-note { margin: 0 0 4px; font-size: calc(10px * var(--fs)); color: var(--muted); line-height: 1.5; }
+.dlg-note .ok { color: var(--drop); }
+.dlg-note .bad { color: var(--err); }
+.dlg-note .dim { color: var(--muted); }
+.set-row { display: grid; grid-template-columns: 1fr 190px; gap: 10px; align-items: start; padding: 6px 0; border-top: 1px solid var(--border-soft); }
+.set-row:first-of-type { border-top: none; }
+.set-bool { grid-template-columns: 18px 1fr; align-items: start; cursor: pointer; }
+.set-name { color: var(--text); font-size: calc(11px * var(--fs)); display: flex; flex-direction: column; gap: 2px; }
+.set-help { color: var(--muted); font-size: calc(9px * var(--fs)); line-height: 1.45; font-weight: 400; }
+.set-inert { color: var(--warn); font-size: calc(8px * var(--fs)); letter-spacing: .06em; }
+.set-row input[type="checkbox"] { accent-color: var(--accent); margin-top: 2px; }

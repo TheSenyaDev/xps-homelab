@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
+from . import settings
 from . import sites as site_registry
 
 log = logging.getLogger(__name__)
@@ -40,13 +41,18 @@ def resolve(requested):
     if isinstance(requested, str):
         requested = [requested]
     if ALL in requested:
-        return site_registry.keys()
+        # "all" means every *enabled* market, so a site switched off in Settings
+        # is skipped rather than repeatedly failing.
+        return settings.enabled_sites(site_registry.keys())
     out = []
     for key in requested:
         site_registry.get(key)          # raises UnknownSite
         if key not in out:
             out.append(key)
-    return out
+    # An explicitly named market is still dropped if disabled, but only when
+    # something else remains — otherwise the request would silently do nothing.
+    kept = settings.enabled_sites(out)
+    return kept or out
 
 
 def search_many(keys, opts, params_by_site=None, timeout=120):
@@ -72,7 +78,8 @@ def search_many(keys, opts, params_by_site=None, timeout=120):
     if not keys:
         return [], []
 
-    with ThreadPoolExecutor(max_workers=min(len(keys), 8)) as pool:
+    workers = min(len(keys), 8) if settings.get("search.parallel", True) else 1
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(run, k): k for k in keys}
         for future, key in futures.items():
             label = site_registry.get(key).label

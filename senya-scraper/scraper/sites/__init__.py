@@ -39,6 +39,12 @@ def keys():
     return list(_INSTANCES)
 
 
+def rebuild_fetchers():
+    """Called after settings change; see Scraper.rebuild_fetcher."""
+    for scraper in _INSTANCES.values():
+        scraper.rebuild_fetcher()
+
+
 def get(key):
     scraper = _INSTANCES.get(key)
     if scraper is None:
@@ -48,4 +54,4 @@ def get(key):
 
 
 __all__ = ["Category", "Listing", "Scraper", "ScrapeError", "SearchOptions",
-           "UnknownSite", "available", "get", "keys"]
+           "UnknownSite", "available", "get", "keys", "rebuild_fetchers"]

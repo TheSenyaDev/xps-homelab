@@ -10,6 +10,7 @@
 <body>
   <header class="bar">
     <span class="brand">SENYA/SCRAPER</span>
+    <button type="button" id="open-settings" class="ghost gear" title="Settings">⚙</button>
     <form id="search-form" class="search">
       <input id="q" type="search" placeholder="what are you looking for?" autocomplete="off" />
       <select id="site" aria-label="Site"></select>
@@ -113,6 +114,21 @@
       <menu class="dlg-actions">
         <button type="button" id="dlg-cancel" class="ghost">CANCEL</button>
         <button type="submit" id="dlg-save" class="go">SAVE</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Settings. Every control is rendered from /api/settings' schema, so adding
+       a setting server-side needs no change here. -->
+  <dialog id="settings-dlg" class="dlg dlg-wide">
+    <form id="settings-form" method="dialog">
+      <h2 class="head">SETTINGS</h2>
+      <p class="dlg-note" id="settings-status"></p>
+      <div id="settings-body"></div>
+      <p id="settings-err" class="dlg-err" hidden></p>
+      <menu class="dlg-actions">
+        <button type="button" id="settings-close" class="ghost">CLOSE</button>
+        <button type="submit" class="go">SAVE</button>
       </menu>
     </form>
   </dialog>
