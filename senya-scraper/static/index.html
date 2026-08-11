@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SenyaScraper</title>
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="/style.css" />
+  <!-- Split by area so a change has one obvious home. Four small files over a
+       LAN costs nothing; one 300-line file costs every edit. -->
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/sidebar.css" />
+  <link rel="stylesheet" href="/css/results.css" />
+  <link rel="stylesheet" href="/css/dialog.css" />
 </head>
 <body>
   <header class="bar">
@@ -59,7 +64,7 @@
     </section>
   </main>
 
-  <!-- Create/edit a saved search. One form for both: `editing` in app.js decides
+  <!-- Create/edit a saved search. One form for both: `editing` in search-dialog.js decides
        whether SAVE posts a new profile or patches an existing one. -->
   <dialog id="dlg" class="dlg">
     <form id="dlg-form" method="dialog">
@@ -174,6 +179,6 @@
     </form>
   </dialog>
 
-  <script src="/app.js" type="module"></script>
+  <script src="/js/main.js" type="module"></script>
 </body>
 </html>

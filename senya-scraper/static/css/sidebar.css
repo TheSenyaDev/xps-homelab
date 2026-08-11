@@ -1,0 +1,11 @@
+/* Saved-search sidebar. */
+
+/* ---- saved list ---- */
+
+
+.add { border: 1px solid var(--border); background: none; color: var(--dim); font-size: calc(9px * var(--fs)); padding: 2px 5px; float: right; letter-spacing: .06em; }
+.add:hover { color: var(--accent); border-color: var(--accent); }
+.saved .crit { display: block; color: var(--muted); font-size: calc(9px * var(--fs)); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved .acts { display: flex; gap: 2px; }
+.saved .edit { border: none; background: none; color: var(--muted); padding: 0 2px; }
+.saved .edit:hover { color: var(--accent); }

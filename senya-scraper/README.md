@@ -197,8 +197,21 @@ scraper/
   sites/                base.py + one file per marketplace (self-registering)
   notify/               base.py + one file per channel (self-registering)
   http/                 profiles.py · backends.py · fetcher.py
-static/                 vanilla JS, no build step
+static/
+  index.html
+  css/                  base · sidebar · results · dialog
+  js/
+    main.js             entry: load sites, init components, wire them
+    core/               dom · api · bus · state · format · modal
+    components/         search-bar · results · item-panel · saved-list
+                        search-dialog · settings · site-options
 ```
+
+No build step — plain ES modules served as-is. Components never import each
+other in a cycle: the ones that must talk across (a card opening the item
+panel, the panel blocking a seller, blocking re-running the search) go through
+`core/bus.js`, which keeps the dependency graph a tree. `core/` is leaf-only —
+nothing in it imports a component.
 
 | To add | Do this | Wiring |
 |---|---|---|

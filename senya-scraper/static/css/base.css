@@ -1,0 +1,112 @@
+/* Tokens, reset, shell, top bar and layout. Everything a page needs
+   before any component renders. */
+
+/* SenyaScraper — console-styled, matching SenyaTasks: monospace, square
+   corners, thin bright borders on a dark ground. Density over decoration; the
+   grid is meant to be scanned, so price and the NEW/DROP marks are the only
+   things allowed to be loud. */
+
+:root {
+  --bg: #101216;
+  --panel: #15171c;
+  --panel-2: #0f1114;
+  --border: #3a3f4a;
+  --border-soft: #2a2d34;
+  --text: #d6d9de;
+  --dim: #9aa0ab;
+  --muted: #6b7280;
+  --accent: #8b8ff7;
+  --new: #5bd0e0;
+  --drop: #6ee7a8;
+  --warn: #f0a03a;
+  --err: #f0616a;
+  --fs: 1;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: calc(13px * var(--fs));
+}
+
+/* ---- top bar ---- */
+
+
+.bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  background: var(--panel-2);
+  border-bottom: 2px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-weight: 700; letter-spacing: .1em; color: var(--accent);
+  white-space: nowrap;
+}
+
+.search { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+
+input, select, button {
+  font: inherit;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 6px 8px;
+}
+
+input:focus, select:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+#q { flex: 1; min-width: 200px; }
+.num { width: 78px; }
+
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); color: #fff; }
+
+.go { background: var(--accent); color: #0b0d12; font-weight: 700; letter-spacing: .06em; border-color: var(--accent); }
+.go:hover { color: #0b0d12; filter: brightness(1.1); }
+.ghost { color: var(--dim); }
+
+/* ---- layout ---- */
+
+
+.wrap { display: flex; align-items: flex-start; gap: 0; }
+
+.side {
+  width: 230px; flex: 0 0 230px;
+  border-right: 2px solid var(--border);
+  min-height: calc(100vh - 48px);
+  padding: 10px;
+}
+
+.head {
+  margin: 0 0 8px; font-size: calc(10px * var(--fs));
+  letter-spacing: .12em; color: var(--muted); font-weight: 700;
+}
+
+.saved { list-style: none; margin: 0; padding: 0; }
+
+.saved li {
+  border: 1px solid var(--border-soft);
+  padding: 6px 7px; margin-bottom: 6px;
+  cursor: pointer;
+}
+.saved li:hover { border-color: var(--accent); }
+.saved .nm { display: block; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved .meta { display: flex; justify-content: space-between; gap: 6px; color: var(--muted); font-size: calc(10px * var(--fs)); margin-top: 3px; }
+.saved .del { border: none; background: none; color: var(--muted); padding: 0 2px; }
+.saved .del:hover { color: var(--err); }
+
+.hint { color: var(--muted); font-size: calc(10px * var(--fs)); line-height: 1.5; margin-top: 14px; }
+.hint b { color: var(--dim); }
+
+.results { flex: 1; padding: 10px; min-width: 0; }
+
+.status { color: var(--dim); margin-bottom: 8px; min-height: 18px; font-size: calc(11px * var(--fs)); }
+.status.err { color: var(--err); }
+.status .k { color: var(--accent); }

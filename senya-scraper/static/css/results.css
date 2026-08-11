@@ -1,0 +1,65 @@
+/* Result grid and the bar above it. */
+
+/* ---- result grid ---- */
+
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+
+.card {
+  border: 1px solid var(--border-soft);
+  background: var(--panel);
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+.card:hover { border-color: var(--border); }
+
+.card .thumb {
+  height: 130px; background: var(--panel-2);
+  display: grid; place-items: center; overflow: hidden;
+  border-bottom: 1px solid var(--border-soft);
+}
+.card .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.card .thumb .none { color: var(--muted); font-size: calc(10px * var(--fs)); }
+
+.card .body { padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+
+.card .title {
+  color: var(--text); text-decoration: none; line-height: 1.35;
+  font-size: calc(12px * var(--fs));
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card .title:hover { color: var(--accent); }
+
+.card .price { font-size: calc(15px * var(--fs)); font-weight: 700; }
+.card .was { color: var(--muted); text-decoration: line-through; font-weight: 400; font-size: calc(11px * var(--fs)); margin-left: 5px; }
+
+.row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-top: auto; }
+
+.chip {
+  font-size: calc(9px * var(--fs)); letter-spacing: .05em;
+  border: 1px solid var(--border-soft); color: var(--dim);
+  padding: 1px 4px; text-transform: uppercase;
+}
+.chip.cond { color: var(--dim); }
+.chip.ship { color: var(--muted); text-transform: none; letter-spacing: 0; }
+.chip.new  { color: var(--new); border-color: var(--new); }
+.chip.drop { color: var(--drop); border-color: var(--drop); }
+.chip.offer { color: var(--warn); border-color: var(--border-soft); }
+
+.seller { color: var(--muted); font-size: calc(9px * var(--fs)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .wrap { flex-direction: column; }
+  .side { width: auto; flex: none; border-right: none; border-bottom: 2px solid var(--border); min-height: 0; width: 100%; }
+}
+
+/* ---- results bar ---- */
+
+.results-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.toggle { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: calc(10px * var(--fs)); cursor: pointer; white-space: nowrap; }
+.toggle input { accent-color: var(--accent); }

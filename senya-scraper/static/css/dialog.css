@@ -1,169 +1,8 @@
-/* SenyaScraper — console-styled, matching SenyaTasks: monospace, square
-   corners, thin bright borders on a dark ground. Density over decoration; the
-   grid is meant to be scanned, so price and the NEW/DROP marks are the only
-   things allowed to be loud. */
-
-:root {
-  --bg: #101216;
-  --panel: #15171c;
-  --panel-2: #0f1114;
-  --border: #3a3f4a;
-  --border-soft: #2a2d34;
-  --text: #d6d9de;
-  --dim: #9aa0ab;
-  --muted: #6b7280;
-  --accent: #8b8ff7;
-  --new: #5bd0e0;
-  --drop: #6ee7a8;
-  --warn: #f0a03a;
-  --err: #f0616a;
-  --fs: 1;
-}
-
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: calc(13px * var(--fs));
-}
-
-/* ---- top bar ---- */
-
-.bar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px;
-  background: var(--panel-2);
-  border-bottom: 2px solid var(--border);
-  flex-wrap: wrap;
-}
-
-.brand {
-  font-weight: 700; letter-spacing: .1em; color: var(--accent);
-  white-space: nowrap;
-}
-
-.search { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
-
-input, select, button {
-  font: inherit;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 0;
-  padding: 6px 8px;
-}
-
-input:focus, select:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
-
-#q { flex: 1; min-width: 200px; }
-.num { width: 78px; }
-
-button { cursor: pointer; }
-button:hover { border-color: var(--accent); color: #fff; }
-
-.go { background: var(--accent); color: #0b0d12; font-weight: 700; letter-spacing: .06em; border-color: var(--accent); }
-.go:hover { color: #0b0d12; filter: brightness(1.1); }
-.ghost { color: var(--dim); }
-
-/* ---- layout ---- */
-
-.wrap { display: flex; align-items: flex-start; gap: 0; }
-
-.side {
-  width: 230px; flex: 0 0 230px;
-  border-right: 2px solid var(--border);
-  min-height: calc(100vh - 48px);
-  padding: 10px;
-}
-
-.head {
-  margin: 0 0 8px; font-size: calc(10px * var(--fs));
-  letter-spacing: .12em; color: var(--muted); font-weight: 700;
-}
-
-.saved { list-style: none; margin: 0; padding: 0; }
-
-.saved li {
-  border: 1px solid var(--border-soft);
-  padding: 6px 7px; margin-bottom: 6px;
-  cursor: pointer;
-}
-.saved li:hover { border-color: var(--accent); }
-.saved .nm { display: block; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.saved .meta { display: flex; justify-content: space-between; gap: 6px; color: var(--muted); font-size: calc(10px * var(--fs)); margin-top: 3px; }
-.saved .del { border: none; background: none; color: var(--muted); padding: 0 2px; }
-.saved .del:hover { color: var(--err); }
-
-.hint { color: var(--muted); font-size: calc(10px * var(--fs)); line-height: 1.5; margin-top: 14px; }
-.hint b { color: var(--dim); }
-
-.results { flex: 1; padding: 10px; min-width: 0; }
-
-.status { color: var(--dim); margin-bottom: 8px; min-height: 18px; font-size: calc(11px * var(--fs)); }
-.status.err { color: var(--err); }
-.status .k { color: var(--accent); }
-
-/* ---- result grid ---- */
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 8px;
-}
-
-.card {
-  border: 1px solid var(--border-soft);
-  background: var(--panel);
-  display: flex; flex-direction: column;
-  min-width: 0;
-}
-.card:hover { border-color: var(--border); }
-
-.card .thumb {
-  height: 130px; background: var(--panel-2);
-  display: grid; place-items: center; overflow: hidden;
-  border-bottom: 1px solid var(--border-soft);
-}
-.card .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.card .thumb .none { color: var(--muted); font-size: calc(10px * var(--fs)); }
-
-.card .body { padding: 7px 8px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
-
-.card .title {
-  color: var(--text); text-decoration: none; line-height: 1.35;
-  font-size: calc(12px * var(--fs));
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.card .title:hover { color: var(--accent); }
-
-.card .price { font-size: calc(15px * var(--fs)); font-weight: 700; }
-.card .was { color: var(--muted); text-decoration: line-through; font-weight: 400; font-size: calc(11px * var(--fs)); margin-left: 5px; }
-
-.row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-top: auto; }
-
-.chip {
-  font-size: calc(9px * var(--fs)); letter-spacing: .05em;
-  border: 1px solid var(--border-soft); color: var(--dim);
-  padding: 1px 4px; text-transform: uppercase;
-}
-.chip.cond { color: var(--dim); }
-.chip.ship { color: var(--muted); text-transform: none; letter-spacing: 0; }
-.chip.new  { color: var(--new); border-color: var(--new); }
-.chip.drop { color: var(--drop); border-color: var(--drop); }
-.chip.offer { color: var(--warn); border-color: var(--border-soft); }
-
-.seller { color: var(--muted); font-size: calc(9px * var(--fs)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-@media (max-width: 760px) {
-  .wrap { flex-direction: column; }
-  .side { width: auto; flex: none; border-right: none; border-bottom: 2px solid var(--border); min-height: 0; width: 100%; }
-}
+/* Dialogs: shared chrome, then the profile form, settings and item
+   panel. Also the option controls, which both the bar and the form use. */
 
 /* ---- site-specific options (rendered from /api/sites) ---- */
+
 
 .site-opts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; width: 100%; padding-top: 8px; }
 .site-opts:not([hidden]) { border-top: 1px solid var(--border-soft); margin-top: 8px; }
@@ -173,16 +12,8 @@ button:hover { border-color: var(--accent); color: #fff; }
 .opt-bool { cursor: pointer; }
 .opt-bool:hover { color: var(--text); }
 
-/* ---- saved list ---- */
-
-.add { border: 1px solid var(--border); background: none; color: var(--dim); font-size: calc(9px * var(--fs)); padding: 2px 5px; float: right; letter-spacing: .06em; }
-.add:hover { color: var(--accent); border-color: var(--accent); }
-.saved .crit { display: block; color: var(--muted); font-size: calc(9px * var(--fs)); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.saved .acts { display: flex; gap: 2px; }
-.saved .edit { border: none; background: none; color: var(--muted); padding: 0 2px; }
-.saved .edit:hover { color: var(--accent); }
-
 /* ---- create/edit dialog ---- */
+
 
 .dlg { border: 2px solid var(--border); background: var(--panel); color: var(--text); padding: 0; width: min(460px, 94vw); }
 /* Dim *and* blur what is behind, so the panel reads as the only live thing on
@@ -221,6 +52,7 @@ body.modal-open .wrap { user-select: none; }
 .block:hover { color: var(--err); }
 
 /* ---- multi-market ---- */
+
 .sites-pick #f-sites { display: flex; flex-wrap: wrap; gap: 10px; }
 .opt-block { border-top: 1px solid var(--border-soft); padding-top: 7px; margin-top: 7px; }
 .opt-block:first-child { border-top: none; padding-top: 0; margin-top: 0; }
@@ -229,6 +61,7 @@ body.modal-open .wrap { user-select: none; }
 .warn { color: var(--warn); font-size: calc(10px * var(--fs)); margin-top: 3px; }
 
 /* ---- settings ---- */
+
 .gear { padding: 4px 8px; font-size: calc(14px * var(--fs)); line-height: 1; }
 .dlg-wide { width: min(620px, 96vw); max-height: 88vh; }
 .dlg-wide form { overflow: auto; }
@@ -244,12 +77,8 @@ body.modal-open .wrap { user-select: none; }
 .set-inert { color: var(--warn); font-size: calc(8px * var(--fs)); letter-spacing: .06em; }
 .set-row input[type="checkbox"] { accent-color: var(--accent); margin-top: 2px; }
 
-/* ---- results bar ---- */
-.results-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.toggle { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: calc(10px * var(--fs)); cursor: pointer; white-space: nowrap; }
-.toggle input { accent-color: var(--accent); }
-
 /* ---- item panel ---- */
+
 .card { cursor: pointer; }
 .card.is-blocked { opacity: .5; }
 .card.is-blocked:hover { opacity: 1; }
