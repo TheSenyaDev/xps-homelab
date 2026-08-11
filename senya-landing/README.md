@@ -87,6 +87,25 @@ Markup and behaviour stay separate: components carry no scripts, and each
 At runtime (saved per-browser, no code needed): open the **⚙ Customize** panel to
 set the size, **show/hide** any section and **drag to reorder** them.
 
+### Arranging widgets
+
+The dashboard is a **12-column grid**, chosen so the useful fractions land on a
+column boundary: halves at 6, thirds at 4, quarters at 3.
+
+- **Move** — drag a widget by its heading. A placeholder showing its real
+  footprint occupies the target slot during the drag, so you pick a position you
+  can see rather than guessing where it lands on release.
+- **Resize** — drag the right edge, bottom edge or corner, like a window. Width
+  snaps to columns and height to rows, so a free drag still produces a layout
+  that lines up.
+- **Auto-balance** — after a move, the row the widget landed in shares its width
+  evenly. Drop a third widget into a row of two and all three become thirds
+  (4+4+4); a remainder goes to the leftmost, so five in a row is 3+3+2+2+2 and
+  the row still fills.
+
+Size is also settable numerically in Customize, per widget, alongside whatever
+settings that widget declares. Everything is remembered per browser.
+
 Size is two independent knobs (see [`js/ui-scale.js`](js/ui-scale.js)):
 
 - **Font** — type only (85–140%). Every `font-size` in the stylesheets is
