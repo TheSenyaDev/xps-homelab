@@ -32,6 +32,11 @@ async function api(url, opts = {}) {
 
 // ----- rendering -----
 
+// Set while a saved search's results are displayed, so the ⊘ knows which
+// search to block the seller for. Null during a live search, where there is no
+// profile to store a blocklist on.
+let currentSearch = null;
+
 function card(item, marks = {}) {
   const el = document.createElement("article");
   el.className = "card";
@@ -54,9 +59,39 @@ function card(item, marks = {}) {
       <a class="title" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
       <div class="price">${esc(price)}${was}</div>
       <div class="row">${chips.join("")}</div>
-      ${item.seller ? `<div class="seller">${esc(item.seller)}</div>` : ""}
+      ${sellerRow(item)}
     </div>`;
+  const blockBtn = el.querySelector(".block");
+  if (blockBtn) {
+    blockBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await blockSeller(item.seller_name);
+    });
+  }
   return el;
+}
+
+function sellerRow(item) {
+  if (!item.seller) return "";
+  // Only offer the block when there is a saved search to remember it on.
+  const btn = (currentSearch && item.seller_name)
+    ? `<button class="block" title="Hide ${esc(item.seller_name)} from this search">⊘</button>`
+    : "";
+  return `<div class="seller">${esc(item.seller)}${btn}</div>`;
+}
+
+async function blockSeller(name) {
+  if (!currentSearch || !name) return;
+  try {
+    await api(`/api/searches/${currentSearch.id}/block`, {
+      method: "POST", body: JSON.stringify({ seller: name }),
+    });
+    setStatus(`Blocked <span class="k">${esc(name)}</span> for this search — re-running…`);
+    runSaved(currentSearch);
+  } catch (err) {
+    setStatus(esc(err.message), true);
+  }
 }
 
 function esc(s) {
@@ -185,6 +220,7 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const payload = formPayload();
   if (!payload.query) return;
+  currentSearch = null;
   grid.replaceChildren();
   setStatus("searching…");
   try {
@@ -226,6 +262,7 @@ function openDialog(row = null, prefill = null) {
   $("f-min").value = src.min_price ?? "";
   $("f-max").value = src.max_price ?? "";
   $("f-notify").checked = row ? !!row.notify : true;
+  $("f-blocked").value = row ? (safeList(row.blocked_sellers).join("\n")) : "";
 
   syncDialogSite(src.category || "", prefill?.params);
   dlg.showModal();
@@ -261,9 +298,14 @@ $("f-site").addEventListener("change", () => {
 });
 let lastDialogSite = "";
 
-function safeJson(s) {
-  try { const v = JSON.parse(s || "{}"); return typeof v === "object" && v ? v : {}; }
-  catch { return {}; }
+function safeList(s) {
+  const v = safeJson(s, []);
+  return Array.isArray(v) ? v : [];
+}
+
+function safeJson(s, fallback = {}) {
+  try { const v = JSON.parse(s || "null"); return v ?? fallback; }
+  catch { return fallback; }
 }
 
 $("new").addEventListener("click", () => openDialog());
@@ -285,6 +327,7 @@ $("dlg-form").addEventListener("submit", async (e) => {
     max_price: $("f-max").value || null,
     notify: $("f-notify").checked,
     params: readOptions($("f-opts")),
+    blocked_sellers: $("f-blocked").value,
   };
   try {
     if (editing) {
@@ -339,6 +382,7 @@ async function loadSaved() {
 }
 
 async function runSaved(s) {
+  currentSearch = s;
   grid.replaceChildren();
   setStatus(`running “${esc(s.name)}”…`);
   try {
@@ -348,6 +392,7 @@ async function runSaved(s) {
     const bits = [`<span class="k">${data.total}</span> listings`];
     if (newUids.size) bits.push(`<span class="k">${newUids.size}</span> new`);
     if (drops.size) bits.push(`<span class="k">${drops.size}</span> price drop${drops.size > 1 ? "s" : ""}`);
+    if (data.hidden) bits.push(`<span class="k">${data.hidden}</span> hidden (blocked)`);
     setStatus(bits.join(" · "));
     // New and discounted first — the whole reason for re-running.
     const rank = (i) => (newUids.has(i.uid) ? 0 : drops.has(i.uid) ? 1 : 2);

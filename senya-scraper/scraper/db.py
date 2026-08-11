@@ -68,8 +68,15 @@ M1 = """
 ALTER TABLE searches ADD COLUMN params TEXT NOT NULL DEFAULT '{}';
 """
 
+# Sellers to hide from this search's results, as a JSON array of account names.
+# Per search rather than global on purpose: a seller who floods one query with
+# junk may be exactly who you want for another.
+M2 = """
+ALTER TABLE searches ADD COLUMN blocked_sellers TEXT NOT NULL DEFAULT '[]';
+"""
+
 #: Append only. Never edit an entry that has shipped.
-MIGRATIONS: list[str] = [M1]
+MIGRATIONS: list[str] = [M1, M2]
 
 
 def db_path():

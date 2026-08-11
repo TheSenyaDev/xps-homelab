@@ -96,6 +96,20 @@ Values are stored per site, as JSON keyed by site key:
 So a saved profile pointed at eBay keeps its Kijiji settings if you switch it
 over and back, and each site is configured completely independently.
 
+### Blocked sellers
+
+Each saved search keeps its own blocklist of seller accounts — per search, not
+global, because a seller who floods one query with junk may be exactly who you
+want for another. Set it in the edit dialog (one per line or comma-separated),
+or click the **⊘** next to a seller on any result card.
+
+Filtering happens locally rather than by asking the marketplace to exclude them:
+not every site supports it, and doing it here means one behaviour everywhere. A
+run reports how many it hid (`hidden` in the response) so results never just
+silently come up short. Blocked listings are dropped *before* anything is
+stored, so unblocking someone later does not announce their whole back catalogue
+as new.
+
 ### Adding a notification channel
 
 Same shape. Configured channels are wired to the event bus at startup; an
@@ -138,7 +152,8 @@ storage, **append** a string to `db.MIGRATIONS` — never edit a shipped one;
 | `GET`/`POST` | `/api/searches` | list / create saved searches |
 | `GET`/`PATCH` | `/api/searches/<id>` | read / edit one profile (partial payload) |
 | `DELETE` | `/api/searches/<id>` | |
-| `POST` | `/api/searches/<id>/run` | re-run + diff → `{new, price_drops, results}` |
+| `POST` | `/api/searches/<id>/run` | re-run + diff → `{new, price_drops, hidden, results}` |
+| `POST` | `/api/searches/<id>/block` | `{seller}` to hide, `{seller, unblock: true}` to restore |
 | `GET` | `/api/searches/<id>/results` | stored listings (`?include_gone=1`) |
 
 Search body: `{query, site, category, sort, condition, min_price, max_price, params}`.

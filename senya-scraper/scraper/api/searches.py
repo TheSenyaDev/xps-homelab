@@ -37,6 +37,51 @@ def _params_map(row):
         return {}
 
 
+def _blocked(row):
+    """The search's seller blocklist, lowercased for matching."""
+    try:
+        raw = json.loads(row["blocked_sellers"] or "[]")
+    except (ValueError, TypeError, IndexError, KeyError):
+        return set()
+    if not isinstance(raw, list):
+        return set()
+    return {str(s).strip().lower() for s in raw if str(s).strip()}
+
+
+def parse_blocklist(value):
+    """Accept a JSON array or a free-typed string (commas/newlines), since the
+    dialog is a textarea and pasting a list should just work."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        parts = value.replace(",", "\n").split("\n")
+    elif isinstance(value, (list, tuple)):
+        parts = [str(v) for v in value]
+    else:
+        return []
+    seen, out = set(), []
+    for p in parts:
+        name = p.strip().lstrip("@")
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            out.append(name)
+    return out
+
+
+def apply_blocklist(items, blocked):
+    """Drop listings from blocked sellers.
+
+    Filtered here rather than by asking the site to exclude them: not every
+    marketplace supports it, and doing it locally means one behaviour for all of
+    them. Returns (kept, dropped_count) so the UI can say what it hid instead of
+    the results silently coming up short.
+    """
+    if not blocked:
+        return items, 0
+    kept = [i for i in items if (i.seller_name or "").lower() not in blocked]
+    return kept, len(items) - len(kept)
+
+
 def _opts_for(row):
     """SearchOptions from a stored row, carrying only that site's own params."""
     return sites.SearchOptions.from_dict({
@@ -104,8 +149,15 @@ def _fields_from(body, defaults=None):
         # are dropped rather than stored and later smuggled into a URL.
         stored[site] = sites.get(site).clean_params(body.get("params") or {})
 
+    blocked = parse_blocklist(body.get("blocked_sellers"))
+    if blocked is None:                       # not mentioned → leave as-is
+        blocked_json = d.get("blocked_sellers") or "[]"
+    else:
+        blocked_json = json.dumps(blocked)
+
     notify = body.get("notify", d.get("notify", 1))
     return {
+        "blocked_sellers": blocked_json,
         "name": (body.get("name") or d.get("name") or opts.query).strip(),
         "site": site,
         "query": opts.query,
@@ -128,9 +180,9 @@ def create_search():
     cur = db.execute(
         """INSERT INTO searches
                (name, site, query, sort, condition, category, min_price, max_price,
-                notify, params)
+                notify, params, blocked_sellers)
            VALUES (:name,:site,:query,:sort,:condition,:category,:min_price,:max_price,
-                   :notify,:params)""",
+                   :notify,:params,:blocked_sellers)""",
         fields)
     db.commit()
     row = db.execute("SELECT * FROM searches WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -155,10 +207,43 @@ def update_search(sid):
     db.execute(
         """UPDATE searches SET name=:name, site=:site, query=:query, sort=:sort,
                condition=:condition, category=:category, min_price=:min_price,
-               max_price=:max_price, notify=:notify, params=:params
+               max_price=:max_price, notify=:notify, params=:params,
+               blocked_sellers=:blocked_sellers
            WHERE id=:id""", {**fields, "id": sid})
     db.commit()
     return jsonify(dict(db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()))
+
+
+@bp.post("/searches/<int:sid>/block")
+def block_seller(sid):
+    """Add (or with `unblock`, remove) one seller — what the ⊘ on a result card
+    calls, so blocking is one click rather than a trip through the edit form."""
+    body = request.get_json(silent=True) or {}
+    seller = (body.get("seller") or "").strip().lstrip("@")
+    if not seller:
+        return fail("No seller given.")
+    db = get_db()
+    row = db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()
+    if not row:
+        return fail("No such saved search.", 404)
+
+    current = parse_blocklist(row["blocked_sellers"] and json.loads(row["blocked_sellers"])) or []
+    lowered = {s.lower() for s in current}
+    if body.get("unblock"):
+        current = [s for s in current if s.lower() != seller.lower()]
+    elif seller.lower() not in lowered:
+        current.append(seller)
+
+    db.execute("UPDATE searches SET blocked_sellers=? WHERE id=?",
+               (json.dumps(current), sid))
+    # Hide anything already stored from that seller, so the list updates without
+    # waiting for the next run.
+    if not body.get("unblock"):
+        db.execute("""UPDATE listings SET gone=1
+                       WHERE search_id=? AND lower(substr(seller, 1, instr(seller || ' ', ' ') - 1))=?""",
+                   (sid, seller.lower()))
+    db.commit()
+    return jsonify({"blocked_sellers": current})
 
 
 @bp.get("/searches/<int:sid>")
@@ -191,6 +276,10 @@ def run_search(sid):
         # A blocked or restructured site is an upstream problem, not a bug here:
         # 502 says so, and the message tells the user what to do about it.
         return fail(str(e), 502)
+
+    # Filter before storing: a blocked seller should never enter the history,
+    # so unblocking later does not announce their whole back catalogue as new.
+    items, hidden = apply_blocklist(items, _blocked(row))
 
     stamp = now()
     seen, new_items, drops = set(), [], []
@@ -243,6 +332,7 @@ def run_search(sid):
     return jsonify({
         "ran_at": stamp,
         "total": len(items),
+        "hidden": hidden,
         "new": new_items,
         "price_drops": drops,
         "results": [i.as_dict() for i in items],

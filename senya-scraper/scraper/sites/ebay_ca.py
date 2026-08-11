@@ -211,6 +211,9 @@ class EbayCA(Scraper):
         shipping = next((r for r in rows if "shipping" in r.lower()
                          or "livraison" in r.lower()), "")
         seller = next((r for r in rows if "% positive" in r), "")
+        # "acme-parts 99.2% positive (431)" -> "acme-parts". eBay usernames never
+        # contain spaces, so the first token is the account.
+        seller_name = seller.split(" ", 1)[0] if seller else ""
 
         sub = card.select_one(".s-card__subtitle")
         condition = clean(sub.get_text(" ")) if sub else ""
@@ -238,6 +241,7 @@ class EbayCA(Scraper):
             condition=condition,
             shipping=shipping,
             seller=seller,
+            seller_name=seller_name,
             image=image,
             extra={"item_id": item_id,
                    "best_offer": any("best offer" in r.lower() for r in rows)},

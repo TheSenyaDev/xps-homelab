@@ -201,3 +201,7 @@ button:hover { border-color: var(--accent); color: #fff; }
 .opts .opt-choice { display: grid; grid-template-columns: 1fr 150px; align-items: center; }
 .dlg-err { color: var(--err); font-size: calc(11px * var(--fs)); margin: 0; }
 .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 4px 0 0; padding: 0; }
+.dlg textarea { font: inherit; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 8px; resize: vertical; }
+.seller { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.block { border: none; background: none; color: var(--muted); padding: 0 2px; cursor: pointer; line-height: 1; }
+.block:hover { color: var(--err); }

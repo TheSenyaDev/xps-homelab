@@ -66,7 +66,8 @@ class Listing:
     condition: str = ""
     shipping: str = ""
     location: str = ""
-    seller: str = ""
+    seller: str = ""        # as displayed, e.g. "acme-parts 99.2% positive (431)"
+    seller_name: str = ""   # just the account, for blocklist matching
     image: str = ""
     posted_at: str = ""                 # site's own timestamp, when it gives one
     extra: dict = field(default_factory=dict)
