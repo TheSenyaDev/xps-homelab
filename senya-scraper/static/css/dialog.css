@@ -118,3 +118,14 @@ body.modal-open .wrap { user-select: none; }
 .blocked-row { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
 .blocked-row:last-child { margin-bottom: 0; }
 .blocked-row > span { color: var(--accent); font-size: calc(9px * var(--fs)); letter-spacing: .08em; text-transform: uppercase; }
+
+/* ---- dialog tabs and the text view ---- */
+.dlg-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tabs { display: flex; gap: 4px; }
+.tab { font-size: calc(9px * var(--fs)); letter-spacing: .08em; padding: 3px 9px; color: var(--muted); background: none; }
+.tab.is-on { color: var(--accent); border-color: var(--accent); }
+.text-edit { width: 100%; font: inherit; font-size: calc(11px * var(--fs)); line-height: 1.5; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 8px; resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+.text-errors { margin: 8px 0 0; padding-left: 18px; color: var(--err); font-size: calc(10px * var(--fs)); line-height: 1.5; }
+.dlg-err.ok-msg { color: var(--drop); }
+.market-pane legend { display: flex; align-items: center; gap: 6px; }
+.legend-select { font-size: calc(10px * var(--fs)); padding: 1px 4px; }

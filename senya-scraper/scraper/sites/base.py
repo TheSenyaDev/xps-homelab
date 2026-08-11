@@ -113,6 +113,29 @@ class Option:
 
 
 @dataclass(frozen=True)
+class Sort:
+    """One ordering a site offers.
+
+    Sites do not agree on what orderings exist — eBay separates "Price" from
+    "Price + shipping" and has "ending soonest" for auctions; Facebook has
+    neither. So each adapter declares its own, and the UI shows exactly what
+    that market can do instead of a lowest-common-denominator list.
+
+    `kind` is the canonical meaning, used only when merging results from
+    several markets, where site-specific keys cannot be compared. One of:
+    best · newest · ending · price-asc · price-desc.
+    """
+
+    key: str            # site-specific id, e.g. "price-ship-asc"
+    label: str          # shown in the UI
+    value: str = ""     # the site's own code, e.g. eBay's _sop
+    kind: str = "best"  # canonical, for cross-market merging
+
+    def as_dict(self):
+        return {"key": self.key, "label": self.label, "kind": self.kind}
+
+
+@dataclass(frozen=True)
 class Category:
     """One entry in a site's category tree. Sites number their categories
     differently (eBay has _sacat ids, Kijiji has path slugs), so `value` is
@@ -450,6 +473,32 @@ class Scraper:
         """Filters unique to this site. Default: none."""
         return []
 
+    def sorts(self) -> list[Sort]:
+        """Orderings this site offers. Override to declare the real list."""
+        return [Sort("best", "Best match", "", "best")]
+
+    def sort_by_key(self, key):
+        """The declared Sort for `key`, falling back sensibly.
+
+        A saved search may carry a key from another market (its sorts are
+        per-site), so fall back to the first sort of the same canonical kind
+        before giving up on the default — "cheapest" should stay "cheapest"
+        across markets even when the exact option differs.
+        """
+        available = self.sorts()
+        by_key = {s.key: s for s in available}
+        if key in by_key:
+            return by_key[key]
+        wanted_kind = None
+        for s in available:
+            if s.key == key:
+                wanted_kind = s.kind
+        # `key` may be a canonical kind rather than a site key.
+        for s in available:
+            if s.kind == (wanted_kind or key):
+                return s
+        return available[0]
+
     def clean_params(self, params):
         """Keep only values this site declared, coerced to their type.
 
@@ -478,6 +527,7 @@ class Scraper:
             },
             "categories": [asdict(c) for c in self.categories()],
             "options": [o.as_dict() for o in self.options()],
+            "sorts": [s.as_dict() for s in self.sorts()],
         }
 
     # ---- fetching ----

@@ -39,20 +39,61 @@ docker compose up --build -d senya-scraper   # → http://localhost:8005
 independently. A combined search returns whatever came back plus a per-site
 `errors` list. Only when *every* market fails is it a 502.
 
-### 1.2 Per-site options
+### 1.2 Per-market criteria
 
-Anything one site can filter by and others cannot is declared by its adapter and
-rendered by the UI from that declaration.
+Markets disagree about what exists, so **sort, condition, category, options and
+the blocklist are all per market**, chosen with a dropdown in the profile
+dialog. Only the query and price range are shared, because they mean the same
+thing everywhere.
+
+**Sorts** are declared by each adapter, not drawn from a shared list:
+
+| eBay.ca | Facebook |
+|---|---|
+| Best match · Newly listed · Ending soonest | Best match · Newly listed |
+| **Cheapest + shipping** · Dearest + shipping | **Cheapest** · Dearest |
+| **Cheapest (item only)** · Dearest (item only) | — |
+
+eBay's split matters and is verified against live results: sorting by item price
+alone puts a $9.59 item with $117.99 shipping above a $73.85 one shipping for
+$23.95. Facebook has no shipping-inclusive ordering because its items are
+collected in person.
+
+Each `Sort` carries a canonical `kind` used only when merging markets, where
+site-specific keys cannot be compared. If the markets were told to sort
+differently there is no honest shared order, so the merge falls back to
+round-robin.
+
+**Options** unique to one market:
 
 - **eBay** — buying format (BIN / auction / best offer), item location, free
   shipping, returns accepted, sold & completed listings.
 - **Facebook** — city (required: Marketplace is city-scoped with no national
   search), radius, listed-within.
 
-Values are stored **keyed by site**, so a profile switched between markets keeps
-each one's configuration independently.
+All of it is stored **keyed by market**, so a profile switched between them
+keeps each one's configuration independently.
 
-### 1.3 Saved searches
+### 1.3 Saved searches as text
+
+The TEXT tab in the profile dialog shows the search as the JSON actually
+stored, editable and verifiable. A profile is nested — markets, then per-market
+criteria, options and blocklists — and a form is a slow way to review or
+bulk-edit one.
+
+**VERIFY** reports what is wrong and where, rather than refusing:
+
+```
+Not valid JSON: Expecting value: line 1 column 10 (char 9)
+Unknown market 'nope'. Available: ebay-ca, facebook.
+FB Marketplace has no sort 'ending'. Offered: best, price-asc, price-desc, newest.
+"params" mentions 'facebook', which is not in "sites".
+Unknown field 'colour'. Allowed: blocked_sellers, criteria, …
+```
+
+It runs the same validation the form does, so the two views cannot disagree.
+
+### 1.4 Saved searches
 
 - Named profiles with full criteria; create and edit from one dialog.
 - **Re-run diff** — new listings and price drops since last run.
@@ -63,20 +104,20 @@ each one's configuration independently.
 - A market that **errored** is skipped when flagging listings gone — they are
   absent because we could not ask, not because they sold.
 
-### 1.4 Item panel
+### 1.5 Item panel
 
 Clicking a result opens it. Shows everything the search returned — price and
 previous price, condition, shipping, seller, location, posted date, market —
 plus:
 
 - **Open on site** — the listing itself.
-- **Block this seller** — scoped to that listing's market (§1.5).
+- **Block this seller** — scoped to that listing's market (§1.6).
 - **Load full details** — fetches the listing's own page for the description,
   full photo set and item specifics. On demand, not automatic: it is one request
   per item, and doing it for 60 results would get the session throttled at once.
   eBay only; Facebook's detail pages need real JS.
 
-### 1.5 Seller blocklist
+### 1.6 Seller blocklist
 
 **Per search and per marketplace.** Per search because a seller who floods one
 query with junk may be exactly who you want for another. Per marketplace because
@@ -97,7 +138,7 @@ unblock button. Seeing what a block costs you is how you notice it was too broad
 Requires seller data: Facebook exposes none when logged out, so the field is
 hidden there until a session is supplied.
 
-### 1.6 Anti-detection (`scraper/http/`)
+### 1.7 Anti-detection (`scraper/http/`)
 
 Detection works in layers. The ones people skip are the ones that identify them.
 
@@ -126,7 +167,7 @@ Safari.
 Requests are paced per domain, globally across threads, so several tabs still
 add up to a civil rate.
 
-### 1.7 Signed-in sessions
+### 1.8 Signed-in sessions
 
 Optional. Reuses a session **you** established in a browser, supplied as cookies
 (Cookie header or exported JSON).
@@ -151,7 +192,7 @@ than an error, so the adapter checks the embedded viewer id (`"USER_ID":"0"`).
 
 **Treat the file as a password** — a session cookie grants full account access.
 
-### 1.8 Settings (⚙)
+### 1.9 Settings (⚙)
 
 Runtime settings, no restart. Every control is rendered from a server-side
 schema, so adding one never touches the frontend. Stored in
@@ -171,7 +212,7 @@ under `http.` rebuilds the fetchers immediately. The page shows live transport
 state, so "am I still fingerprintable as Python?" is verifiable rather than
 assumed.
 
-### 1.9 Notifications
+### 1.10 Notifications
 
 Event bus: a run emits `listings.new` / `listings.price_drop` and never learns
 who is listening. Handlers cannot fail the request that triggered them.
@@ -261,6 +302,8 @@ a control that silently does nothing.
 | `POST` | `/api/searches/<id>/block` | `{seller, site}`; add `unblock: true` to reverse |
 | `POST` | `/api/detail` | `{site, url}` → description, photos, specs |
 | `GET` | `/api/searches/<id>/results` | stored listings (`?include_gone=1`) |
+| `GET`/`PUT` | `/api/searches/<id>/text` | the profile as JSON |
+| `POST` | `/api/searches/text/validate` | check without saving → `{ok, errors}` |
 
 **Status codes.** `400` is your mistake (no query, unknown site). `502` means
 the marketplace refused or changed shape — a real occurrence, not a bug here.

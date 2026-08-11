@@ -38,7 +38,8 @@ from urllib.parse import urlencode
 from bs4 import BeautifulSoup
 
 from ..http import FetchPolicy
-from .base import Listing, Option, Scraper, ScrapeError, SearchOptions, parse_price
+from .base import (Listing, Option, Scraper, ScrapeError, SearchOptions, Sort,
+                   parse_price)
 
 # The field that marks a node as a listing. Everything else is read relative to
 # it, so if Facebook renames this one key the adapter fails loudly rather than
@@ -83,12 +84,14 @@ class FacebookMarketplace(Scraper):
         # blocklist becomes available exactly when it can actually work.
         return self.authenticated
 
-    SORTS = {
-        "best": None,                       # Facebook's default relevance
-        "newest": "creation_time_descend",
-        "price-asc": "price_ascend",
-        "price-desc": "price_descend",
-    }
+    # Facebook offers no shipping-inclusive ordering — items are collected in
+    # person — so there is no price+shipping variant to mirror eBay's.
+    SORTS = [
+        Sort("best", "Best match", "", "best"),
+        Sort("price-asc", "Cheapest", "price_ascend", "price-asc"),
+        Sort("price-desc", "Dearest", "price_descend", "price-desc"),
+        Sort("newest", "Newly listed", "creation_time_descend", "newest"),
+    ]
 
     # Marketplace is scoped to a city in the URL path, with no national search —
     # so unlike every other site here, location is not optional. A site-specific
@@ -108,6 +111,9 @@ class FacebookMarketplace(Scraper):
     def options(self):
         return self.OPTIONS
 
+    def sorts(self):
+        return self.SORTS
+
     # ----- request -----
 
     def build_url(self, opts: SearchOptions):
@@ -115,7 +121,7 @@ class FacebookMarketplace(Scraper):
         city = (p.get("location") or "toronto").strip().strip("/") or "toronto"
 
         params = {"query": opts.query}
-        sort = self.SORTS.get(opts.sort)
+        sort = self.sort_by_key(opts.sort).value
         if sort:
             params["sortBy"] = sort
         if opts.min_price is not None:

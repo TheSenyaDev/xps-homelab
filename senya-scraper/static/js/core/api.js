@@ -38,6 +38,11 @@ export const api = {
       post(`/api/searches/${id}/block`, { seller, site, unblock }),
   },
 
+  // Saved searches as text — the same profile, validated by the same code.
+  searchText: (id) => get(`/api/searches/${id}/text`),
+  saveText: (id, text) => put(`/api/searches/${id}/text`, { text }),
+  validateText: (text) => post("/api/searches/text/validate", { text }),
+
   settings: {
     read: () => get("/api/settings"),
     write: (values) => put("/api/settings", values),

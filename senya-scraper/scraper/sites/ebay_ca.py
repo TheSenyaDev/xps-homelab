@@ -27,7 +27,7 @@ from bs4 import BeautifulSoup
 
 from ..http import FetchPolicy
 from .base import (Category, Listing, Option, Scraper, ScrapeError, SearchOptions,
-                   clean, parse_price)
+                   Sort, clean, parse_price)
 
 # The numeric id in /itm/<id> — stable per item, unlike the full URL, which
 # carries per-search tracking params that change every run.
@@ -57,12 +57,19 @@ class EbayCA(Scraper):
     policy = FetchPolicy(profile="chrome-mac", min_interval=1.5, max_interval=6.0,
                          warmup_url="https://www.ebay.ca/")
 
-    SORTS = {                # eBay's _sop codes, named for the UI
-        "best": "12",
-        "newest": "10",
-        "price-asc": "15",   # price + shipping, lowest first
-        "price-desc": "16",
-    }
+    # eBay's _sop codes. It distinguishes item price from price+shipping, which
+    # matters: sorting by price alone puts a $9 item with $118 shipping above a
+    # $60 item posted free. Verified against live results — _sop=2 orders by item
+    # price with erratic shipping, _sop=15 by the total.
+    SORTS = [
+        Sort("best", "Best match", "12", "best"),
+        Sort("price-ship-asc", "Cheapest + shipping", "15", "price-asc"),
+        Sort("price-asc", "Cheapest (item only)", "2", "price-asc"),
+        Sort("price-ship-desc", "Dearest + shipping", "16", "price-desc"),
+        Sort("price-desc", "Dearest (item only)", "3", "price-desc"),
+        Sort("newest", "Newly listed", "10", "newest"),
+        Sort("ending", "Ending soonest", "1", "ending"),
+    ]
     CONDITIONS = {"any": None, "new": "1000", "used": "3000"}
 
     # A starter set of eBay's top-level category ids (_sacat). Extend freely —
@@ -114,13 +121,16 @@ class EbayCA(Scraper):
     def options(self):
         return self.OPTIONS
 
+    def sorts(self):
+        return self.SORTS
+
     # ----- request -----
 
     def build_url(self, opts: SearchOptions):
         params = {
             "_nkw": opts.query,
             "_ipg": "60",     # 60/page; eBay allows 240 but big pages draw attention
-            "_sop": self.SORTS.get(opts.sort, "12"),
+            "_sop": self.sort_by_key(opts.sort).value,
         }
         if opts.page > 1:
             params["_pgn"] = str(opts.page)

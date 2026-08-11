@@ -19,7 +19,7 @@ import importlib
 import pkgutil
 
 from .base import (Category, Listing, Option, Scraper, ScrapeError, SearchOptions,
-                   UnknownSite)
+                   Sort, UnknownSite)
 
 # Import every sibling module so its Scraper subclasses register themselves.
 for _mod in pkgutil.iter_modules(__path__):
@@ -54,4 +54,4 @@ def get(key):
 
 
 __all__ = ["Category", "Listing", "Scraper", "ScrapeError", "SearchOptions",
-           "UnknownSite", "available", "get", "keys", "rebuild_fetchers"]
+           "Sort", "UnknownSite", "available", "get", "keys", "rebuild_fetchers"]

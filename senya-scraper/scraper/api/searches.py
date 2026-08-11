@@ -145,9 +145,18 @@ def _sites_for(row):
         return [k for k in listed if k in sites.keys()] or [sites.keys()[0]]
 
 
+def _criteria_map(row):
+    """Per-market {sort, condition, category}, keyed by site."""
+    try:
+        data = json.loads(row["criteria"] or "{}")
+        return data if isinstance(data, dict) else {}
+    except (ValueError, TypeError, IndexError, KeyError):
+        return {}
+
+
 def _opts_for(row):
-    """SearchOptions from a stored row. Per-site params are applied by
-    aggregate.search_many, which hands each adapter only its own."""
+    """The shared baseline. Query and price range apply everywhere; sort,
+    condition and category are per-market and layered on by search_many."""
     return sites.SearchOptions.from_dict({
         "query": row["query"], "sort": row["sort"], "condition": row["condition"],
         "category": row["category"], "min_price": row["min_price"],
@@ -225,6 +234,27 @@ def _fields_from(body, defaults=None):
         elif len(keys) == 1:
             stored[site] = sites.get(site).clean_params(incoming)
 
+    # Per-market criteria, validated against what each market declares so a
+    # sort key from another site cannot be stored against this one.
+    criteria = {}
+    if defaults:
+        try:
+            criteria = json.loads(d.get("criteria") or "{}")
+        except (ValueError, TypeError):
+            criteria = {}
+        if not isinstance(criteria, dict):
+            criteria = {}
+    if "criteria" in body:
+        incoming = body.get("criteria") or {}
+        for key in keys:
+            c = (incoming.get(key) or {}) if isinstance(incoming, dict) else {}
+            scraper = sites.get(key)
+            criteria[key] = {
+                "sort": scraper.sort_by_key(c.get("sort") or opts.sort).key,
+                "condition": c.get("condition") or opts.condition,
+                "category": c.get("category") or "",
+            }
+
     blocked = parse_blocklist(body.get("blocked_sellers"), keys)
     if blocked is None:                       # not mentioned → leave as-is
         blocked_json = d.get("blocked_sellers") or "{}"
@@ -245,6 +275,7 @@ def _fields_from(body, defaults=None):
         "notify": 0 if notify in (False, 0, "0", "false") else 1,
         "params": json.dumps(stored),
         "sites": json.dumps(keys),
+        "criteria": json.dumps(criteria),
     }, None
 
 
@@ -257,9 +288,9 @@ def create_search():
     cur = db.execute(
         """INSERT INTO searches
                (name, site, query, sort, condition, category, min_price, max_price,
-                notify, params, blocked_sellers, sites)
+                notify, params, blocked_sellers, sites, criteria)
            VALUES (:name,:site,:query,:sort,:condition,:category,:min_price,:max_price,
-                   :notify,:params,:blocked_sellers,:sites)""",
+                   :notify,:params,:blocked_sellers,:sites,:criteria)""",
         fields)
     db.commit()
     row = db.execute("SELECT * FROM searches WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -285,7 +316,7 @@ def update_search(sid):
         """UPDATE searches SET name=:name, site=:site, query=:query, sort=:sort,
                condition=:condition, category=:category, min_price=:min_price,
                max_price=:max_price, notify=:notify, params=:params,
-               blocked_sellers=:blocked_sellers, sites=:sites
+               blocked_sellers=:blocked_sellers, sites=:sites, criteria=:criteria
            WHERE id=:id""", {**fields, "id": sid})
     db.commit()
     return jsonify(dict(db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()))
@@ -358,7 +389,8 @@ def run_search(sid):
     if not row:
         return fail("No such saved search.", 404)
     keys = _sites_for(row)
-    items, site_errors = aggregate.search_many(keys, _opts_for(row), _params_map(row))
+    items, site_errors = aggregate.search_many(
+        keys, _opts_for(row), _params_map(row), criteria_by_site=_criteria_map(row))
     if site_errors and not items and len(site_errors) == len(keys):
         # Every site failed — nothing to diff, and storing "everything vanished"
         # would mark the whole history gone and then re-announce it all as new

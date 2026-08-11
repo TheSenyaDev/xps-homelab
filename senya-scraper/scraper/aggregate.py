@@ -55,7 +55,7 @@ def resolve(requested):
     return kept or out
 
 
-def search_many(keys, opts, params_by_site=None, timeout=120):
+def search_many(keys, opts, params_by_site=None, timeout=120, criteria_by_site=None):
     """Search every site in `keys`, in parallel.
 
     Returns (listings, errors) where errors is [{site, label, error}].
@@ -66,13 +66,22 @@ def search_many(keys, opts, params_by_site=None, timeout=120):
     holds a 6 s floor.
     """
     params_by_site = params_by_site or {}
+    criteria_by_site = criteria_by_site or {}
     results, errors = {}, []
 
     def run(key):
         scraper = site_registry.get(key)
-        # Each site gets only its own options — the whole point of storing them
-        # keyed by site.
-        site_opts = opts.replace(params=params_by_site.get(key, {}))
+        # Each market gets only its own options and criteria. Sort, condition
+        # and category are per-market because markets disagree about what
+        # exists; query and price range are shared because they mean the same
+        # thing everywhere.
+        c = criteria_by_site.get(key) or {}
+        site_opts = opts.replace(
+            params=params_by_site.get(key, {}),
+            sort=c.get("sort") or opts.sort,
+            condition=c.get("condition") or opts.condition,
+            category=c.get("category") if c.get("category") is not None else opts.category,
+        )
         return scraper.search(site_opts)
 
     if not keys:
@@ -95,7 +104,25 @@ def search_many(keys, opts, params_by_site=None, timeout=120):
                 log.exception("adapter %s raised", key)
                 errors.append({"site": key, "label": label,
                                "error": f"{label} failed unexpectedly: {e}"})
-    return merge(results, opts.sort), errors
+    return merge(results, _merge_kind(keys, opts, criteria_by_site)), errors
+
+
+def _merge_kind(keys, opts, criteria_by_site):
+    """The canonical sort kind to merge by.
+
+    Site-specific sort keys cannot be compared, so ask each adapter what kind
+    its chosen sort actually is. If the markets were told to sort differently,
+    there is no honest shared order — fall back to round-robin.
+    """
+    kinds = set()
+    for key in keys:
+        try:
+            scraper = site_registry.get(key)
+        except site_registry.ScrapeError:
+            continue
+        chosen = (criteria_by_site.get(key) or {}).get("sort") or opts.sort
+        kinds.add(scraper.sort_by_key(chosen).kind)
+    return kinds.pop() if len(kinds) == 1 else "best"
 
 
 def merge(results, sort):

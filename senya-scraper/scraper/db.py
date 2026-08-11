@@ -85,8 +85,19 @@ M3 = """
 ALTER TABLE searches ADD COLUMN sites TEXT NOT NULL DEFAULT '[]';
 """
 
+# Per-market criteria: {"ebay-ca": {"sort": "price-ship-asc", "condition":
+# "used", "category": "computers"}, ...}
+#
+# These were single columns shared by every market, which cannot work once
+# markets disagree about what exists — eBay separates price from price+shipping
+# and Facebook has no condition filter at all. The shared columns stay as the
+# fallback for anything unset, so existing rows keep working untouched.
+M4 = """
+ALTER TABLE searches ADD COLUMN criteria TEXT NOT NULL DEFAULT '{}';
+"""
+
 #: Append only. Never edit an entry that has shipped.
-MIGRATIONS: list[str] = [M1, M2, M3]
+MIGRATIONS: list[str] = [M1, M2, M3, M4]
 
 
 def db_path():

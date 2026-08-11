@@ -1,9 +1,15 @@
-// Create / edit a saved search. One form for both — `editing` decides whether
-// SAVE posts a new profile or patches an existing one.
+// Create / edit a saved search, in two views over the same profile.
 //
-// Markets, per-market options and per-market blocklists are all rebuilt when
-// the market selection changes, and each market's values are remembered so
-// unticking and re-ticking one does not discard its configuration.
+// FORM — name, query and price apply to every market; everything else is per
+// market, chosen with a dropdown, because markets disagree about what exists.
+// eBay separates "cheapest" from "cheapest + shipping" and has "ending
+// soonest"; Facebook has neither, and no condition filter at all. A shared set
+// of controls could only ever offer the intersection.
+//
+// TEXT — the profile as the JSON actually stored, verifiable before saving. A
+// nested structure is faster to review and bulk-edit as text than through a
+// form, and VERIFY runs the same validation the form does, so the two cannot
+// disagree.
 
 import { $, el, safeJson, safeList } from "../core/dom.js";
 import { api } from "../core/api.js";
@@ -13,18 +19,24 @@ import { getSites, siteByKey } from "../core/state.js";
 import { renderOptions, readOptions } from "./site-options.js";
 
 let dlg;
-let editing = null;       // the row being edited, or null when creating
-let editingParams = {};   // {site: {option: value}}
-let editingBlocked = {};  // {site: [names]} — blocklists are per marketplace
+let editing = null;
+let market = null;        // which market's criteria are on screen
+let criteria = {};        // {site: {sort, condition, category}}
+let params = {};          // {site: {option: value}}
+let blocked = {};         // {site: [names]}
+
+const CONDITIONS = [["any", "Any"], ["new", "New"], ["used", "Used"]];
 
 export function open(row = null, prefill = null) {
   editing = row;
-  editingParams = row ? safeJson(row.params, {}) : {};
-  editingBlocked = row ? safeJson(row.blocked_sellers, {}) : {};
-  if (Array.isArray(editingBlocked)) editingBlocked = {};   // legacy flat list
+  criteria = row ? safeJson(row.criteria, {}) : {};
+  params = row ? safeJson(row.params, {}) : (prefill?.params || {});
+  blocked = row ? safeJson(row.blocked_sellers, {}) : {};
+  if (Array.isArray(blocked)) blocked = {};       // legacy flat list
 
   $("dlg-title").textContent = row ? "EDIT SEARCH" : "NEW SEARCH";
   $("dlg-err").hidden = true;
+  showTab("form");
 
   const src = row || prefill || {};
   let chosen = row ? safeList(row.sites) : (Array.isArray(src.sites) ? src.sites : []);
@@ -33,29 +45,34 @@ export function open(row = null, prefill = null) {
 
   $("f-name").value = row ? row.name : "";
   $("f-query").value = src.query || "";
-  $("f-condition").value = src.condition || "any";
-  $("f-sort").value = src.sort || "best";
   $("f-min").value = src.min_price ?? "";
   $("f-max").value = src.max_price ?? "";
   $("f-notify").checked = row ? !!row.notify : true;
 
-  renderSitePicker(chosen);
-  sync(src.category || "", prefill?.params);
+  renderMarketPicker(chosen);
+  // A live search being turned into a profile carries one sort for its market.
+  if (prefill?.sort && chosen.length === 1) {
+    criteria[chosen[0]] = { ...(criteria[chosen[0]] || {}), sort: prefill.sort,
+                            condition: prefill.condition, category: prefill.category };
+  }
+  market = chosen[0];
+  syncMarketPane();
   openModal(dlg);
   $("f-query").focus();
 }
 
-function renderSitePicker(chosen) {
+// ---- markets ----
+
+function renderMarketPicker(chosen) {
   $("f-sites").replaceChildren(...getSites().map((site) => {
     const cb = el("input", { type: "checkbox", value: site.key });
     cb.checked = chosen.includes(site.key);
     cb.dataset.siteKey = site.key;
     cb.addEventListener("change", () => {
-      // Remember what was configured for the market being unticked, so
-      // re-ticking it restores rather than resets.
       stash();
       if (!chosenSites().length) cb.checked = true;   // never leave it empty
-      sync();
+      if (!chosenSites().includes(market)) market = chosenSites()[0];
+      syncMarketPane();
     });
     return el("label", { class: "opt opt-bool" }, cb, el("span", { text: site.label }));
   }));
@@ -64,100 +81,128 @@ function renderSitePicker(chosen) {
 const chosenSites = () =>
   [...$("f-sites").querySelectorAll("input:checked")].map((c) => c.dataset.siteKey);
 
-/** Capture the currently rendered per-market values before re-rendering. */
+/** Capture what is on screen before switching markets or re-rendering. */
 function stash() {
-  Object.assign(editingParams, readAllOptions());
-  Object.assign(editingBlocked, readBlocked(true));
+  if (!market) return;
+  criteria[market] = {
+    sort: $("f-sort").value,
+    condition: $("f-condition").value,
+    category: $("f-category").value,
+  };
+  params[market] = readOptions($("f-opts"));
+  blocked[market] = $("f-blocked").value.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
 }
 
-// Category, per-market options and blocklists all depend on the chosen markets,
-// so they are rebuilt together.
-function sync(category = "", overrideParams = null) {
+// ---- the per-market pane ----
+
+function syncMarketPane() {
   const keys = chosenSites();
-  const first = siteByKey(keys[0]);
+  $("f-market").replaceChildren(...keys.map((k) =>
+    el("option", { value: k, text: siteByKey(k)?.label || k })));
+  $("f-market").value = market;
 
-  const cats = first?.categories || [];
+  const site = siteByKey(market);
+  if (!site) return;
+  const c = criteria[market] || {};
+  const sup = site.supports || {};
+
+  // Sorts are whatever this market declares — not a shared list.
+  const sorts = site.sorts || [];
+  $("f-sort").replaceChildren(...sorts.map((s) =>
+    el("option", { value: s.key, text: s.label })));
+  $("f-sort").value = sorts.some((s) => s.key === c.sort) ? c.sort : (sorts[0]?.key || "best");
+
+  $("f-condition-row").hidden = sup.condition === false;
+  $("f-condition").replaceChildren(...CONDITIONS.map(([v, t]) =>
+    el("option", { value: v, text: t })));
+  $("f-condition").value = c.condition || "any";
+
+  const cats = site.categories || [];
   $("f-category-row").hidden = !cats.length;
-  $("f-category").replaceChildren(
-    ...cats.map((c) => el("option", { value: c.key, text: c.label })));
-  if (category) $("f-category").value = category;
+  $("f-category").replaceChildren(...cats.map((x) =>
+    el("option", { value: x.key, text: x.label })));
+  if (c.category) $("f-category").value = c.category;
 
-  // One options block per chosen market that declares any.
-  const host = $("f-opts");
-  host.replaceChildren();
-  let anyOptions = false;
-  for (const key of keys) {
-    const site = siteByKey(key);
-    if (!site?.options?.length) continue;
-    anyOptions = true;
-    const body = el("div");
-    renderOptions(body, site, overrideParams || editingParams[key] || {});
-    host.append(el("div", { class: "opt-block", dataset: { siteKey: key } },
-      el("div", { class: "opt-block-head", text: site.label }), body));
-  }
-  $("f-opts-wrap").hidden = !anyOptions;
-  $("f-opts-legend").textContent = "Per-market options";
+  renderOptions($("f-opts"), site, params[market] || {});
 
-  renderBlockedFields(keys);
+  // No seller data means a blocklist could not match anything.
+  $("f-blocked-row").hidden = sup.seller === false;
+  $("f-blocked").value = (blocked[market] || []).join("\n");
 }
 
-// One blocklist box per chosen market that exposes sellers. A market without
-// seller data gets no box rather than a box that cannot work.
-function renderBlockedFields(keys) {
-  const host = $("f-blocked");
-  host.replaceChildren();
-  let any = false;
-  for (const key of keys) {
-    const site = siteByKey(key);
-    if (!site || site.supports?.seller === false) continue;
-    any = true;
-    const ta = el("textarea", { rows: 2, placeholder: "one per line, or comma-separated" });
-    ta.value = (editingBlocked[key] || []).join("\n");
-    ta.dataset.blockedSite = key;
-    host.append(el("label", { class: "blocked-row" },
-      el("span", { text: site.label }), ta));
-  }
-  $("f-blocked-wrap").hidden = !any;
+// ---- tabs ----
+
+function showTab(which) {
+  const isText = which === "text";
+  $("pane-form").hidden = isText;
+  $("pane-text").hidden = !isText;
+  $("dlg-verify").hidden = !isText;
+  $("tab-form").classList.toggle("is-on", !isText);
+  $("tab-text").classList.toggle("is-on", isText);
 }
 
-function readAllOptions() {
-  const out = {};
-  for (const block of $("f-opts").querySelectorAll(".opt-block")) {
-    out[block.dataset.siteKey] = readOptions(block);
-  }
-  return out;
+/** The profile as JSON — built from the form so the text always matches it. */
+function currentDoc() {
+  stash();
+  const keys = chosenSites();
+  const pick = (obj) => Object.fromEntries(keys.map((k) => [k, obj[k]]).filter(([, v]) => v));
+  return {
+    name: $("f-name").value.trim() || $("f-query").value.trim(),
+    query: $("f-query").value.trim(),
+    sites: keys,
+    min_price: $("f-min").value === "" ? null : Number($("f-min").value),
+    max_price: $("f-max").value === "" ? null : Number($("f-max").value),
+    notify: $("f-notify").checked,
+    criteria: pick(criteria),
+    params: pick(params),
+    blocked_sellers: pick(blocked),
+  };
 }
 
-/** @param asLists split textareas into arrays, for stashing between renders */
-function readBlocked(asLists = false) {
-  const out = {};
-  for (const ta of $("f-blocked").querySelectorAll("[data-blocked-site]")) {
-    const key = ta.dataset.blockedSite;
-    out[key] = asLists
-      ? ta.value.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
-      : ta.value;
-  }
-  return out;
+function showErrors(list) {
+  const host = $("text-errors");
+  host.replaceChildren(...list.map((e) => el("li", { text: e })));
+  host.hidden = !list.length;
 }
+
+async function verify() {
+  const res = await api.validateText($("f-text").value).catch((e) => ({ ok: false, errors: [e.message] }));
+  showErrors(res.errors || []);
+  if (res.ok) {
+    showErrors([]);
+    $("dlg-err").textContent = "Valid — formatting and every market check out.";
+    $("dlg-err").hidden = false;
+    $("dlg-err").classList.add("ok-msg");
+  } else {
+    $("dlg-err").hidden = true;
+  }
+  return res.ok;
+}
+
+// ---- save ----
 
 async function submit(e) {
   e.preventDefault();
-  const payload = {
-    name: $("f-name").value.trim(),
-    sites: chosenSites(),
-    query: $("f-query").value.trim(),
-    category: $("f-category").value,
-    condition: $("f-condition").value,
-    sort: $("f-sort").value,
-    min_price: $("f-min").value || null,
-    max_price: $("f-max").value || null,
-    notify: $("f-notify").checked,
-    params: readAllOptions(),
-    blocked_sellers: readBlocked(),
-  };
+  $("dlg-err").classList.remove("ok-msg");
+  const usingText = !$("pane-text").hidden;
+
   try {
-    if (editing) await api.searches.update(editing.id, payload);
-    else await api.searches.create(payload);
+    if (usingText) {
+      // Text is authoritative when that tab is open, and is validated server
+      // side by the same code the form uses.
+      if (!editing) {
+        const res = await api.validateText($("f-text").value);
+        if (!res.ok) return showErrors(res.errors);
+        await api.searches.create(JSON.parse($("f-text").value));
+      } else {
+        const res = await api.saveText(editing.id, $("f-text").value);
+        if (!res.ok) return showErrors(res.errors || []);
+      }
+    } else if (editing) {
+      await api.searches.update(editing.id, currentDoc());
+    } else {
+      await api.searches.create(currentDoc());
+    }
     dlg.close();
     emit("saved:changed", { created: !editing });
   } catch (err) {
@@ -170,6 +215,25 @@ export function init() {
   dlg = $("dlg");
   $("dlg-cancel").addEventListener("click", () => dlg.close());
   $("dlg-form").addEventListener("submit", submit);
-  // No closeOnBackdrop here on purpose: dismissing a form on a stray click
-  // would discard what was typed.
+  $("dlg-verify").addEventListener("click", verify);
+
+  $("f-market").addEventListener("change", () => {
+    stash();
+    market = $("f-market").value;
+    syncMarketPane();
+  });
+
+  $("tab-form").addEventListener("click", () => showTab("form"));
+  $("tab-text").addEventListener("click", async () => {
+    // Prefer the stored text when editing, so what you see is byte-for-byte
+    // what is saved rather than a re-serialisation of the form.
+    let text;
+    if (editing) {
+      text = await api.searchText(editing.id).then((r) => r.text).catch(() => null);
+    }
+    $("f-text").value = text ?? JSON.stringify(currentDoc(), null, 2);
+    showErrors([]);
+    showTab("text");
+  });
+  // No closeOnBackdrop: dismissing a form on a stray click discards the edit.
 }

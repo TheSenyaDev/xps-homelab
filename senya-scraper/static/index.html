@@ -20,12 +20,9 @@
       <input id="q" type="search" placeholder="what are you looking for?" autocomplete="off" />
       <select id="site" aria-label="Site"></select>
       <select id="category" aria-label="Category"></select>
-      <select id="sort" aria-label="Sort">
-        <option value="best">Best match</option>
-        <option value="newest">Newest</option>
-        <option value="price-asc">Price ↑</option>
-        <option value="price-desc">Price ↓</option>
-      </select>
+      <!-- Filled from the chosen market's declared sorts — eBay offers price
+           and price+shipping separately, Facebook does not. -->
+      <select id="sort" aria-label="Sort"></select>
       <select id="condition" aria-label="Condition">
         <option value="any">Any</option>
         <option value="new">New</option>
@@ -66,68 +63,78 @@
 
   <!-- Create/edit a saved search. One form for both: `editing` in search-dialog.js decides
        whether SAVE posts a new profile or patches an existing one. -->
-  <dialog id="dlg" class="dlg">
+  <!-- Create/edit a saved search. One form for both: `editing` in
+       search-dialog.js decides whether SAVE posts or patches.
+
+       Two views over the same profile — the form, and the JSON that is actually
+       stored. The text view exists because a profile is nested (markets, then
+       per-market criteria, options and blocklists) and a form is a slow way to
+       review or bulk-edit one. -->
+  <dialog id="dlg" class="dlg dlg-wide">
     <form id="dlg-form" method="dialog">
-      <h2 id="dlg-title" class="head">NEW SEARCH</h2>
+      <div class="dlg-top">
+        <h2 id="dlg-title" class="head">NEW SEARCH</h2>
+        <div class="tabs" role="tablist">
+          <button type="button" id="tab-form" class="tab is-on" role="tab">FORM</button>
+          <button type="button" id="tab-text" class="tab" role="tab">TEXT</button>
+        </div>
+      </div>
 
-      <label>Name<span class="sub">what to call it</span>
-        <input id="f-name" type="text" placeholder="Dell XPS" />
-      </label>
-      <label>Search for<span class="sub">required</span>
-        <input id="f-query" type="text" placeholder="dell xps 13" required />
-      </label>
-      <!-- Several marketplaces at once. Each keeps its own options below, and a
-           site that fails is reported without costing you the others. -->
-      <fieldset class="opts sites-pick">
-        <legend>Markets</legend>
-        <div id="f-sites"></div>
-      </fieldset>
-      <label id="f-category-row">Category
-        <select id="f-category"></select>
-      </label>
-      <div class="pair">
-        <label>Condition
-          <select id="f-condition">
-            <option value="any">Any</option>
-            <option value="new">New</option>
-            <option value="used">Used</option>
-          </select>
+      <div id="pane-form">
+        <label>Name<span class="sub">what to call it</span>
+          <input id="f-name" type="text" placeholder="Dell XPS" />
         </label>
-        <label>Sort
-          <select id="f-sort">
-            <option value="best">Best match</option>
-            <option value="newest">Newest</option>
-            <option value="price-asc">Price ↑</option>
-            <option value="price-desc">Price ↓</option>
-          </select>
+        <label>Search for<span class="sub">applies to every market</span>
+          <input id="f-query" type="text" placeholder="dell xps 13" required />
+        </label>
+        <div class="pair">
+          <label>Min price<input id="f-min" type="number" min="0" step="1" placeholder="any" /></label>
+          <label>Max price<input id="f-max" type="number" min="0" step="1" placeholder="any" /></label>
+        </div>
+
+        <fieldset class="opts sites-pick">
+          <legend>Markets</legend>
+          <div id="f-sites"></div>
+        </fieldset>
+
+        <!-- Everything below is per market. The dropdown picks which one you are
+             editing; each keeps its own values, because markets disagree about
+             what exists (eBay separates price from price+shipping; Facebook has
+             no condition filter at all). -->
+        <fieldset class="opts market-pane">
+          <legend>Criteria for
+            <select id="f-market" class="legend-select"></select>
+          </legend>
+          <div class="pair">
+            <label>Sort<select id="f-sort"></select></label>
+            <label id="f-condition-row">Condition<select id="f-condition"></select></label>
+          </div>
+          <label id="f-category-row">Category
+            <select id="f-category"></select>
+          </label>
+          <div id="f-opts"></div>
+          <label id="f-blocked-row">Blocked sellers<span class="sub">one per line or comma-separated</span>
+            <textarea id="f-blocked" rows="2" placeholder="spammy-seller, another-one"></textarea>
+          </label>
+        </fieldset>
+
+        <label class="check">
+          <input id="f-notify" type="checkbox" checked />
+          Notify on new listings and price drops
         </label>
       </div>
-      <div class="pair">
-        <label>Min price<input id="f-min" type="number" min="0" step="1" placeholder="any" /></label>
-        <label>Max price<input id="f-max" type="number" min="0" step="1" placeholder="any" /></label>
+
+      <div id="pane-text" hidden>
+        <p class="dlg-note">The profile exactly as stored. Edit and VERIFY before
+          saving — verification reports what is wrong and where, rather than
+          refusing.</p>
+        <textarea id="f-text" class="text-edit" rows="20" spellcheck="false"></textarea>
+        <ul id="text-errors" class="text-errors" hidden></ul>
       </div>
-      <!-- Site-specific filters for the selected site, built from its declared
-           options. Each site's values are stored separately, so switching the
-           Site dropdown swaps these without losing the other site's settings. -->
-      <fieldset id="f-opts-wrap" class="opts">
-        <legend id="f-opts-legend">Site options</legend>
-        <div id="f-opts"></div>
-      </fieldset>
-
-      <!-- One box per market: seller identities are not shared between them,
-           so a single list could not say which site a name belongs to. -->
-      <fieldset id="f-blocked-wrap" class="opts">
-        <legend>Blocked sellers</legend>
-        <div id="f-blocked"></div>
-      </fieldset>
-
-      <label class="check">
-        <input id="f-notify" type="checkbox" checked />
-        Notify on new listings and price drops
-      </label>
 
       <p id="dlg-err" class="dlg-err" hidden></p>
       <menu class="dlg-actions">
+        <button type="button" id="dlg-verify" class="ghost" hidden>VERIFY</button>
         <button type="button" id="dlg-cancel" class="ghost">CANCEL</button>
         <button type="submit" id="dlg-save" class="go">SAVE</button>
       </menu>

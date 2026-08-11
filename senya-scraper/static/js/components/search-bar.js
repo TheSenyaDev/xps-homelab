@@ -29,8 +29,15 @@ export function applySiteCapabilities() {
   const key = $("site").value;
 
   if (key === "all") {
-    // Only the filters every market honours make sense across all of them;
-    // per-market options are configured on a saved profile instead.
+    // Across markets only the canonical orderings mean anything — a
+    // site-specific key like eBay's price+shipping has no Facebook equivalent.
+    // Per-market sorts and options are set on a saved profile instead.
+    setSorts([
+      { key: "best", label: "Best match" },
+      { key: "price-asc", label: "Cheapest" },
+      { key: "price-desc", label: "Dearest" },
+      { key: "newest", label: "Newly listed" },
+    ]);
     $("sort").disabled = false;
     $("condition").disabled = false;
     $("min_price").disabled = $("max_price").disabled = false;
@@ -42,6 +49,7 @@ export function applySiteCapabilities() {
   const site = siteByKey(key);
   if (!site) return;
   const sup = site.supports || {};
+  setSorts(site.sorts || []);
   $("sort").disabled = !sup.sort;
   $("condition").disabled = !sup.condition;
   $("min_price").disabled = $("max_price").disabled = !sup.price_range;
@@ -52,6 +60,15 @@ export function applySiteCapabilities() {
     ...cats.map((c) => el("option", { value: c.key, text: c.label })));
 
   renderOptions($("site-opts"), site);
+}
+
+// Preserves the current choice across a market change when that market offers
+// the same ordering, so switching sites does not silently reset you to Best.
+function setSorts(sorts) {
+  const previous = $("sort").value;
+  $("sort").replaceChildren(
+    ...sorts.map((s) => el("option", { value: s.key, text: s.label })));
+  if (sorts.some((s) => s.key === previous)) $("sort").value = previous;
 }
 
 export function populateSitePicker() {
