@@ -201,6 +201,9 @@ def parse_price(text):
         return None, "CAD"
     text = text.strip()
     currency = "CAD"
+    #: Seconds between requests to this site. Raise it for sites that throttle
+    #: hard — Facebook starts refusing after a handful of quick hits.
+    min_interval = 1.5
     for hint, code in _CURRENCY_HINTS:
         if hint in text:
             currency = code
@@ -241,11 +244,14 @@ class RateLimiter:
         with self._guard:
             return self._locks.setdefault(domain, threading.Lock())
 
-    def wait(self, domain):
+    def wait(self, domain, min_interval=None):
+        """Block until this domain may be hit again. `min_interval` lets a
+        thin-skinned site ask for a longer floor than the default."""
+        floor = self.min_interval if min_interval is None else min_interval
         with self._lock_for(domain):
             gap = time.monotonic() - self._last.get(domain, 0.0)
-            if gap < self.min_interval:
-                time.sleep(self.min_interval - gap)
+            if gap < floor:
+                time.sleep(floor - gap)
             self._last[domain] = time.monotonic()
 
 
@@ -272,6 +278,10 @@ class Scraper:
     supports_condition = True
     supports_price_range = True
     supports_categories = False
+    #: Whether listings carry a seller name. False disables the per-search
+    #: seller blocklist in the UI, rather than letting it be configured and then
+    #: silently match nothing (Facebook hides sellers from logged-out requests).
+    supports_seller = True
 
     #: Registry of every concrete adapter, keyed by `key`.
     registry: dict[str, type["Scraper"]] = {}
@@ -319,6 +329,7 @@ class Scraper:
                 "condition": self.supports_condition,
                 "price_range": self.supports_price_range,
                 "categories": self.supports_categories,
+                "seller": self.supports_seller,
             },
             "categories": [asdict(c) for c in self.categories()],
             "options": [o.as_dict() for o in self.options()],
@@ -333,7 +344,7 @@ class Scraper:
         if self._primed or not self.home_url:
             return
         try:
-            LIMITER.wait(self.domain)
+            LIMITER.wait(self.domain, self.min_interval)
             self.session.get(self.home_url, timeout=15)
         except requests.RequestException:
             pass
@@ -342,7 +353,7 @@ class Scraper:
     def get(self, url, **kw):
         """Rate-limited GET that turns transport failures into ScrapeError."""
         self.prime()
-        LIMITER.wait(self.domain)
+        LIMITER.wait(self.domain, self.min_interval)
         kw.setdefault("timeout", 25)
         try:
             res = self.session.get(url, **kw)

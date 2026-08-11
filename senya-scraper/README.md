@@ -7,8 +7,9 @@ which listings are **new** and which **dropped in price**.
 That diff is the point. Running the same eBay search by hand every day and
 trying to spot what moved is exactly the job a computer should do.
 
-**eBay.ca** is implemented. The structure assumes more will follow (Kijiji,
-AutoTrader, …) — see [Adding a marketplace](#adding-a-marketplace).
+**eBay.ca** and **Facebook Marketplace** are implemented. The structure assumes
+more will follow (Kijiji, AutoTrader, …) — see
+[Adding a marketplace](#adding-a-marketplace).
 
 ## Run
 
@@ -195,13 +196,44 @@ threads) so two open tabs still add up to a civil request rate.
 ### Which sites will actually work
 
 - **eBay.ca** — works, with the session priming above.
+- **Facebook Marketplace** — works, but is the least reliable of the two; see
+  below.
 - **Kijiji / AutoTrader** — reachable from this host; adapters not yet written.
-- **Facebook Marketplace** — realistically out of reach. It requires a logged-in
-  session, renders results from JavaScript rather than HTML, and its terms
-  prohibit automated collection. An adapter would need a real browser and a real
-  account, and would break constantly. Worth knowing before it goes on a roadmap.
 
 Sites change their markup without warning; an adapter that suddenly returns
 nothing usually means selectors, not a crash. `search()` raises a distinct error
 for "page loaded but nothing recognisable" precisely so that case is not
 mistaken for "no matches".
+
+## Notes on scraping Facebook Marketplace
+
+Facebook works, but not the way the other adapters do, and each difference looks
+like a bug if you do not know about it:
+
+- **The listings are not in the HTML.** Marketplace renders from JavaScript, so
+  there is nothing to select — CSS-selector scraping of this site cannot work at
+  all. The data *is* there, embedded in a Relay payload inside
+  `<script type="application/json">`, and `_extract()` walks the JSON for nodes
+  carrying `marketplace_listing_title`. It searches the whole tree rather than
+  following a fixed path, because Facebook nests these under keys that vary
+  between page variants.
+- **Cold requests return HTTP 400** — even the homepage. Priming cookies first
+  turns the search into a 200, but the session goes stale much faster than
+  eBay's.
+- **A 200 does not mean results.** When throttling, Facebook serves a large,
+  valid logged-out shell with no listings in it. That is reported as "no listing
+  data, wait a few minutes" rather than "no matches", because they need
+  completely different responses from you.
+- **`min_interval` is 6 s here**, against 1.5 s elsewhere. A handful of quick
+  requests is enough to start getting 400s on every URL for a while.
+
+**No seller data.** `marketplace_listing_seller` is null for logged-out
+requests, so the per-search seller blocklist cannot match anything on Facebook.
+The adapter sets `supports_seller = False` and the UI hides the field, rather
+than letting you configure something that would silently do nothing.
+
+**One page only.** Facebook returns ~12–24 listings and paginates over GraphQL
+with signed tokens, which is not reachable without a real session.
+
+Since Marketplace is scoped to a city with no national search, `location` is a
+required site option (default `toronto`) — use the slug from the URL.

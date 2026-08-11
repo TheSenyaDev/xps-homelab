@@ -283,6 +283,11 @@ function syncDialogSite(category = "", overrideParams = null) {
   }));
   if (category) $("f-category").value = category;
 
+  // A site with no seller data cannot honour a blocklist, so hide the field
+  // rather than let it be filled in and quietly do nothing.
+  const hasSeller = !site || site.supports?.seller !== false;
+  $("f-blocked").closest("label").hidden = !hasSeller;
+
   const values = overrideParams || editingParams[$("f-site").value] || {};
   renderOptions($("f-opts"), site, values);
   $("f-opts-wrap").hidden = !((site && site.options) || []).length;
