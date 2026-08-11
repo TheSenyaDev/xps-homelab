@@ -1,0 +1,200 @@
+"""
+eBay.ca search results.
+
+Two things about eBay's markup are worth knowing before touching the selectors,
+because both look like bugs otherwise:
+
+  1. Results use `.s-card`, not the `.s-item` that older examples describe —
+     eBay changed the markup, and the old selectors silently match nothing.
+  2. Every card carries a footer reading "derosnopS": "Sponsored" reversed, a
+     scraper-defeating trick. It appears on organic listings too, so it is NOT a
+     usable sponsored flag and we ignore it.
+
+eBay also pads results with placeholder "Shop on eBay" cards pointing at
+/itm/123456 for $20.00. Those are filler, not listings, and are dropped.
+
+Reaching search at all needs a session cookie first: a cold request to /sch/
+returns 403, but fetching the homepage once and reusing the cookies works. That
+is what `home_url` and `Scraper.prime()` are for.
+"""
+
+from __future__ import annotations
+
+import re
+from urllib.parse import urlencode, urlsplit, urlunsplit
+
+from bs4 import BeautifulSoup
+
+from .base import Category, Listing, Scraper, ScrapeError, SearchOptions, clean, parse_price
+
+# The numeric id in /itm/<id> — stable per item, unlike the full URL, which
+# carries per-search tracking params that change every run.
+_ITEM_ID_RE = re.compile(r"/itm/(\d+)")
+
+# Condition strings eBay puts in the subtitle row.
+_CONDITIONS = {
+    "brand new", "new (other)", "new with tags", "new without tags",
+    "pre-owned", "open box", "certified - refurbished", "excellent - refurbished",
+    "very good - refurbished", "good - refurbished", "seller refurbished",
+    "for parts or not working", "used",
+}
+
+
+class EbayCA(Scraper):
+    key = "ebay-ca"
+    label = "eBay.ca"
+    domain = "www.ebay.ca"
+    home_url = "https://www.ebay.ca/"
+    supports_categories = True
+
+    SORTS = {                # eBay's _sop codes, named for the UI
+        "best": "12",
+        "newest": "10",
+        "price-asc": "15",   # price + shipping, lowest first
+        "price-desc": "16",
+    }
+    CONDITIONS = {"any": None, "new": "1000", "used": "3000"}
+
+    # A starter set of eBay's top-level category ids (_sacat). Extend freely —
+    # the UI renders whatever this returns.
+    CATEGORIES = [
+        Category("all", "All categories", ""),
+        Category("electronics", "Consumer electronics", "293"),
+        Category("computers", "Computers/tablets", "58058"),
+        Category("cell-phones", "Cell phones & accessories", "15032"),
+        Category("cameras", "Cameras & photo", "625"),
+        Category("home-garden", "Home & garden", "11700"),
+        Category("clothing", "Clothing & accessories", "11450"),
+        Category("sporting", "Sporting goods", "888"),
+        Category("toys", "Toys & hobbies", "220"),
+        Category("motors", "eBay Motors", "6000"),
+        Category("music", "Musical instruments", "619"),
+        Category("collectibles", "Collectibles", "1"),
+    ]
+
+    def categories(self):
+        return self.CATEGORIES
+
+    # ----- request -----
+
+    def build_url(self, opts: SearchOptions):
+        params = {
+            "_nkw": opts.query,
+            "_ipg": "60",     # 60/page; eBay allows 240 but big pages draw attention
+            "_sop": self.SORTS.get(opts.sort, "12"),
+        }
+        if opts.page > 1:
+            params["_pgn"] = str(opts.page)
+        cond = self.CONDITIONS.get(opts.condition)
+        if cond:
+            params["LH_ItemCondition"] = cond
+        cat = self._category_value(opts.category)
+        if cat:
+            params["_sacat"] = cat
+        # Send these only when set: empty values return zero results.
+        if opts.min_price is not None:
+            params["_udlo"] = str(opts.min_price)
+        if opts.max_price is not None:
+            params["_udhi"] = str(opts.max_price)
+        return "https://www.ebay.ca/sch/i.html?" + urlencode(params)
+
+    def _category_value(self, key):
+        if not key or key == "all":
+            return ""
+        for c in self.CATEGORIES:
+            if c.key == key:
+                return c.value
+        # An unknown key is a caller bug, but dropping the filter quietly would
+        # return the whole site's results and look like the filter "did nothing".
+        raise ScrapeError(f"Unknown eBay category '{key}'.")
+
+    # ----- parse -----
+
+    def search(self, opts: SearchOptions):
+        if not opts.query:
+            raise ScrapeError("Enter something to search for.")
+        res = self.get(self.build_url(opts))
+        soup = BeautifulSoup(res.text, "lxml")
+        cards = soup.select("li.s-card, div.s-card")
+        if not cards:
+            # Distinguish "no matches" from "our selectors are stale": the second
+            # needs a code change and should not look like an empty shelf.
+            if soup.select_one(".srp-save-null-search__heading, .s-answer-region"):
+                return []
+            raise ScrapeError(
+                "eBay returned a page with no recognisable listings. Their markup "
+                "may have changed — see scraper/sites/ebay_ca.py."
+            )
+        out, seen = [], set()
+        for card in cards:
+            item = self._parse_card(card)
+            if item and item.uid not in seen:
+                seen.add(item.uid)
+                out.append(item)
+        return out
+
+    def _parse_card(self, card):
+        a = card.select_one("a.s-card__link[href]") or card.select_one("a[href]")
+        title_el = card.select_one(".s-card__title")
+        if not a or not title_el:
+            return None
+
+        # eBay hides "Opens in a new window or tab" inside the title for screen
+        # readers. get_text() has no idea it is invisible, so it lands in every
+        # title (and every notification) unless it is removed first.
+        for hidden in title_el.select(".clipped"):
+            hidden.decompose()
+        title = clean(title_el.get_text(" "))
+        href = a["href"]
+        m = _ITEM_ID_RE.search(href)
+        # Placeholder filler: the fake id, and the title eBay uses for it.
+        if not m or m.group(1) == "123456" or title.lower() == "shop on ebay":
+            return None
+        item_id = m.group(1)
+
+        price_el = card.select_one(".s-card__price")
+        price_text = clean(price_el.get_text(" ")) if price_el else ""
+        price, currency = parse_price(price_text)
+
+        rows = [clean(r.get_text(" ")) for r in card.select(".s-card__attribute-row")]
+        shipping = next((r for r in rows if "shipping" in r.lower()
+                         or "livraison" in r.lower()), "")
+        seller = next((r for r in rows if "% positive" in r), "")
+
+        sub = card.select_one(".s-card__subtitle")
+        condition = clean(sub.get_text(" ")) if sub else ""
+        if condition and condition.lower() not in _CONDITIONS and len(condition) >= 30:
+            # The subtitle slot is reused for marketing blurbs; keep it only when
+            # it plausibly is a condition, so the UI chip stays meaningful.
+            condition = ""
+
+        img = card.select_one("img")
+        image = ""
+        if img:
+            image = img.get("src") or img.get("data-src") or ""
+            # Cards ship a 500px thumb; the 225 variant is a quarter of the bytes
+            # and still sharp at the size the grid renders it.
+            image = re.sub(r"/s-l\d+\.(webp|jpg|png)", r"/s-l225.\1", image)
+
+        return Listing(
+            uid=f"{self.key}:{item_id}",
+            site=self.key,
+            title=title,
+            url=self._clean_url(href),
+            price=price,
+            currency=currency,
+            price_text=price_text,
+            condition=condition,
+            shipping=shipping,
+            seller=seller,
+            image=image,
+            extra={"item_id": item_id,
+                   "best_offer": any("best offer" in r.lower() for r in rows)},
+        )
+
+    @staticmethod
+    def _clean_url(href):
+        """Drop eBay's tracking query string: it is long, changes every search,
+        and the bare /itm/<id> URL resolves fine."""
+        p = urlsplit(href)
+        return urlunsplit((p.scheme, p.netloc, p.path, "", ""))

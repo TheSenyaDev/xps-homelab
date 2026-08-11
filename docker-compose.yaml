@@ -535,6 +535,26 @@ services:
       - TZ=${TZ}
     restart: unless-stopped
 
+  # Marketplace product search. Scrapes second-hand sites (eBay.ca today; the
+  # scraper/sites package takes one file per marketplace) and, for saved
+  # searches, reports what is new and what dropped in price since the last run.
+  # No inbound secrets: it only makes outbound GETs and stores results locally.
+  senya-scraper:
+    build: ./senya-scraper
+    image: senya-scraper:latest
+    container_name: senya-scraper
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./senya-scraper/data:/data
+    environment:
+      - TZ=${TZ}
+      # Notification channels are opt-in per channel (see scraper/notify/).
+      # The log channel is on by default; set NOTIFY_LOG=0 to silence it.
+      - NOTIFY_LOG=${SENYA_SCRAPER_NOTIFY_LOG:-1}
+      - LOG_LEVEL=${SENYA_SCRAPER_LOG_LEVEL:-INFO}
+    restart: unless-stopped
+
   # Spending tracker. Reads bank CSV exports from the read-only TrueNAS SMB mount
   # (/import), normalizes + categorizes them into SQLite (/data). See its README.
   senya-finance:

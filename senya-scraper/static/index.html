@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SenyaScraper</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="bar">
+    <span class="brand">SENYA/SCRAPER</span>
+    <form id="search-form" class="search">
+      <input id="q" type="search" placeholder="what are you looking for?" autocomplete="off" />
+      <select id="site" aria-label="Site"></select>
+      <select id="category" aria-label="Category"></select>
+      <select id="sort" aria-label="Sort">
+        <option value="best">Best match</option>
+        <option value="newest">Newest</option>
+        <option value="price-asc">Price ↑</option>
+        <option value="price-desc">Price ↓</option>
+      </select>
+      <select id="condition" aria-label="Condition">
+        <option value="any">Any</option>
+        <option value="new">New</option>
+        <option value="used">Used</option>
+      </select>
+      <input id="min_price" class="num" type="number" min="0" step="1" placeholder="min" />
+      <input id="max_price" class="num" type="number" min="0" step="1" placeholder="max" />
+      <button type="submit" class="go">SEARCH</button>
+      <button type="button" id="save" class="ghost" title="Save this search to track new listings and price drops">SAVE</button>
+    </form>
+  </header>
+
+  <main class="wrap">
+    <aside class="side">
+      <h2 class="head">SAVED</h2>
+      <ul id="saved" class="saved"></ul>
+      <p class="hint">Saved searches remember every listing they have seen, so
+        re-running one tells you what is <b>new</b> and what <b>dropped</b> in price.</p>
+    </aside>
+
+    <section class="results">
+      <div id="status" class="status"></div>
+      <div id="grid" class="grid"></div>
+    </section>
+  </main>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

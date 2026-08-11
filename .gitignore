@@ -77,3 +77,6 @@ webdav/data/
 # The Postgres volume is the named `nextcloud-db`, already outside the repo.
 nextcloud/html/
 nextcloud/data/
+
+# SenyaScraper — SQLite of saved searches and every listing seen
+senya-scraper/data/
