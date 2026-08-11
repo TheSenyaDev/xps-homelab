@@ -80,3 +80,8 @@ nextcloud/data/
 
 # SenyaScraper — SQLite of saved searches and every listing seen
 senya-scraper/data/
+
+# SenyaScraper — signed-in session cookies. These grant full account access;
+# the directory's own README is kept, nothing else.
+senya-scraper/secrets/*
+!senya-scraper/secrets/README.md

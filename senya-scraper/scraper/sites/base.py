@@ -11,12 +11,17 @@ adding a site is one new file in this package and no edit anywhere else.
 
 from __future__ import annotations
 
+import json
+import logging
+import os
 import re
 import threading
 import time
 from dataclasses import asdict, dataclass, field
 
 import requests
+
+log = logging.getLogger(__name__)
 
 # A real browser string. Not an attempt to hide what we are: several of these
 # sites return 403 to anything that looks scripted, and the alternative is an app
@@ -201,9 +206,6 @@ def parse_price(text):
         return None, "CAD"
     text = text.strip()
     currency = "CAD"
-    #: Seconds between requests to this site. Raise it for sites that throttle
-    #: hard — Facebook starts refusing after a handful of quick hits.
-    min_interval = 1.5
     for hint, code in _CURRENCY_HINTS:
         if hint in text:
             currency = code
@@ -222,6 +224,64 @@ def parse_price(text):
 def clean(text):
     """Collapse the whitespace that falls out of get_text() on nested markup."""
     return re.sub(r"\s+", " ", text or "").strip()
+
+
+# ----- signed-in sessions -----
+
+def parse_cookies(raw):
+    """Cookies from a browser export, in whichever form you pasted.
+
+    Accepts the two things people actually have to hand:
+
+      * a Cookie header  — ``c_user=100…; xs=abc…; datr=xyz…``
+      * a JSON array     — ``[{"name": "c_user", "value": "100…"}, …]``,
+        which is what every "export cookies" browser extension produces.
+
+    Returns {name: value}. Never log the result: these *are* the session.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return {}
+    if raw[0] in "[{":
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            return {}
+        if isinstance(data, dict):                       # {"c_user": "...", ...}
+            return {str(k): str(v) for k, v in data.items()}
+        out = {}
+        for c in data if isinstance(data, list) else []:
+            if isinstance(c, dict) and c.get("name"):
+                out[str(c["name"])] = str(c.get("value", ""))
+        return out
+    out = {}
+    for part in raw.replace("\n", ";").split(";"):
+        if "=" in part:
+            name, _, value = part.partition("=")
+            name, value = name.strip(), value.strip()
+            if name:
+                out[name] = value
+    return out
+
+
+def load_cookie_source(env_var):
+    """Read cookies from ``$<env_var>`` or, preferred, the file named by
+    ``$<env_var>_FILE``.
+
+    The file form exists because putting a session cookie in a compose
+    `environment:` block leaks it into `docker inspect`, process listings and
+    shell history. A file can be chmod 600 and mounted read-only.
+    """
+    path = os.environ.get(f"{env_var}_FILE")
+    if path:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return parse_cookies(fh.read()), f"{env_var}_FILE"
+        except OSError:
+            # Deliberately not fatal: a missing cookie file should downgrade to
+            # logged-out scraping, not take the whole app down at import time.
+            return {}, f"{env_var}_FILE (unreadable)"
+    return parse_cookies(os.environ.get(env_var, "")), env_var
 
 
 # ----- politeness -----
@@ -272,6 +332,10 @@ class Scraper:
     home_url = ""       # fetched once for cookies, if the site needs it
     currency = "CAD"
 
+    #: Seconds between requests to this site. Raise it for sites that throttle
+    #: hard — Facebook starts refusing after a handful of quick hits.
+    min_interval = 1.5
+
     # Feature flags, so the UI can grey out controls a site cannot honour rather
     # than silently ignoring them.
     supports_sort = True
@@ -291,10 +355,49 @@ class Scraper:
         if cls.key:
             Scraper.registry[cls.key] = cls
 
+    #: Env var holding a signed-in session's cookies, if this site can use one.
+    #: `<name>_FILE` is read in preference — see `load_cookie_source`.
+    cookie_env = ""
+
+    #: Cookies that must all be present for the session to count as signed in.
+    #: Checked so a stale or half-copied paste is reported as "not signed in"
+    #: rather than silently behaving like a logged-out scrape.
+    required_cookies: tuple = ()
+
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
         self._primed = False
+        self.cookie_source = ""
+        self.authenticated = False
+        self._load_session_cookies()
+
+    def _load_session_cookies(self):
+        """Install signed-in cookies, if any were supplied.
+
+        No password ever reaches this app. Facebook checkpoints scripted logins
+        almost immediately and would demand 2FA anyway, so reusing a session you
+        established yourself in a browser is both the only thing that works and
+        the option that keeps credentials out of here entirely.
+        """
+        if not self.cookie_env:
+            return
+        cookies, source = load_cookie_source(self.cookie_env)
+        if not cookies:
+            return
+        missing = [c for c in self.required_cookies if not cookies.get(c)]
+        if missing:
+            # Names only. The values are the session and must never be logged.
+            log.warning("%s: ignoring cookies from %s — missing %s",
+                        self.label, source, ", ".join(missing))
+            return
+        for name, value in cookies.items():
+            self.session.cookies.set(name, value, domain=f".{self.domain.lstrip('www.')}")
+        self.cookie_source = source
+        self.authenticated = True
+        self._primed = True      # a real session needs no anonymous priming
+        log.info("%s: using signed-in session from %s (%d cookies)",
+                 self.label, source, len(cookies))
 
     # ---- capabilities ----
 
@@ -324,6 +427,7 @@ class Scraper:
             "label": self.label,
             "domain": self.domain,
             "currency": self.currency,
+            "authenticated": self.authenticated,
             "supports": {
                 "sort": self.supports_sort,
                 "condition": self.supports_condition,

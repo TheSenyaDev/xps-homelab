@@ -547,12 +547,21 @@ services:
       - "8005:8005"
     volumes:
       - ./senya-scraper/data:/data
+      # Optional signed-in Facebook session. Mounted from a file rather than
+      # passed as an env var because a session cookie is as good as the
+      # password, and env vars leak into `docker inspect` and process listings.
+      # Create ./senya-scraper/secrets/fb_cookies.txt (chmod 600) to enable it;
+      # the :ro and the missing-file fallback mean it is safe to leave absent.
+      - ./senya-scraper/secrets:/secrets:ro
     environment:
       - TZ=${TZ}
       # Notification channels are opt-in per channel (see scraper/notify/).
       # The log channel is on by default; set NOTIFY_LOG=0 to silence it.
       - NOTIFY_LOG=${SENYA_SCRAPER_NOTIFY_LOG:-1}
       - LOG_LEVEL=${SENYA_SCRAPER_LOG_LEVEL:-INFO}
+      # Points at the mount above. Absent or unreadable → logged-out scraping,
+      # which still works; it just returns less and exposes no sellers.
+      - FB_COOKIES_FILE=${SENYA_SCRAPER_FB_COOKIES_FILE:-/secrets/fb_cookies.txt}
     restart: unless-stopped
 
   # Spending tracker. Reads bank CSV exports from the read-only TrueNAS SMB mount

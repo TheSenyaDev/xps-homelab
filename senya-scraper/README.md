@@ -227,10 +227,53 @@ like a bug if you do not know about it:
 - **`min_interval` is 6 s here**, against 1.5 s elsewhere. A handful of quick
   requests is enough to start getting 400s on every URL for a while.
 
-**No seller data.** `marketplace_listing_seller` is null for logged-out
-requests, so the per-search seller blocklist cannot match anything on Facebook.
-The adapter sets `supports_seller = False` and the UI hides the field, rather
-than letting you configure something that would silently do nothing.
+**No seller data when logged out.** `marketplace_listing_seller` is null for
+anonymous requests, so the per-search seller blocklist has nothing to match on.
+`supports_seller` follows the session state and the UI hides the field, rather
+than letting you configure something that would silently do nothing. Sign in
+(below) and both come back.
+
+### Using a signed-in Facebook account
+
+Signing in gets you seller names (so the blocklist works) and generally more
+results. SenyaScraper reuses a session **you** established in a browser.
+
+> **It never handles your password, and that is deliberate.** Facebook
+> checkpoints scripted logins almost immediately and would demand 2FA anyway, so
+> automating the login form would not work *and* would mean storing credentials.
+> Reusing a browser session is the only approach that works and the one that
+> keeps your password out of this app entirely.
+
+1. Sign in to Facebook in a browser.
+2. Export its cookies for `facebook.com` — either a Cookie header string
+   (`c_user=…; xs=…; datr=…`) or the JSON any "export cookies" extension emits.
+   Both are accepted. `c_user` and `xs` are required; without both, the paste is
+   rejected as not-a-login rather than half-working.
+3. Save them and lock the file down:
+
+   ```bash
+   install -m 600 /dev/null senya-scraper/secrets/fb_cookies.txt
+   $EDITOR senya-scraper/secrets/fb_cookies.txt
+   docker compose up -d senya-scraper
+   ```
+
+`docker compose` already mounts `./senya-scraper/secrets` read-only and points
+`FB_COOKIES_FILE` at it. `GET /api/sites` reports `authenticated` so you can
+confirm it took. There is also an `FB_COOKIES` env var, but prefer the file:
+env vars leak into `docker inspect`, process listings and shell history.
+
+**Treat that file as a password.** A session cookie grants full access to the
+account — reading messages, posting, everything. `senya-scraper/secrets/` is
+gitignored except for its README. Scraping Marketplace also runs against Meta's
+terms of service, and doing it from a signed-in account is what makes an
+account actionable, so the risk is no longer purely theoretical. Use a
+throwaway account if that matters to you.
+
+If the cookies expire (logging out of the source browser does it), Facebook does
+**not** return an error — it quietly serves the ordinary logged-out page, which
+still has listings in it. The adapter checks the viewer id Facebook embeds in
+every page (`"USER_ID":"0"` when logged out) and says the session is dead,
+rather than letting you keep scraping in a silently degraded mode.
 
 **One page only.** Facebook returns ~12–24 listings and paginates over GraphQL
 with signed tokens, which is not reachable without a real session.

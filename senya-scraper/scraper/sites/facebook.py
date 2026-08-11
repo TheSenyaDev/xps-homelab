@@ -31,6 +31,7 @@ signed tokens, which is out of reach without a session).
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
@@ -42,6 +43,12 @@ from .base import Listing, Option, Scraper, ScrapeError, SearchOptions, parse_pr
 # it, so if Facebook renames this one key the adapter fails loudly rather than
 # returning half-populated rows.
 TITLE_KEY = "marketplace_listing_title"
+
+# The viewer id Facebook embeds in every page config: "0" when logged out, the
+# account id when signed in. The only dependable signal that a supplied session
+# is still good — Facebook serves a normal logged-out page for expired cookies
+# rather than an error.
+_USER_ID_RE = re.compile(r'"USER_ID":"(\d+)"')
 
 
 class FacebookMarketplace(Scraper):
@@ -55,7 +62,23 @@ class FacebookMarketplace(Scraper):
 
     supports_categories = False
     supports_condition = False   # logged-out search exposes no condition filter
-    supports_seller = False      # seller is null without a session — see above
+
+    # Reuse a session you signed in with yourself, in a browser. No password is
+    # ever handled here: Facebook checkpoints scripted logins almost at once and
+    # would demand 2FA, so automating it would not work *and* would mean storing
+    # credentials. Cookies are strictly better on both counts. See the README for
+    # how to export them — and note they grant full account access, so treat the
+    # file as a password.
+    cookie_env = "FB_COOKIES"
+    # c_user is the account id and xs the session token; without both, whatever
+    # was pasted is not a usable login.
+    required_cookies = ("c_user", "xs")
+
+    @property
+    def supports_seller(self):
+        # Sellers only appear in the payload for a signed-in session, so the
+        # blocklist becomes available exactly when it can actually work.
+        return self.authenticated
 
     SORTS = {
         "best": None,                       # Facebook's default relevance
@@ -106,6 +129,18 @@ class FacebookMarketplace(Scraper):
         if not opts.query:
             raise ScrapeError("Enter something to search for.")
         res = self.get(self.build_url(opts))
+        if self.authenticated and not self._session_alive(res.text):
+            # Cookies expire, and Facebook answers an expired session with a
+            # normal-looking logged-out page. Without this you would just see
+            # "no listing data" and go looking for a throttling problem that
+            # is not there.
+            self.authenticated = False
+            raise ScrapeError(
+                "The saved Facebook session is no longer valid — the cookies "
+                "have expired or been invalidated (logging out of the browser "
+                "you copied them from does this). Export them again; see "
+                "senya-scraper/README.md."
+            )
         nodes = self._extract(res.text)
         if not nodes:
             # The shell is a big, valid page — so "no nodes" almost always means
@@ -124,6 +159,23 @@ class FacebookMarketplace(Scraper):
                 seen.add(item.uid)
                 out.append(item)
         return out
+
+    @staticmethod
+    def _session_alive(html):
+        """Whether the response actually came back signed in.
+
+        Facebook does not reject bad cookies — it quietly serves the ordinary
+        logged-out page, which still contains listings. So an expired session
+        looks like success while silently losing seller data and returning less.
+        The tell is the viewer id Facebook embeds in every page config:
+        `"USER_ID":"0"` when logged out, the account id when not.
+
+        Absent entirely (an unusual page variant) is treated as alive: failing
+        to prove logged-out is not proof of logged-out, and a false alarm here
+        would be worse than the mild degradation it is warning about.
+        """
+        m = _USER_ID_RE.search(html)
+        return not m or m.group(1) != "0"
 
     # ----- payload -----
 
@@ -199,6 +251,14 @@ class FacebookMarketplace(Scraper):
             except (TypeError, ValueError, OSError):
                 posted = ""
 
+        # Populated only for a signed-in session; null when logged out, which is
+        # why supports_seller follows self.authenticated.
+        seller_node = node.get("marketplace_listing_seller") or {}
+        seller = (seller_node.get("name") or "").strip()
+        # Facebook has no seller handles, so the display name is the only thing
+        # to match a blocklist on. Spaces and all — hence no split() here.
+        seller_name = seller
+
         return Listing(
             uid=f"{self.key}:{listing_id}",
             site=self.key,
@@ -208,10 +268,12 @@ class FacebookMarketplace(Scraper):
             currency=currency,
             price_text=price_text,
             location=location,
+            seller=seller,
+            seller_name=seller_name,
             image=image,
             posted_at=posted,
-            # seller stays empty: null when logged out, hence supports_seller.
             extra={"listing_id": str(listing_id),
                    "was_price": was,
-                   "city": city},
+                   "city": city,
+                   "seller_id": str(seller_node.get("id") or "")},
         )
