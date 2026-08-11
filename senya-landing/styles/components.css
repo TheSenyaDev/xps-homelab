@@ -405,3 +405,35 @@
   .info-toggle { display: none; }
   .dashboard { border-right: none; }
 }
+
+/* ---- Tasks widget (js/sections/tasks.js) ---- */
+.tk-head { display: flex; align-items: center; gap: 5px; padding: 5px 7px; border-bottom: 1px solid var(--border-3); }
+.tk-sel {
+  flex: 1; min-width: 0; background: var(--panel-2); color: var(--dim);
+  border: 1px solid var(--border-3); border-radius: var(--radius-sm);
+  font-family: inherit; font-size: calc(10px * var(--fs)); padding: 2px 4px;
+}
+.tk-sel:hover { color: var(--text); border-color: var(--accent); }
+.tk-lim { flex: 0 0 46px; }
+
+.tk-rows { display: flex; flex-direction: column; }
+.tk-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; text-decoration: none; color: var(--text);
+  border-bottom: 1px solid var(--border-3); min-width: 0;
+}
+.tk-row:last-child { border-bottom: none; }
+.tk-row:hover { background: var(--panel-2); }
+
+/* Priority as a dot: loud only when high, so an ordinary list stays grey. */
+.tk-dot { width: 5px; height: 5px; border-radius: 50%; flex: 0 0 auto; background: var(--dim); }
+.tk-dot.tk-high { background: #f0616a; }
+.tk-dot.tk-medium { background: #f0a03a; }
+.tk-dot.tk-low { background: var(--border); }
+
+.tk-title { flex: 1; min-width: 0; font-size: calc(11px * var(--fs)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-cat { color: var(--muted); font-size: calc(9px * var(--fs)); white-space: nowrap; }
+.tk-due { color: var(--muted); font-size: calc(9px * var(--fs)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tk-due.overdue { color: #f0616a; }
+
+.tk-empty, .tk-more { color: var(--muted); font-size: calc(10px * var(--fs)); padding: 7px 8px; text-align: center; }

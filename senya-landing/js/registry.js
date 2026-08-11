@@ -9,6 +9,7 @@
 
 import { internal } from "./config.js";
 import { initDaily } from "./sections/daily.js";
+import { initTasks } from "./sections/tasks.js";
 import { initMarket } from "./sections/market.js";
 import { initCrypto } from "./sections/crypto.js";
 
@@ -16,6 +17,10 @@ export const SECTIONS = [
   {
     id: "daily", title: "Daily", hint: "today", bodyId: "daily", bodyClass: "daily",
     init: initDaily, available: () => !!internal,
+  },
+  {
+    id: "tasks", title: "Tasks", hint: "open", bodyId: "tasks", bodyClass: "tasks",
+    init: initTasks, available: () => !!internal,
   },
   {
     id: "market", title: "Market Map", hint: "S&P 500 · finviz", bodyId: "market", bodyClass: "market",

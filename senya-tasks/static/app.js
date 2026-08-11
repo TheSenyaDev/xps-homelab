@@ -33,6 +33,10 @@ const store = {
 
 let activeCategory = store.get("category", "all"); // "all" | "none" | <id>
 let filter = store.get("filter", "all");           // "all" | "active" | <status>
+// How many completed tasks stay visible, from the server's settings. Completed
+// work is noise once done, but hiding it entirely makes a task look like it
+// vanished, so the most recent few stay.
+let completedShown = 3;
 let sortBy = store.get("sort", "created");
 let tagFilter = store.get("tag", null);
 let collapsed = new Set(store.get("collapsed", []));
@@ -62,13 +66,36 @@ function el(tag, props = {}, ...kids) {
 }
 
 async function load() {
-  [meta, categories, tasks, tags] = await Promise.all([
+  let settings;
+  [meta, categories, tasks, tags, settings] = await Promise.all([
     api.get("/api/meta"),
     api.get("/api/categories"),
     api.get("/api/tasks"),
     api.get("/api/tags"),
+    api.get("/api/settings").catch(() => null),
   ]);
+  if (settings) completedShown = settings.values.completed_shown;
   render();
+}
+
+// ----- display settings -----
+
+function openPrefs() {
+  document.getElementById("prefs-shown").value = completedShown;
+  document.getElementById("prefs-modal").hidden = false;
+}
+
+async function savePrefs() {
+  const value = Number(document.getElementById("prefs-shown").value);
+  try {
+    const res = await api.put("/api/settings", { completed_shown: value });
+    completedShown = res.values.completed_shown;
+    document.getElementById("prefs-modal").hidden = true;
+    render();
+  } catch (err) {
+    document.getElementById("prefs-err").textContent = err.message;
+    document.getElementById("prefs-err").hidden = false;
+  }
 }
 
 // ----- category tree helpers -----
@@ -247,6 +274,23 @@ function visibleTasks() {
   });
 }
 
+// Keep only the most recently completed `completedShown`, dropping the rest.
+// Applied after filtering so the cap counts what is actually on screen, and
+// skipped when a status filter deliberately asks for done tasks — asking to see
+// "done" and being shown three of them would be a bug, not a tidy-up.
+function trimCompleted(arr) {
+  if (filter === "done") return arr;
+  const done = arr.filter((t) => t.done);
+  if (done.length <= completedShown) return arr;
+  const keep = new Set(
+    [...done]
+      .sort((a, b) => (b.completed_at || b.updated_at || "").localeCompare(
+                       a.completed_at || a.updated_at || ""))
+      .slice(0, completedShown)
+      .map((t) => t.id));
+  return arr.filter((t) => !t.done || keep.has(t.id));
+}
+
 // Done always sinks; within that, the chosen key. Missing due dates sort last.
 function sortTasks(arr) {
   const key = {
@@ -264,11 +308,17 @@ function sortTasks(arr) {
 
 function renderTasks() {
   const container = document.getElementById("task-groups");
-  const list = visibleTasks();
+  const list = trimCompleted(visibleTasks());
   container.innerHTML = "";
 
+  // Say when completed ones are being withheld, so a missing task is explained
+  // rather than mysterious.
+  const allVisible = visibleTasks();
+  const hiddenDone = allVisible.filter((t) => t.done).length
+                   - list.filter((t) => t.done).length;
   document.getElementById("current-count").textContent =
-    `${list.filter((t) => !t.done).length} open · ${list.length} shown`;
+    `${list.filter((t) => !t.done).length} open · ${list.length} shown` +
+    (hiddenDone ? ` · ${hiddenDone} completed hidden` : "");
 
   if (!list.length) {
     container.innerHTML = `<div class="empty">Nothing here. Add a task above.</div>`;
@@ -643,8 +693,14 @@ function renderCalendar() {
 
   document.getElementById("cal-summary").textContent =
     `${list.filter((t) => !t.done).length} open · ${list.length} shown`;
+  // Say when completed ones are being withheld, so a missing task is explained
+  // rather than mysterious.
+  const allVisible = visibleTasks();
+  const hiddenDone = allVisible.filter((t) => t.done).length
+                   - list.filter((t) => t.done).length;
   document.getElementById("current-count").textContent =
-    `${list.filter((t) => !t.done).length} open · ${list.length} shown`;
+    `${list.filter((t) => !t.done).length} open · ${list.length} shown` +
+    (hiddenDone ? ` · ${hiddenDone} completed hidden` : "");
 }
 
 let activeDay = null;   // day whose overflow tasks are expanded
@@ -1108,6 +1164,12 @@ function showSyncResult(ok, message, detail) {
     detail ? el("div", { class: "sync-result-detail", text: detail }) : null,
   ].filter(Boolean));
 }
+
+document.getElementById("btn-prefs").onclick = openPrefs;
+document.getElementById("prefs-close").onclick =
+  document.getElementById("prefs-cancel").onclick =
+    () => { document.getElementById("prefs-modal").hidden = true; };
+document.getElementById("prefs-save").onclick = savePrefs;
 
 document.getElementById("btn-sync-settings").onclick = async () => {
   await refreshSyncStatus();

@@ -72,7 +72,8 @@
           <button id="sync-chip" class="ghost-btn sync-chip" title="CalDAV sync" hidden></button>
           <button id="btn-export" class="ghost-btn" title="Download the tasks below as Obsidian markdown">↓&nbsp;Export</button>
           <button id="btn-import" class="ghost-btn" title="Paste Obsidian markdown to import">↑&nbsp;Import</button>
-          <button id="btn-sync-settings" class="ghost-btn" title="CalDAV sync settings">⚙</button>
+          <button id="btn-prefs" class="ghost-btn" title="Display settings">⚙</button>
+          <button id="btn-sync-settings" class="ghost-btn" title="CalDAV sync settings">⟳</button>
         </span>
       </header>
 
@@ -147,6 +148,34 @@
         <button id="import-back" class="ghost-btn" hidden>← Back</button>
         <button id="import-parse" class="primary-btn">Parse →</button>
         <button id="import-commit" class="primary-btn" hidden>Import</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Display settings. Small on purpose: this is for preferences about what
+       the list shows, not for anything that changes the data. -->
+  <div id="prefs-modal" class="modal" hidden>
+    <div class="modal-card narrow">
+      <header class="modal-head">
+        <strong>Display</strong>
+        <button id="prefs-close" class="icon-btn" title="Close (Esc)">✕</button>
+      </header>
+      <section class="modal-body">
+        <div class="form-grid">
+          <label for="prefs-shown">Completed tasks shown</label>
+          <input id="prefs-shown" type="number" min="0" max="25" step="1" />
+        </div>
+        <p class="hint">
+          Completed work is noise once it is done, but hiding it entirely makes a
+          task look like it vanished — so the most recently finished stay visible
+          and older ones drop off. <strong>0</strong> hides them all. The
+          <em>done</em> filter always shows everything regardless.
+        </p>
+        <p id="prefs-err" class="hint error" hidden></p>
+      </section>
+      <footer class="modal-foot">
+        <button id="prefs-cancel" class="ghost-btn">Cancel</button>
+        <button id="prefs-save" class="primary-btn">Save</button>
       </footer>
     </div>
   </div>
