@@ -85,7 +85,18 @@ Markup and behaviour stay separate: components carry no scripts, and each
 ## Customize
 
 At runtime (saved per-browser, no code needed): open the **⚙ Customize** panel to
-set the size, **show/hide** any section and **drag to reorder** them.
+set the page scale, **show/hide** any section, and arrange the dashboard.
+
+Size is two independent knobs (see [`js/ui-scale.js`](js/ui-scale.js)):
+
+- **Font** — type only (85–140%). Every `font-size` in the stylesheets is
+  written `calc(<px> * var(--fs))`, so text grows inside the existing chrome.
+- **Zoom** — the whole page (80–160%): type, padding, row heights, the rail and
+  the info pane, via root `zoom`, so proportions are preserved.
+
+Order, hidden set and both scales live in `localStorage`
+(`senya.sections.order` / `senya.sections.hidden` / `senya.fontScale` /
+`senya.uiZoom`).
 
 ### Arranging widgets
 
@@ -103,19 +114,10 @@ column boundary: halves at 6, thirds at 4, quarters at 3.
   (4+4+4); a remainder goes to the leftmost, so five in a row is 3+3+2+2+2 and
   the row still fills.
 
-Size is also settable numerically in Customize, per widget, alongside whatever
-settings that widget declares. Everything is remembered per browser.
+Width and height are also settable numerically in Customize, per widget,
+alongside whatever settings that widget declares. Layout lives in
+`localStorage` under `senya.widgets`.
 
-Size is two independent knobs (see [`js/ui-scale.js`](js/ui-scale.js)):
-
-- **Font** — type only (85–140%). Every `font-size` in the stylesheets is
-  written `calc(<px> * var(--fs))`, so text grows inside the existing chrome.
-- **Zoom** — the whole page (80–160%): type, padding, row heights, the rail and
-  the info pane, via root `zoom`, so proportions are preserved.
-
-Order, hidden set and both scales live in `localStorage`
-(`senya.sections.order` / `senya.sections.hidden` / `senya.fontScale` /
-`senya.uiZoom`).
 
 In code:
 
