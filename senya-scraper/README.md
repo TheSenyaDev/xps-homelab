@@ -65,6 +65,37 @@ Declare what the site can actually filter by (`supports_sort`,
 `supports_price_range`, …) and the UI greys out the controls it cannot honour
 instead of silently ignoring them.
 
+### Per-site search options
+
+Every marketplace has a query, a sort and a price range, so those are shared
+fields on `SearchOptions`. Everything a site can filter by that others **cannot**
+— eBay's buying format, a car site's mileage — is declared by the adapter as an
+`Option`, and the frontend renders the controls from that description:
+
+```python
+OPTIONS = [
+    Option("buying_format", "Buying format", "choice",
+           choices=(("any", "Any"), ("bin", "Buy It Now"), ("auction", "Auction")),
+           default="any"),
+    Option("free_shipping", "Free shipping only", "bool", default=False),
+]
+```
+
+Types are `bool · choice · text · number`. Adding a filter is one line in one
+adapter: no frontend change, no shared field that other sites have to ignore,
+and no site's filters leaking into another's URL — `clean_params()` keeps only
+the keys that site declared and coerces them to their type.
+
+Values are stored per site, as JSON keyed by site key:
+
+```json
+{"ebay-ca": {"buying_format": "bin", "free_shipping": true},
+ "kijiji":  {"radius_km": 25}}
+```
+
+So a saved profile pointed at eBay keeps its Kijiji settings if you switch it
+over and back, and each site is configured completely independently.
+
 ### Adding a notification channel
 
 Same shape. Configured channels are wired to the event bus at startup; an
@@ -105,12 +136,18 @@ storage, **append** a string to `db.MIGRATIONS` — never edit a shipped one;
 | `GET` | `/api/health` | registered sites + notification channels |
 | `POST` | `/api/search` | live search, persists nothing |
 | `GET`/`POST` | `/api/searches` | list / create saved searches |
+| `GET`/`PATCH` | `/api/searches/<id>` | read / edit one profile (partial payload) |
 | `DELETE` | `/api/searches/<id>` | |
 | `POST` | `/api/searches/<id>/run` | re-run + diff → `{new, price_drops, results}` |
 | `GET` | `/api/searches/<id>/results` | stored listings (`?include_gone=1`) |
 
-Search body: `{query, site, category, sort, condition, min_price, max_price}`.
-`sort` is one of `best · newest · price-asc · price-desc`.
+Search body: `{query, site, category, sort, condition, min_price, max_price, params}`.
+`sort` is one of `best · newest · price-asc · price-desc`; `params` holds that
+site's own options (see above).
+
+Editing a profile keeps its stored listings on purpose — tightening a price
+ceiling should not make everything already seen look new on the next run. Items
+that fall outside the new criteria just stop coming back and get flagged `gone`.
 
 **Status codes matter here.** `400` is your mistake (no query, unknown site);
 `502` means the marketplace refused or changed shape — a real thing that
@@ -123,6 +160,11 @@ Three behaviours cost real debugging time, so they are documented in
 
 - **A cold request to `/sch/` returns 403.** Fetching the homepage first and
   reusing those cookies works; that is what `home_url` / `Scraper.prime()` do.
+- **Rate limiting arrives as HTTP 200.** Push too hard and eBay serves a
+  *"Pardon Our Interruption — checking your browser"* interstitial with a
+  success status, which parses as a valid page with zero results. `Scraper`
+  sniffs for it (`INTERSTITIAL_MARKERS`) and says "you are being rate limited"
+  rather than the very misleading "their markup changed".
 - **Results use `.s-card`, not `.s-item`.** eBay changed the markup — older
   selectors match nothing and look like "no results".
 - **Every card's footer reads `derosnopS`** — "Sponsored" reversed, to defeat

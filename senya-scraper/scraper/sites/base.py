@@ -76,6 +76,52 @@ class Listing:
 
 
 @dataclass(frozen=True)
+class Option:
+    """One site-specific search control.
+
+    The shared `SearchOptions` fields (query, sort, condition, price) exist
+    because every marketplace has them. Everything a site can filter by that
+    others cannot — eBay's buying format, a car site's mileage — is declared
+    here instead, and the UI renders the controls from this description. That
+    way adding a filter is a line in one adapter, with no frontend change and
+    no field that other sites have to ignore.
+
+    `type` is one of: bool · choice · text · number.
+    `choices` is [(value, label)], required for `choice`.
+    """
+
+    key: str
+    label: str
+    type: str = "bool"
+    choices: tuple = ()
+    default: object = None
+    help: str = ""
+
+    def as_dict(self):
+        return {
+            "key": self.key, "label": self.label, "type": self.type,
+            "choices": [{"value": v, "label": l} for v, l in self.choices],
+            "default": self.default, "help": self.help,
+        }
+
+    def coerce(self, value):
+        """Normalise a value that arrived as JSON or a form string."""
+        if value is None:
+            return self.default
+        if self.type == "bool":
+            return value not in (False, 0, "0", "false", "", None)
+        if self.type == "number":
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return self.default
+        if self.type == "choice":
+            allowed = {v for v, _ in self.choices}
+            return value if value in allowed else self.default
+        return str(value)
+
+
+@dataclass(frozen=True)
 class Category:
     """One entry in a site's category tree. Sites number their categories
     differently (eBay has _sacat ids, Kijiji has path slugs), so `value` is
@@ -103,6 +149,11 @@ class SearchOptions:
     max_price: float | None = None
     page: int = 1
 
+    #: Site-specific values, keyed by that site's `Option.key`. Kept in its own
+    #: dict rather than as fields so one site's filters never leak into another's
+    #: signature — an adapter reads only the keys it declared.
+    params: dict = field(default_factory=dict)
+
     @classmethod
     def from_dict(cls, src):
         def num(key):
@@ -113,6 +164,9 @@ class SearchOptions:
                 return float(v)
             except (TypeError, ValueError):
                 return None
+        params = src.get("params") or {}
+        if not isinstance(params, dict):
+            params = {}
         return cls(
             query=(src.get("query") or "").strip(),
             sort=src.get("sort") or "best",
@@ -121,7 +175,11 @@ class SearchOptions:
             min_price=num("min_price"),
             max_price=num("max_price"),
             page=int(src.get("page") or 1),
+            params=dict(params),
         )
+
+    def param(self, key, default=None):
+        return self.params.get(key, default)
 
 
 # ----- shared parsing -----
@@ -234,6 +292,20 @@ class Scraper:
         implemented them simply shows no category picker."""
         return []
 
+    def options(self) -> list[Option]:
+        """Filters unique to this site. Default: none."""
+        return []
+
+    def clean_params(self, params):
+        """Keep only values this site declared, coerced to their type.
+
+        Anything unrecognised is dropped rather than passed through, so a
+        profile edited while pointed at another site cannot smuggle that site's
+        filters into this one's URL.
+        """
+        params = params or {}
+        return {o.key: o.coerce(params.get(o.key)) for o in self.options()}
+
     def describe(self):
         """What /api/sites hands the frontend."""
         return {
@@ -248,6 +320,7 @@ class Scraper:
                 "categories": self.supports_categories,
             },
             "categories": [asdict(c) for c in self.categories()],
+            "options": [o.as_dict() for o in self.options()],
         }
 
     # ---- fetching ----
@@ -286,7 +359,33 @@ class Scraper:
             )
         if res.status_code != 200:
             raise ScrapeError(f"{self.label} returned HTTP {res.status_code}.")
+        self.check_interstitial(res)
         return res
+
+    #: Phrases that mark a bot-check page. These are served with HTTP 200 and a
+    #: normal content type, so without this they parse as a valid page with zero
+    #: results and get misreported as "the site changed its markup".
+    INTERSTITIAL_MARKERS = (
+        "pardon our interruption",
+        "checking your browser",
+        "before you access",
+        "enable javascript and cookies to continue",
+        "verify you are a human",
+        "unusual traffic",
+    )
+
+    def check_interstitial(self, res):
+        # Real result pages are large; the challenge pages are a few KB. Checking
+        # the size first keeps this off the hot path for genuine responses.
+        if len(res.content) > 60_000:
+            return
+        head = res.text[:4000].lower()
+        if any(m in head for m in self.INTERSTITIAL_MARKERS):
+            self._primed = False
+            raise ScrapeError(
+                f"{self.label} served a bot check instead of results — usually "
+                f"too many requests too quickly. Waiting a few minutes clears it."
+            )
 
     # ---- the one thing every adapter must implement ----
 

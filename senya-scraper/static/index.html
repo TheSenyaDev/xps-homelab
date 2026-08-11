@@ -30,14 +30,18 @@
       <button type="submit" class="go">SEARCH</button>
       <button type="button" id="save" class="ghost" title="Save this search to track new listings and price drops">SAVE</button>
     </form>
+    <!-- Filters only this site has, rendered from /api/sites. Empty for a site
+         that declares none, so nothing here is eBay-specific. -->
+    <div id="site-opts" class="site-opts"></div>
   </header>
 
   <main class="wrap">
     <aside class="side">
-      <h2 class="head">SAVED</h2>
+      <h2 class="head">SEARCHES <button id="new" class="add" type="button" title="New search">+ NEW</button></h2>
       <ul id="saved" class="saved"></ul>
-      <p class="hint">Saved searches remember every listing they have seen, so
-        re-running one tells you what is <b>new</b> and what <b>dropped</b> in price.</p>
+      <p class="hint">A saved search remembers every listing it has seen, so
+        re-running one tells you what is <b>new</b> and what <b>dropped</b> in price.
+        Click one to run it, <b>✎</b> to edit.</p>
     </aside>
 
     <section class="results">
@@ -45,6 +49,66 @@
       <div id="grid" class="grid"></div>
     </section>
   </main>
+
+  <!-- Create/edit a saved search. One form for both: `editing` in app.js decides
+       whether SAVE posts a new profile or patches an existing one. -->
+  <dialog id="dlg" class="dlg">
+    <form id="dlg-form" method="dialog">
+      <h2 id="dlg-title" class="head">NEW SEARCH</h2>
+
+      <label>Name<span class="sub">what to call it</span>
+        <input id="f-name" type="text" placeholder="Dell XPS" />
+      </label>
+      <label>Search for<span class="sub">required</span>
+        <input id="f-query" type="text" placeholder="dell xps 13" required />
+      </label>
+      <label>Site
+        <select id="f-site"></select>
+      </label>
+      <label id="f-category-row">Category
+        <select id="f-category"></select>
+      </label>
+      <div class="pair">
+        <label>Condition
+          <select id="f-condition">
+            <option value="any">Any</option>
+            <option value="new">New</option>
+            <option value="used">Used</option>
+          </select>
+        </label>
+        <label>Sort
+          <select id="f-sort">
+            <option value="best">Best match</option>
+            <option value="newest">Newest</option>
+            <option value="price-asc">Price ↑</option>
+            <option value="price-desc">Price ↓</option>
+          </select>
+        </label>
+      </div>
+      <div class="pair">
+        <label>Min price<input id="f-min" type="number" min="0" step="1" placeholder="any" /></label>
+        <label>Max price<input id="f-max" type="number" min="0" step="1" placeholder="any" /></label>
+      </div>
+      <!-- Site-specific filters for the selected site, built from its declared
+           options. Each site's values are stored separately, so switching the
+           Site dropdown swaps these without losing the other site's settings. -->
+      <fieldset id="f-opts-wrap" class="opts">
+        <legend id="f-opts-legend">Site options</legend>
+        <div id="f-opts"></div>
+      </fieldset>
+
+      <label class="check">
+        <input id="f-notify" type="checkbox" checked />
+        Notify on new listings and price drops
+      </label>
+
+      <p id="dlg-err" class="dlg-err" hidden></p>
+      <menu class="dlg-actions">
+        <button type="button" id="dlg-cancel" class="ghost">CANCEL</button>
+        <button type="submit" id="dlg-save" class="go">SAVE</button>
+      </menu>
+    </form>
+  </dialog>
 
   <script src="/app.js" type="module"></script>
 </body>

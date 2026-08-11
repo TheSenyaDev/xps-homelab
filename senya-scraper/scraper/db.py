@@ -59,8 +59,17 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE INDEX IF NOT EXISTS idx_listings_search ON listings(search_id, last_seen DESC);
 """
 
+# Site-specific filter values, as a JSON object keyed by site — e.g.
+#   {"ebay-ca": {"buying_format": "bin", "free_shipping": true}}
+# Keyed by site rather than flat so switching a profile between marketplaces
+# keeps each one's settings instead of discarding them, and so one site's
+# filters can never be handed to another's URL builder.
+M1 = """
+ALTER TABLE searches ADD COLUMN params TEXT NOT NULL DEFAULT '{}';
+"""
+
 #: Append only. Never edit an entry that has shipped.
-MIGRATIONS: list[str] = []
+MIGRATIONS: list[str] = [M1]
 
 
 def db_path():

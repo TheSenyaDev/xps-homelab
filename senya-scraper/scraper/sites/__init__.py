@@ -18,7 +18,7 @@ search would throw that away and start collecting 403s.
 import importlib
 import pkgutil
 
-from .base import (Category, Listing, Scraper, ScrapeError, SearchOptions,
+from .base import (Category, Listing, Option, Scraper, ScrapeError, SearchOptions,
                    UnknownSite)
 
 # Import every sibling module so its Scraper subclasses register themselves.

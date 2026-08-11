@@ -9,6 +9,7 @@ without this module knowing they exist.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
@@ -27,12 +28,22 @@ def fail(msg, code=400):
     return jsonify({"error": msg}), code
 
 
+def _params_map(row):
+    """The stored per-site params, as {site: {option: value}}."""
+    try:
+        data = json.loads(row["params"] or "{}")
+        return data if isinstance(data, dict) else {}
+    except (ValueError, TypeError, IndexError, KeyError):
+        return {}
+
+
 def _opts_for(row):
-    """SearchOptions from a stored row."""
+    """SearchOptions from a stored row, carrying only that site's own params."""
     return sites.SearchOptions.from_dict({
         "query": row["query"], "sort": row["sort"], "condition": row["condition"],
         "category": row["category"], "min_price": row["min_price"],
         "max_price": row["max_price"],
+        "params": _params_map(row).get(row["site"], {}),
     })
 
 
@@ -47,28 +58,115 @@ def list_searches():
     return jsonify([dict(r) for r in rows])
 
 
-@bp.post("/searches")
-def create_search():
-    body = request.get_json(silent=True) or {}
-    opts = sites.SearchOptions.from_dict(body)
+def _fields_from(body, defaults=None):
+    """Validate a create/update payload into the columns of `searches`.
+
+    Returns (fields, error). On update, `defaults` is the existing row, so a
+    partial payload only changes what it actually mentions — otherwise editing
+    just the price would blank the query.
+    """
+    d = dict(defaults) if defaults else {}
+    merged = {
+        "query": body.get("query", d.get("query", "")),
+        "sort": body.get("sort", d.get("sort", "best")),
+        "condition": body.get("condition", d.get("condition", "any")),
+        "category": body.get("category", d.get("category", "")),
+        "min_price": body.get("min_price", d.get("min_price")),
+        "max_price": body.get("max_price", d.get("max_price")),
+    }
+    opts = sites.SearchOptions.from_dict(merged)
     if not opts.query:
-        return fail("A saved search needs a query.")
-    site = body.get("site") or "ebay-ca"
+        return None, "A saved search needs something to search for."
+
+    site = body.get("site", d.get("site") or "ebay-ca")
     try:
         sites.get(site)
     except sites.ScrapeError as e:
-        return fail(str(e))
+        return None, str(e)
+
+    if (opts.min_price is not None and opts.max_price is not None
+            and opts.min_price > opts.max_price):
+        # Cheap to catch here; the site would just return nothing and look broken.
+        return None, "Minimum price is above the maximum."
+
+    # Site-specific filters, merged into whatever the profile already held for
+    # other sites so editing an eBay profile never discards a Kijiji one.
+    stored = {}
+    if defaults:
+        try:
+            stored = json.loads(d.get("params") or "{}")
+        except (ValueError, TypeError):
+            stored = {}
+        if not isinstance(stored, dict):
+            stored = {}
+    if "params" in body:
+        # Validated against the target site's declared options, so unknown keys
+        # are dropped rather than stored and later smuggled into a URL.
+        stored[site] = sites.get(site).clean_params(body.get("params") or {})
+
+    notify = body.get("notify", d.get("notify", 1))
+    return {
+        "name": (body.get("name") or d.get("name") or opts.query).strip(),
+        "site": site,
+        "query": opts.query,
+        "sort": opts.sort,
+        "condition": opts.condition,
+        "category": opts.category,
+        "min_price": opts.min_price,
+        "max_price": opts.max_price,
+        "notify": 0 if notify in (False, 0, "0", "false") else 1,
+        "params": json.dumps(stored),
+    }, None
+
+
+@bp.post("/searches")
+def create_search():
+    fields, err = _fields_from(request.get_json(silent=True) or {})
+    if err:
+        return fail(err)
     db = get_db()
     cur = db.execute(
         """INSERT INTO searches
-               (name, site, query, sort, condition, category, min_price, max_price, notify)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
-        ((body.get("name") or opts.query).strip(), site, opts.query, opts.sort,
-         opts.condition, opts.category, opts.min_price, opts.max_price,
-         0 if body.get("notify") is False else 1))
+               (name, site, query, sort, condition, category, min_price, max_price,
+                notify, params)
+           VALUES (:name,:site,:query,:sort,:condition,:category,:min_price,:max_price,
+                   :notify,:params)""",
+        fields)
     db.commit()
     row = db.execute("SELECT * FROM searches WHERE id=?", (cur.lastrowid,)).fetchone()
     return jsonify(dict(row)), 201
+
+
+@bp.patch("/searches/<int:sid>")
+def update_search(sid):
+    """Edit a saved profile in place.
+
+    The stored listings are deliberately kept: changing a price ceiling should
+    not make everything already seen look new on the next run. Items that fall
+    outside the new criteria simply stop coming back and get flagged `gone`.
+    """
+    db = get_db()
+    row = db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()
+    if not row:
+        return fail("No such saved search.", 404)
+    fields, err = _fields_from(request.get_json(silent=True) or {}, defaults=row)
+    if err:
+        return fail(err)
+    db.execute(
+        """UPDATE searches SET name=:name, site=:site, query=:query, sort=:sort,
+               condition=:condition, category=:category, min_price=:min_price,
+               max_price=:max_price, notify=:notify, params=:params
+           WHERE id=:id""", {**fields, "id": sid})
+    db.commit()
+    return jsonify(dict(db.execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()))
+
+
+@bp.get("/searches/<int:sid>")
+def get_search(sid):
+    row = get_db().execute("SELECT * FROM searches WHERE id=?", (sid,)).fetchone()
+    if not row:
+        return fail("No such saved search.", 404)
+    return jsonify(dict(row))
 
 
 @bp.delete("/searches/<int:sid>")

@@ -25,7 +25,8 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from .base import Category, Listing, Scraper, ScrapeError, SearchOptions, clean, parse_price
+from .base import (Category, Listing, Option, Scraper, ScrapeError, SearchOptions,
+                   clean, parse_price)
 
 # The numeric id in /itm/<id> — stable per item, unlike the full URL, which
 # carries per-search tracking params that change every run.
@@ -72,8 +73,37 @@ class EbayCA(Scraper):
         Category("collectibles", "Collectibles", "1"),
     ]
 
+    # eBay's own filters, which most other marketplaces have no equivalent for.
+    # Declared rather than hard-coded into the URL builder so the UI can render
+    # them without knowing anything about eBay, and so a site that lacks them
+    # simply has none to render. Each maps to one of eBay's LH_* query params.
+    OPTIONS = [
+        Option("buying_format", "Buying format", "choice",
+               choices=(("any", "Any"), ("bin", "Buy It Now"),
+                        ("auction", "Auction"), ("offer", "Best Offer")),
+               default="any"),
+        Option("item_location", "Item location", "choice",
+               choices=(("any", "Anywhere"), ("ca", "Canada only"),
+                        ("na", "North America")),
+               default="any",
+               help="Cuts out long international shipping."),
+        Option("free_shipping", "Free shipping only", "bool", default=False),
+        Option("returns", "Returns accepted", "bool", default=False),
+        Option("sold", "Sold & completed listings", "bool", default=False,
+               help="Shows what things actually sold for, not what sellers ask."),
+    ]
+
+    # option value -> the LH_* params eBay wants for it
+    _FORMAT_PARAMS = {"bin": {"LH_BIN": "1"},
+                      "auction": {"LH_Auction": "1"},
+                      "offer": {"LH_BO": "1"}}
+    _LOCATION_PARAMS = {"ca": {"LH_PrefLoc": "1"}, "na": {"LH_PrefLoc": "2"}}
+
     def categories(self):
         return self.CATEGORIES
+
+    def options(self):
+        return self.OPTIONS
 
     # ----- request -----
 
@@ -96,7 +126,28 @@ class EbayCA(Scraper):
             params["_udlo"] = str(opts.min_price)
         if opts.max_price is not None:
             params["_udhi"] = str(opts.max_price)
+        params.update(self._option_params(opts))
         return "https://www.ebay.ca/sch/i.html?" + urlencode(params)
+
+    def _option_params(self, opts):
+        """Translate this site's declared options into eBay's LH_* params.
+
+        `clean_params` has already dropped anything not declared here, so an
+        unexpected key cannot reach the URL.
+        """
+        p = self.clean_params(opts.params)
+        out = {}
+        out.update(self._FORMAT_PARAMS.get(p.get("buying_format"), {}))
+        out.update(self._LOCATION_PARAMS.get(p.get("item_location"), {}))
+        if p.get("free_shipping"):
+            out["LH_FS"] = "1"
+        if p.get("returns"):
+            out["LH_RPA"] = "1"
+        if p.get("sold"):
+            # eBay wants both: Sold alone still shows unsold completed items.
+            out["LH_Sold"] = "1"
+            out["LH_Complete"] = "1"
+        return out
 
     def _category_value(self, key):
         if not key or key == "all":
