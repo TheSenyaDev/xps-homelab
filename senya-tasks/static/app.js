@@ -544,18 +544,21 @@ function taskRow(t) {
   actions.append(del);
 
   main.append(prio, title, metaBox);
+  row.append(cb, main, dueCell(t), actions);
 
-  // A note is part of the task, not a detail to go hunting for. One line under
-  // the title, collapsed to its first line and clipped — the full text is in
-  // the editor, and a row that grows with an essay would wreck the list.
+  // A note is part of the task, not a detail to go hunting for. Appended to the
+  // row rather than into .main so it forms a real second grid row: everything
+  // in the first row (checkbox, title, due, actions) then centres against the
+  // title alone, instead of drifting to the midpoint of a two-line cell.
+  // First line only — a row that grew with an essay would wreck the list.
   if (t.notes && t.notes.trim()) {
     const note = document.createElement("span");
     note.className = "note-peek";
     note.textContent = t.notes.trim().split("\n")[0];
     note.title = t.notes;
-    main.append(note);
+    row.append(note);
   }
-  row.append(cb, main, dueCell(t), actions);
+
   return row;
 }
 

@@ -261,7 +261,13 @@ input[type="checkbox"]:checked::after {
 .task {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto auto;
-  align-items: center; gap: var(--gap);
+  /* Two content-sized rows: the task, then its note. align-content centres the
+     pair inside the row's min-height instead of stretching the tracks, so a
+     task without a note keeps exactly the height it had. align-items then
+     centres each item within its own row, which is what puts the checkbox
+     level with the title rather than adrift between title and note. */
+  grid-template-rows: auto auto;
+  align-items: center; align-content: center; gap: 0 var(--gap);
   min-height: var(--row); padding: 4px 16px;
   border-bottom: 1px solid var(--border-soft);
   border-radius: 0;
@@ -270,16 +276,20 @@ input[type="checkbox"]:checked::after {
 .task.done .title { color: var(--muted); text-decoration: line-through; }
 .task.done .prio { opacity: .35; }
 
-/* Wraps so a note can sit on its own line under the title. The first row keeps
-   its original single-line shape; the note is pushed to a new line by taking
-   the full width. */
-.task .main { display: flex; align-items: center; gap: var(--gap); min-width: 0; overflow: hidden; flex-wrap: wrap; }
+.task .main { display: flex; align-items: center; gap: var(--gap); min-width: 0; overflow: hidden; }
+
+/* The note is its own grid row, starting under the title and running to the end
+   of the row. Being a real row is what keeps the checkbox level with the title:
+   with the note inside .main, the cell was two lines tall and align-items:center
+   parked the checkbox between them. */
 .task .note-peek {
-  flex: 1 0 100%;
+  grid-column: 2 / -1;
+  grid-row: 2;
   font-size: .78em; color: var(--muted, #6b7280);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  padding-left: 14px;                 /* clears the priority LED above it */
+  padding-left: 14px;                 /* aligns under the title, past the LED */
   line-height: 1.35;
+  margin-top: -2px;                   /* tucks it under the title, not adrift */
 }
 /* Hidden while the editor is open — the full note is right there. */
 .task.open .note-peek { display: none; }
