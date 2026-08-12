@@ -270,7 +270,19 @@ input[type="checkbox"]:checked::after {
 .task.done .title { color: var(--muted); text-decoration: line-through; }
 .task.done .prio { opacity: .35; }
 
-.task .main { display: flex; align-items: center; gap: var(--gap); min-width: 0; overflow: hidden; }
+/* Wraps so a note can sit on its own line under the title. The first row keeps
+   its original single-line shape; the note is pushed to a new line by taking
+   the full width. */
+.task .main { display: flex; align-items: center; gap: var(--gap); min-width: 0; overflow: hidden; flex-wrap: wrap; }
+.task .note-peek {
+  flex: 1 0 100%;
+  font-size: .78em; color: var(--muted, #6b7280);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding-left: 14px;                 /* clears the priority LED above it */
+  line-height: 1.35;
+}
+/* Hidden while the editor is open — the full note is right there. */
+.task.open .note-peek { display: none; }
 /* Priority reads as a square LED, not a soft dot */
 .task .prio { width: 8px; height: 8px; border-radius: 0; flex: none; background: var(--med); }
 .task .prio.high { background: var(--high); box-shadow: none; }

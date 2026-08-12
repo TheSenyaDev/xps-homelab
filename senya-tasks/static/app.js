@@ -13,6 +13,13 @@ const api = {
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
     return r.status === 204 ? null : r.json();
   },
+  // Named wrappers over send(). Callers reach for api.post before api.send,
+  // and a missing method fails as "api.post is not a function" — a click that
+  // does nothing at all, with the error only in the console.
+  post(url, body) { return this.send("POST", url, body); },
+  put(url, body) { return this.send("PUT", url, body); },
+  patch(url, body) { return this.send("PATCH", url, body); },
+  del(url) { return this.send("DELETE", url); },
 };
 
 // ----- state -----
@@ -537,6 +544,17 @@ function taskRow(t) {
   actions.append(del);
 
   main.append(prio, title, metaBox);
+
+  // A note is part of the task, not a detail to go hunting for. One line under
+  // the title, collapsed to its first line and clipped — the full text is in
+  // the editor, and a row that grows with an essay would wreck the list.
+  if (t.notes && t.notes.trim()) {
+    const note = document.createElement("span");
+    note.className = "note-peek";
+    note.textContent = t.notes.trim().split("\n")[0];
+    note.title = t.notes;
+    main.append(note);
+  }
   row.append(cb, main, dueCell(t), actions);
   return row;
 }
@@ -544,12 +562,17 @@ function taskRow(t) {
 async function addSubtask(t) {
   const title = prompt(`Subtask of “${t.title}”`);
   if (!title || !title.trim()) return;
-  // Inherits the parent's category so the pair stays together in the list and,
-  // in per-category sync mode, in the same CalDAV collection.
-  await api.post("/api/tasks", {
-    title: title.trim(), parent_id: t.id, category_id: t.category_id,
-  });
-  expanded.add(t.id);
+  try {
+    // Inherits the parent's category so the pair stays together in the list
+    // and, in per-category sync mode, in the same CalDAV collection.
+    await api.post("/api/tasks", {
+      title: title.trim(), parent_id: t.id, category_id: t.category_id,
+    });
+  } catch (err) {
+    // A silent failure here is indistinguishable from "subtasks do not work".
+    alert(`Could not add the subtask: ${err.message}`);
+    return;
+  }
   await load();
 }
 
