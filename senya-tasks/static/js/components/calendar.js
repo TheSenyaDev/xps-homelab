@@ -4,9 +4,9 @@
 import { patchTask as patch, reload } from "../core/actions.js";
 import { emit, on } from "../core/bus.js";
 import { $, el } from "../core/dom.js";
-import { DOW, MONTH_NAMES, iso, today } from "../core/format.js";
+import { DOW, MONTH_NAMES, iso } from "../core/format.js";
 import { categoryById, getCategories, getMeta, getTags, getTasks, prefs, setPref,
-         visibleTasks } from "../core/state.js";
+         sortTasks, visibleTasks } from "../core/state.js";
 
 // Module-local mirrors of the shared data, refreshed whenever it reloads.
 // Kept as plain bindings so the render code below reads exactly as it did
@@ -25,6 +25,21 @@ function syncMirrors() {
   tags = getTags();
 }
 on("data:changed", syncMirrors);
+
+/** Month navigation, owned here because the cursor is this view's state — the
+ *  toolbar should ask for "next month", not reach in and set a Date. */
+export function shiftMonth(delta) {
+  calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + delta, 1);
+  activeDay = null;
+  renderCalendar();
+}
+
+export function goToday() {
+  const now = new Date();
+  calCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  activeDay = null;
+  renderCalendar();
+}
 
 export { renderCalendar };
 

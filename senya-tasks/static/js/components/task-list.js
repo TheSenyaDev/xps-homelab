@@ -7,10 +7,10 @@
 import { api } from "../core/api.js";
 import { patchTask as patch, reload } from "../core/actions.js";
 import { emit, on } from "../core/bus.js";
-import { $, el } from "../core/dom.js";
+import { $, el, watchDateInput } from "../core/dom.js";
 import { MONTHS, STATUS_LABEL, STATUS_RING, today } from "../core/format.js";
 import {
-  categoryById, expanded, getCategories, getMeta, getTags, getTasks,
+  categoryById, expanded, getCategories, getMeta, getTags, getTasks, prefs, setPref,
   sortTasks, subtasksOf, trimCompleted, visibleTasks,
 } from "../core/state.js";
 
@@ -207,12 +207,11 @@ function taskRow(t) {
 
   for (const tag of t.tags) {
     const c = document.createElement("button");
-    c.className = "chip tag" + (tagFilter === tag.name ? " on" : "");
+    c.className = "chip tag" + (prefs.tag === tag.name ? " on" : "");
     c.textContent = `#${tag.name}`;
     c.onclick = (e) => {
       e.stopPropagation();
-      tagFilter = tagFilter === tag.name ? null : tag.name;
-      store.set("tag", tagFilter);
+      setPref("tag", prefs.tag === tag.name ? null : tag.name);
       emit("view:changed");
     };
     metaBox.append(c);

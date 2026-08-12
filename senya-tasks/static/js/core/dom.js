@@ -20,3 +20,17 @@ export function el(tag, props = {}, ...kids) {
   n.append(...kids.filter((k) => k != null));
   return n;
 }
+
+/**
+ * Collapse a date input to its picker icon while it is empty.
+ *
+ * Shared because the new-task bar, the inline editor and the import preview all
+ * have one; it lived inside the toolbar's init and was invisible to the other
+ * two, which is a runtime error rather than a missed style.
+ */
+export function watchDateInput(el) {
+  const sync = () => el.classList.toggle("has-value", !!el.value);
+  el.addEventListener("input", sync);
+  el.addEventListener("change", sync);
+  sync();
+}

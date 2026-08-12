@@ -8,11 +8,13 @@
 import { api } from "../core/api.js";
 import { reload } from "../core/actions.js";
 import { emit, on } from "../core/bus.js";
-import { $, $$, el } from "../core/dom.js";
-import { iso, today } from "../core/format.js";
+import { $, $$, el, watchDateInput } from "../core/dom.js";
+import { store } from "../core/store.js";
+import { iso } from "../core/format.js";
 import {
-  getCategories, getMeta, getTasks, prefs, setPref, setQuery,
+  expanded, getCategories, getMeta, getTasks, prefs, setPref, setQuery, visibleTasks,
 } from "../core/state.js";
+import { goToday, shiftMonth } from "./calendar.js";
 import { render, renderView, setView } from "../view.js";
 
 let categories = [];
@@ -30,8 +32,8 @@ export function init() {
         title,
         priority: $("task-priority").value,
         due_date: dueEl.value || null,
-        category_id: typeof activeCategory === "number" ? activeCategory : null,
-        tags: tagFilter ? [tagFilter] : [],
+        category_id: typeof prefs.category === "number" ? prefs.category : null,
+        tags: prefs.tag ? [prefs.tag] : [],
       });
     } catch (err) {
       alert(err.message);
@@ -56,8 +58,7 @@ export function init() {
         parent_id: parentVal ? Number(parentVal) : null,
       });
       nameEl.value = "";
-      activeCategory = cat.id;
-      store.set("category", cat.id);
+      setPref("category", cat.id);
       await reload();
     } catch (err) {
       alert(err.message);
@@ -68,8 +69,8 @@ export function init() {
   search.oninput = () => { query = search.value; renderView(); };
 
   const sortSel = $("sort-by");
-  sortSel.value = sortBy;
-  sortSel.onchange = () => { sortBy = sortSel.value; store.set("sort", sortBy); renderView(); };
+  sortSel.value = prefs.sortBy;
+  sortSel.onchange = () => { setPref("sortBy", sortSel.value); renderView(); };
 
   const app = document.querySelector(".app");
 
@@ -93,12 +94,6 @@ export function init() {
   if (store.get("sidebar-collapsed", false)) app.classList.add("collapsed");
 
   // Collapse a date input to its picker icon while it's empty (see style.css).
-  function watchDateInput(el) {
-    const sync = () => el.classList.toggle("has-value", !!el.value);
-    el.addEventListener("input", sync);
-    el.addEventListener("change", sync);
-    sync();
-  }
   document.querySelectorAll('input[type="date"]').forEach(watchDateInput);
 
   // Export exactly what's on screen: the search box and tag chips filter
@@ -119,37 +114,36 @@ export function init() {
   for (const btn of document.querySelectorAll("#views button")) {
     btn.onclick = () => setView(btn.dataset.view);
   }
-  const shiftMonth = (delta) => {
-    calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + delta, 1);
-    activeDay = null;
-    renderCalendar();
-  };
   $("cal-prev").onclick = () => shiftMonth(-1);
   $("cal-next").onclick = () => shiftMonth(1);
-  $("cal-today").onclick = () => {
-    const now = new Date();
-    calCursor = new Date(now.getFullYear(), now.getMonth(), 1);
-    activeDay = null;
-    renderCalendar();
-  };
+  $("cal-today").onclick = goToday;
 
-    if (e.key === "Escape" && !syncModal.hidden) { syncModal.hidden = true; return; }
-    if (e.key === "Escape" && !modal.hidden) { closeImport(); return; }
-    if (e.key === "Escape" && !typing && expanded.size) { expanded.clear(); renderTasks(); return; }
-    if (!modal.hidden || !syncModal.hidden) return;
+  document.onkeydown = (e) => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)
+                || e.target.isContentEditable;
+
+    // Single-key shortcuts, but never while typing into something.
+    const syncOpen = !$("sync-modal").hidden;
+    const importOpen = !$("import-modal").hidden;
+    if (e.key === "Escape" && syncOpen) { $("sync-modal").hidden = true; return; }
+    if (e.key === "Escape" && importOpen) { $("import-modal").hidden = true; return; }
+    if (e.key === "Escape" && !typing && expanded.size) {
+      expanded.clear();
+      renderView();
+      return;
+    }
+    if (syncOpen || importOpen) return;
     if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === "/") { e.preventDefault(); search.focus(); }
+    if (e.key === "/") { e.preventDefault(); $("search").focus(); }
     if (e.key === "n") { e.preventDefault(); $("task-title").focus(); }
     if (e.key === "\\") { e.preventDefault(); toggleSidebar(); }
-    if (e.key === "c") { e.preventDefault(); setView(view === "calendar" ? "list" : "calendar"); }
-    if (view === "calendar" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    if (e.key === "c") {
+      e.preventDefault();
+      setView(prefs.view === "calendar" ? "list" : "calendar");
+    }
+    if (prefs.view === "calendar" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       e.preventDefault();
       shiftMonth(e.key === "ArrowLeft" ? -1 : 1);
     }
   };
-
-  // Restore the stored view after the first render, so the toggle, the sort
-  // visibility and the rendered pane all start out agreeing with each other.
-  load().then(() => setView(view));
-
 }

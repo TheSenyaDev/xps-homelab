@@ -6,7 +6,7 @@
 import { api } from "../core/api.js";
 import { reload } from "../core/actions.js";
 import { emit, on } from "../core/bus.js";
-import { $, el } from "../core/dom.js";
+import { $, el, watchDateInput } from "../core/dom.js";
 import { getCategories, getMeta, getTags, getTasks } from "../core/state.js";
 
 // Module-local mirrors, refreshed on reload. Plain bindings so the code below
@@ -23,43 +23,43 @@ export function init() {
 }
 
 let importItems = [];
-const modal = document.getElementById("import-modal");
-const $i = (id) => document.getElementById(id);
+const modal = $("import-modal");
+const $i = (id) => $(id);
 
 function openImport() {
-  const sel = $i("import-default-status");
+  const sel = $("import-default-status");
   if (!sel.options.length) for (const s of meta.statuses) sel.append(new Option(s, s));
   sel.value = "todo";
   importItems = [];
-  $i("import-text").value = "";
+  $("import-text").value = "";
   showImportStep("paste");
   modal.hidden = false;
-  $i("import-text").focus();
+  $("import-text").focus();
 }
 
 function closeImport() { modal.hidden = true; }
 
 function showImportStep(step) {
   const reviewing = step === "review";
-  $i("import-paste").hidden = reviewing;
-  $i("import-review").hidden = !reviewing;
-  $i("import-parse").hidden = reviewing;
-  $i("import-commit").hidden = !reviewing;
-  $i("import-back").hidden = !reviewing;
-  $i("import-step").textContent = reviewing ? "2 · review" : "1 · paste";
+  $("import-paste").hidden = reviewing;
+  $("import-review").hidden = !reviewing;
+  $("import-parse").hidden = reviewing;
+  $("import-commit").hidden = !reviewing;
+  $("import-back").hidden = !reviewing;
+  $("import-step").textContent = reviewing ? "2 · review" : "1 · paste";
 }
 
-$i("import-close").onclick = closeImport;
-$i("import-back").onclick = () => showImportStep("paste");
+$("import-close").onclick = closeImport;
+$("import-back").onclick = () => showImportStep("paste");
 modal.onclick = (e) => { if (e.target === modal) closeImport(); };
 
-$i("import-parse").onclick = async () => {
-  const markdown = $i("import-text").value;
+$("import-parse").onclick = async () => {
+  const markdown = $("import-text").value;
   if (!markdown.trim()) { alert("Paste some markdown first."); return; }
   try {
     const res = await api.send("POST", "/api/import/preview", {
       markdown,
-      default_status: $i("import-default-status").value,
+      default_status: $("import-default-status").value,
     });
     importItems = res.items;
     if (!importItems.length) { alert("No tasks or list items found in that text."); return; }
@@ -71,7 +71,7 @@ $i("import-parse").onclick = async () => {
 };
 
 function renderReview() {
-  const box = $i("import-rows");
+  const box = $("import-rows");
   box.innerHTML = "";
 
   const head = document.createElement("div");
@@ -163,9 +163,9 @@ function renderReview() {
 function updateImportSummary() {
   const n = importItems.filter((i) => i.include).length;
   const warned = importItems.filter((i) => i.warnings.length).length;
-  $i("import-summary").textContent =
+  $("import-summary").textContent =
     `${importItems.length} found · ${n} selected` + (warned ? ` · ${warned} need a look` : "");
-  const btn = $i("import-commit");
+  const btn = $("import-commit");
   btn.textContent = n ? `Import ${n}` : "Import";
   btn.disabled = !n;
 }
@@ -174,17 +174,17 @@ const setAll = (fn) => {
   importItems.forEach((i) => { i.include = fn(i); });
   renderReview();
 };
-$i("sel-all").onclick = () => setAll(() => true);
-$i("sel-none").onclick = () => setAll(() => false);
-$i("sel-clean").onclick = () => setAll((i) => !i.warnings.length && !!i.title.trim());
+$("sel-all").onclick = () => setAll(() => true);
+$("sel-none").onclick = () => setAll(() => false);
+$("sel-clean").onclick = () => setAll((i) => !i.warnings.length && !!i.title.trim());
 
-$i("import-commit").onclick = async () => {
-  const btn = $i("import-commit");
+$("import-commit").onclick = async () => {
+  const btn = $("import-commit");
   btn.disabled = true;
   try {
     const res = await api.send("POST", "/api/import/commit", {
       items: importItems.filter((i) => i.include),
-      create_categories: $i("import-create-cats").checked,
+      create_categories: $("import-create-cats").checked,
     });
     closeImport();
     await reload();

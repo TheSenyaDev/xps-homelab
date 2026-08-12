@@ -13,19 +13,19 @@ export function init() {
 }
 
 function openPrefs() {
-  document.getElementById("prefs-shown").value = completedShown;
-  document.getElementById("prefs-modal").hidden = false;
+  $("prefs-shown").value = getCompletedShown();
+  $("prefs-modal").hidden = false;
 }
 
 async function savePrefs() {
-  const value = Number(document.getElementById("prefs-shown").value);
+  const value = Number($("prefs-shown").value);
   try {
     const res = await api.put("/api/settings", { completed_shown: value });
-    completedShown = res.values.completed_shown;
-    document.getElementById("prefs-modal").hidden = true;
+    setCompletedShown(res.values.completed_shown);
+    $("prefs-modal").hidden = true;
     emit("view:changed");
   } catch (err) {
-    document.getElementById("prefs-err").textContent = err.message;
-    document.getElementById("prefs-err").hidden = false;
+    $("prefs-err").textContent = err.message;
+    $("prefs-err").hidden = false;
   }
 }

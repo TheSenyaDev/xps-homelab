@@ -3,7 +3,8 @@
 
 import { emit, on } from "../core/bus.js";
 import { $, el } from "../core/dom.js";
-import { getMeta, getCategories, getTags, getTasks, prefs, setPref, visibleTasks } from "../core/state.js";
+import { STATUS_LABEL } from "../core/format.js";
+import { getCategories, getMeta, getTags, getTasks, prefs, setPref } from "../core/state.js";
 
 // Module-local mirrors, refreshed on reload. Plain bindings so the code below
 // reads exactly as it did before the split — renaming into string literals is
@@ -17,7 +18,7 @@ on("data:changed", syncMirrors);
 export { renderFilters };
 
 function renderFilters() {
-  const box = document.getElementById("filters");
+  const box = $("filters");
   if (box.dataset.built) return;              // static once meta is known
   box.dataset.built = "1";
   const opts = [["all", "All"], ["active", "Active"],
@@ -26,10 +27,9 @@ function renderFilters() {
     const b = document.createElement("button");
     b.textContent = label;
     b.dataset.filter = value;
-    b.className = value === filter ? "active" : "";
+    b.className = value === prefs.filter ? "active" : "";
     b.onclick = () => {
-      filter = value;
-      store.set("filter", value);
+      setPref("filter", value);
       box.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x.dataset.filter === value));
       renderView();
     };

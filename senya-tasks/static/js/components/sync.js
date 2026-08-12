@@ -13,22 +13,14 @@ import { getCategories } from "../core/state.js";
 let categories = [];
 on("data:changed", () => { categories = getCategories(); });
 
-const syncModal = document.getElementById("sync-modal");
+const syncModal = $("sync-modal");
 let syncStatus = null;
 
-const relTime = (iso) => {
-  if (!iso) return "never";
-  const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (secs < 90) return `${Math.round(secs)}s ago`;
-  if (secs < 5400) return `${Math.round(secs / 60)}m ago`;
-  if (secs < 172800) return `${Math.round(secs / 3600)}h ago`;
-  return `${Math.round(secs / 86400)}d ago`;
-};
 
 // The chip is the at-a-glance confirmation: it only appears once sync is
 // configured, and says plainly whether it's on and when it last ran.
 function renderSyncChip() {
-  const chip = $i("sync-chip");
+  const chip = $("sync-chip");
   if (!syncStatus || !syncStatus.configured) { chip.hidden = true; return; }
   chip.hidden = false;
   if (!syncStatus.enabled) {
@@ -55,14 +47,14 @@ async function refreshSyncStatus() {
 }
 
 function syncModeChanged() {
-  const per = $i("sync-mode").value === "per-category";
+  const per = $("sync-mode").value === "per-category";
   // The URL means different things in the two modes, so say which is wanted
   // rather than letting a plausible-looking wrong URL fail confusingly later.
-  $i("sync-url-label").textContent = per ? "Calendar home" : "Calendar URL";
-  $i("sync-url").placeholder = per
+  $("sync-url-label").textContent = per ? "Calendar home" : "Calendar URL";
+  $("sync-url").placeholder = per
     ? "http://192.168.2.100:5232/dav.php/calendars/Senya/"
     : "http://192.168.2.100:5232/dav.php/calendars/Senya/default/";
-  $i("sync-mode-hint").textContent = per
+  $("sync-mode-hint").textContent = per
     ? "One Reminders list per category, created and named for you. Nested categories "
       + "flatten — CalDAV lists have no hierarchy. Point this at the folder that holds "
       + "your calendars, not at one calendar."
@@ -71,8 +63,8 @@ function syncModeChanged() {
 }
 
 function renderSyncCollections() {
-  const box = $i("sync-collections");
-  const per = $i("sync-mode").value === "per-category";
+  const box = $("sync-collections");
+  const per = $("sync-mode").value === "per-category";
   const cols = (syncStatus && syncStatus.collections) || [];
   if (!per || !cols.length) { box.replaceChildren(); return; }
   box.replaceChildren(
@@ -84,17 +76,17 @@ function renderSyncCollections() {
 
 function fillSyncForm() {
   const s = syncStatus || {};
-  $i("sync-mode").value = s.mode || "single";
-  $i("sync-url").value = s.url || "";
-  $i("sync-user").value = s.user || "";
-  $i("sync-auth").value = s.auth || "auto";
-  $i("sync-interval").value = s.interval || 120;
-  $i("sync-enabled").checked = !!s.enabled;
-  $i("sync-password").placeholder = s.password_set
+  $("sync-mode").value = s.mode || "single";
+  $("sync-url").value = s.url || "";
+  $("sync-user").value = s.user || "";
+  $("sync-auth").value = s.auth || "auto";
+  $("sync-interval").value = s.interval || 120;
+  $("sync-enabled").checked = !!s.enabled;
+  $("sync-password").placeholder = s.password_set
     ? "leave blank to keep the saved one" : "required";
-  $i("sync-state").textContent = s.enabled ? "on" : s.configured ? "paused" : "not configured";
+  $("sync-state").textContent = s.enabled ? "on" : s.configured ? "paused" : "not configured";
   syncModeChanged();
-  $i("sync-stats").textContent = s.configured
+  $("sync-stats").textContent = s.configured
     ? `${s.mapped} tasks linked · last sync ${relTime(s.last_sync)}`
       + (s.pending_deletes ? ` · ${s.pending_deletes} deletions pending` : "")
       + (s.auth_scheme ? ` · ${s.auth_scheme} auth` : "")
@@ -102,17 +94,17 @@ function fillSyncForm() {
 }
 
 const syncFormValues = () => ({
-  mode: $i("sync-mode").value,
-  url: $i("sync-url").value.trim(),
-  user: $i("sync-user").value.trim(),
-  password: $i("sync-password").value,
-  auth: $i("sync-auth").value,
-  interval: Number($i("sync-interval").value) || 120,
-  enabled: $i("sync-enabled").checked,
+  mode: $("sync-mode").value,
+  url: $("sync-url").value.trim(),
+  user: $("sync-user").value.trim(),
+  password: $("sync-password").value,
+  auth: $("sync-auth").value,
+  interval: Number($("sync-interval").value) || 120,
+  enabled: $("sync-enabled").checked,
 });
 
 function showSyncResult(ok, message, detail) {
-  const box = $i("sync-result");
+  const box = $("sync-result");
   box.hidden = false;
   box.className = "sync-result " + (ok ? "ok" : "bad");
   // replaceChildren() stringifies null into a literal "null" text node, unlike
@@ -195,8 +187,6 @@ export function init() {
   refreshSyncStatus();
   setInterval(refreshSyncStatus, 30000);
 
-  // Single-key shortcuts, but never while typing into something.
-  document.onkeydown = (e) => {
 }
 
 export { renderSyncChip, refreshSyncStatus };
