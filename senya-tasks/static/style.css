@@ -102,7 +102,11 @@ input[type="checkbox"]:checked::after {
 
 .app { display: grid; grid-template-columns: var(--sidebar) 1fr; min-height: 100vh; border: 2px solid var(--border); }
 .drawer-scrim { display: none; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .6); }
-.app.collapsed { grid-template-columns: 0 1fr; }
+/* One column, not `0 1fr`. The sidebar is display:none when collapsed, so it
+   stops being a grid item — with two tracks declared, .content auto-places into
+   the first one, which is 0 wide, and the whole page collapses to nothing.
+   Removing the track is the fix; shrinking it is not. */
+.app.collapsed { grid-template-columns: 1fr; }
 .app.collapsed .sidebar { display: none; }
 .app.collapsed #sidebar-show { display: inline-flex; }
 #sidebar-show { display: none; align-items: center; font-size: 14px; }
