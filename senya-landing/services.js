@@ -44,18 +44,19 @@ window.SENYA_INTERNAL = {
   // `localIp`/`tsIp` override the default IPs for services on another host;
   // omit `port` to use the host's default web port (80).
   // Custom-built, in-house apps (own section on the landing page). Same shape as
-  // SERVICES below; no `icon` → _default.svg.
+  // SERVICES below. Icons here are hand-drawn (not from dashboardicons.com, since
+  // these apps have no upstream brand) — see icons/senya-*.png.
   // `container` = docker container_name; the landing page shows a live up/down dot
   // by matching it against the Glances containers list (/stats/xps/containers).
   // Omit `container` for things that aren't a local container (remote host, etc.)
   // → the dot shows neutral "unknown".
   SENYA_APPS: [
-    { name: "SenyaTasks", port: 8000, container: "senya-tasks" },
-    { name: "SenyaDaily", port: 8001, container: "senya-daily" },
-    { name: "SenyaFinance", port: 8002, container: "senya-finance" },
-    { name: "SenyaNotes", port: 8003, container: "senya-notes" },
-    { name: "SenyaBoox", port: 8004, container: "senya-boox" },
-    { name: "SenyaScraper", port: 8005, container: "senya-scraper" },
+    { name: "SenyaTasks", port: 8000, icon: "senya-tasks", container: "senya-tasks" },
+    { name: "SenyaDaily", port: 8001, icon: "senya-daily", container: "senya-daily" },
+    { name: "SenyaFinance", port: 8002, icon: "senya-finance", container: "senya-finance" },
+    { name: "SenyaNotes", port: 8003, icon: "senya-notes", container: "senya-notes" },
+    { name: "SenyaBoox", port: 8004, icon: "senya-boox", container: "senya-boox" },
+    { name: "SenyaScraper", port: 8005, icon: "senya-scraper", container: "senya-scraper" },
   ],
   SERVICES: [
     { name: "Homepage", port: 3010, icon: "homepage", container: "homepage" },
