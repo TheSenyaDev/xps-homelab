@@ -72,3 +72,23 @@
   margin-top: auto; padding: 10px 10px; border-top: 2px solid var(--border);
 }
 .tag-cloud:empty { display: none; }
+
+/* ---------- Category drag (reorder + nest) ---------- */
+.cat[data-cat-id] { touch-action: none; }
+.cat.dragging { opacity: .45; }
+body.cat-dragging { cursor: grabbing; user-select: none; }
+
+/* Between two rows: reorder. Indented to the depth it would land at, so the
+   line shows which parent it joins, not just where it sits. */
+.cat-drop-line {
+  height: 0; border-top: 2px solid var(--accent, #6366f1);
+  margin-right: 6px; pointer-events: none;
+}
+
+/* Onto a row: nest inside it. A filled band rather than a line, because the
+   two outcomes must not look alike mid-drag. */
+.cat.drop-into {
+  outline: 1px solid var(--accent, #6366f1);
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 14%, transparent);
+}

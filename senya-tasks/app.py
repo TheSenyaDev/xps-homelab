@@ -706,6 +706,8 @@ def update_category(cat_id):
             parent_id = int(parent_id)
             if parent_id == cat_id:
                 raise ApiError("a category cannot be its own parent")
+            if would_cycle(get_db(), cat_id, parent_id):
+                raise ApiError("that would nest a category inside its own subtree")
         else:
             parent_id = None
         fields.append("parent_id = ?")
@@ -721,6 +723,75 @@ def update_category(cat_id):
     sync()
     row = db.execute("SELECT * FROM categories WHERE id = ?", (cat_id,)).fetchone()
     return jsonify(dict(row))
+
+
+def would_cycle(db, cat_id, parent_id):
+    """True if making `parent_id` the parent of `cat_id` closes a loop.
+
+    Dragging makes this trivially reachable — dropping a parent onto its own
+    child is a natural mistake — and the result is a subtree that vanishes from
+    the sidebar (the tree walk starts at parent_id IS NULL and never reaches it)
+    while its rows still exist. Cheaper to refuse than to explain.
+    """
+    seen = set()
+    while parent_id is not None and parent_id not in seen:
+        if parent_id == cat_id:
+            return True
+        seen.add(parent_id)
+        row = db.execute("SELECT parent_id FROM categories WHERE id = ?",
+                         (parent_id,)).fetchone()
+        if row is None:
+            return False
+        parent_id = row["parent_id"]
+    return False
+
+
+@app.post("/api/categories/reorder")
+def reorder_categories():
+    """Body: {"items": [{"id": 5, "parent_id": 4, "position": 1}, ...]}
+
+    One call for the whole affected slice rather than a PATCH per row: a drag
+    moves one category but renumbers its siblings, and applying that as
+    separate requests would leave the tree briefly inconsistent — and wholly
+    inconsistent if one of them failed.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    items = data.get("items")
+    if not isinstance(items, list) or not items:
+        raise ApiError("items must be a non-empty list")
+
+    db = get_db()
+    known = {r["id"] for r in db.execute("SELECT id FROM categories").fetchall()}
+    parsed = []
+    for it in items:
+        try:
+            cid = int(it["id"])
+            pos = int(it["position"])
+        except (KeyError, TypeError, ValueError):
+            raise ApiError("each item needs an id and a position")
+        if cid not in known:
+            raise ApiError(f"no category {cid}")
+        parent = it.get("parent_id")
+        parent = None if parent in (None, "", 0) else int(parent)
+        if parent is not None and parent not in known:
+            raise ApiError(f"no category {parent}")
+        if parent == cid:
+            raise ApiError("a category cannot be its own parent")
+        parsed.append((cid, parent, pos))
+
+    # Validated as a set, before writing anything: checking each row as it is
+    # written could accept the first half of a move and reject the second.
+    for cid, parent, _ in parsed:
+        if parent is not None and would_cycle(db, cid, parent):
+            raise ApiError("that would nest a category inside its own subtree")
+
+    for cid, parent, pos in parsed:
+        db.execute("UPDATE categories SET parent_id = ?, position = ? WHERE id = ?",
+                   (parent, pos, cid))
+    db.commit()
+    sync()
+    return jsonify([dict(r) for r in db.execute(
+        "SELECT * FROM categories ORDER BY position, name").fetchall()])
 
 
 @app.delete("/api/categories/<int:cat_id>")

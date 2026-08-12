@@ -51,6 +51,12 @@ function renderSidebar() {
     n.className = "count";
     n.textContent = count || "";
 
+    if (typeof id === "number") {
+      row.dataset.catId = String(id);
+      row.dataset.depth = String(depth);
+      row.addEventListener("pointerdown", (e) => startCatDrag(e, row));
+    }
+
     row.append(twisty, dot, label, n);
     row.onclick = () => {
       setPref("category", id);
@@ -113,6 +119,131 @@ function renderTagCloud() {
       emit("view:changed");
     };
     box.append(b);
+  }
+}
+
+// ---- drag to reorder and nest ----
+//
+// Pointer Events, because HTML5 drag never fires on touch. Two drop targets in
+// one gesture: releasing near a row's vertical middle nests inside it, nearer
+// an edge drops between rows. That is the whole interaction — a separate
+// "nest" mode would mean explaining a mode.
+
+const NEST_BAND = 0.5;      // middle 50% of a row's height nests
+
+let drag = null;            // {row, id, from, moved, marker, target}
+
+function startCatDrag(e, row) {
+  // The twisty and the delete button own their clicks.
+  if (e.target.closest("button, .twisty")) return;
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  drag = { row, id: Number(row.dataset.catId),
+           from: { x: e.clientX, y: e.clientY }, moved: false,
+           marker: null, target: null, mode: null };
+  const h = e.currentTarget;
+  h.setPointerCapture(e.pointerId);
+  h.addEventListener("pointermove", onCatMove);
+  h.addEventListener("pointerup", endCatDrag);
+  h.addEventListener("pointercancel", endCatDrag);
+}
+
+function onCatMove(e) {
+  if (!drag) return;
+  if (!drag.moved) {
+    // A threshold, so selecting a category still works as a plain click.
+    if (Math.hypot(e.clientX - drag.from.x, e.clientY - drag.from.y) < 5) return;
+    drag.moved = true;
+    drag.row.classList.add("dragging");
+    document.body.classList.add("cat-dragging");
+    drag.marker = el("div", { class: "cat-drop-line" });
+  }
+  e.preventDefault();
+  clearHints();
+
+  const rows = [...$("category-list").querySelectorAll(".cat[data-cat-id]")]
+    .filter((r) => r !== drag.row && !inSubtree(Number(r.dataset.catId), drag.id));
+  const over = rows.find((r) => {
+    const b = r.getBoundingClientRect();
+    return e.clientY >= b.top && e.clientY <= b.bottom;
+  });
+  if (!over) { drag.target = null; drag.mode = null; return; }
+
+  const b = over.getBoundingClientRect();
+  const rel = (e.clientY - b.top) / b.height;
+  drag.target = over;
+  if (rel > (1 - NEST_BAND) / 2 && rel < 1 - (1 - NEST_BAND) / 2) {
+    drag.mode = "nest";
+    over.classList.add("drop-into");
+  } else {
+    drag.mode = rel <= 0.5 ? "before" : "after";
+    drag.marker.style.marginLeft = `${6 + Number(over.dataset.depth) * 11}px`;
+    over.parentNode.insertBefore(drag.marker,
+      drag.mode === "before" ? over : over.nextSibling);
+  }
+}
+
+function clearHints() {
+  $("category-list").querySelectorAll(".drop-into")
+    .forEach((n) => n.classList.remove("drop-into"));
+  drag?.marker?.remove();
+}
+
+/** Is `id` inside `rootId`'s subtree? Dropping a category into its own subtree
+ *  would orphan it, so those rows are not offered as targets at all. */
+function inSubtree(id, rootId) {
+  let cur = getCategories().find((c) => c.id === id);
+  const seen = new Set();
+  while (cur && !seen.has(cur.id)) {
+    if (cur.id === rootId) return true;
+    seen.add(cur.id);
+    cur = getCategories().find((c) => c.id === cur.parent_id);
+  }
+  return false;
+}
+
+async function endCatDrag(e) {
+  const h = e.currentTarget;
+  h.releasePointerCapture?.(e.pointerId);
+  h.removeEventListener("pointermove", onCatMove);
+  h.removeEventListener("pointerup", endCatDrag);
+  h.removeEventListener("pointercancel", endCatDrag);
+  if (!drag) return;
+  const { id, moved, target, mode } = drag;
+  clearHints();
+  drag.row.classList.remove("dragging");
+  document.body.classList.remove("cat-dragging");
+  drag = null;
+  if (!moved || !target || !mode) return;
+
+  const targetId = Number(target.dataset.catId);
+  const cats = getCategories();
+  const moving = cats.find((c) => c.id === id);
+  const onto = cats.find((c) => c.id === targetId);
+  if (!moving || !onto) return;
+
+  const parent = mode === "nest" ? targetId : onto.parent_id ?? null;
+  // Rebuild the destination sibling list with the dragged row in place, then
+  // renumber it — sending only the moved row would leave its new siblings with
+  // stale positions and the order would settle differently on next load.
+  const siblings = cats
+    .filter((c) => (c.parent_id ?? null) === (parent ?? null) && c.id !== id)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+  let at = siblings.length;
+  if (mode !== "nest") {
+    const i = siblings.findIndex((c) => c.id === targetId);
+    at = mode === "before" ? i : i + 1;
+  }
+  siblings.splice(at, 0, moving);
+
+  try {
+    await api.post("/api/categories/reorder", {
+      items: siblings.map((c, i) => ({ id: c.id, parent_id: parent, position: i + 1 })),
+    });
+    if (mode === "nest") prefs.collapsed.delete(targetId);   // reveal the drop
+    await reload();
+  } catch (err) {
+    alert(`Could not move that category: ${err.message}`);
+    await reload();          // put the sidebar back the way the server sees it
   }
 }
 
