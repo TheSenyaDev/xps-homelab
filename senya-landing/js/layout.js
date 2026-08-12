@@ -62,8 +62,17 @@ export function getWidgetConfig(id) {
     w: clamp(saved.w ?? (s?.wide ? COLS : DEFAULT_W), SIZE_LIMITS.w),
     h: clamp(saved.h ?? 1, SIZE_LIMITS.h),
   };
-  for (const spec of s?.settings || []) {
-    cfg[spec.key] = saved[spec.key] !== undefined ? saved[spec.key] : spec.default;
+  // `settings` may be a function — a widget whose choices come from an API
+  // declares it that way, and getWidgetSchema() awaits it. Only a declared
+  // array carries defaults that can be read synchronously; iterating the
+  // function threw "function is not iterable" from inside ensureBuilt, which
+  // aborted the whole render loop and left every widget after the first
+  // unbuilt. A widget with an async schema supplies its own defaults instead
+  // (see sections/tasks.js).
+  if (Array.isArray(s?.settings)) {
+    for (const spec of s.settings) {
+      cfg[spec.key] = saved[spec.key] !== undefined ? saved[spec.key] : spec.default;
+    }
   }
   return cfg;
 }
