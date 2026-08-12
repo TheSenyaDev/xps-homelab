@@ -2,23 +2,28 @@
 """
 Read and update homelab TODOs in SenyaTasks.
 
+Plain Python 3, standard library only — no install, and usable by any agent or
+by hand. Point it elsewhere with SENYA_TASKS_URL / SENYA_TASKS_CATEGORY.
+
 A helper rather than raw curl for one reason: the API's `category_id` filter is
 an exact match, so asking for Homelab returns only tasks pinned directly to it
 and silently omits everything in Senya-Tasks, Senya-Landing and the rest. Every
 command here expands the subtree first.
 
-  list [--all] [--category NAME]   open tasks (--all includes done)
-  show <id>                        one task with its notes and subtasks
+  list [--all] [--category NAME] [--json]   open tasks (--all includes done)
+  show <id> [--json]                        one task with its notes and subtasks
   done <id>                        mark complete
   reopen <id>
   note <id> <text>                 append to the task's notes
   add <title> [--category NAME] [--priority high|medium|low] [--due YYYY-MM-DD]
   sub <parent-id> <title>          add a subtask
 """
-import argparse, json, sys, urllib.error, urllib.request
+import argparse, json, os, sys, urllib.error, urllib.request
 
-BASE = "http://localhost:8000"
-ROOT = "Homelab"
+# Overridable so this works from another host, a container, or a tunnel —
+# anything running it does not have to be on the same box as SenyaTasks.
+BASE = os.environ.get("SENYA_TASKS_URL", "http://localhost:8000").rstrip("/")
+ROOT = os.environ.get("SENYA_TASKS_CATEGORY", "Homelab")
 RANK = {"high": 0, "medium": 1, "low": 2}
 
 
@@ -65,6 +70,12 @@ def cmd_list(a):
     rows = [t for t in tasks if t["category_id"] in ids and t["parent_id"] is None
             and (a.all or not t["done"])]
     rows.sort(key=lambda t: (t["done"], RANK.get(t["priority"], 3), t["due_date"] or "9999"))
+    if a.json:
+        for t in rows:
+            t["category"] = name.get(t["category_id"])
+            t["subtasks"] = [s for s in tasks if s["parent_id"] == t["id"]]
+        print(json.dumps(rows, indent=2))
+        return
     if not rows:
         print(f"no {'' if a.all else 'open '}tasks under {a.category}")
         return
@@ -84,6 +95,10 @@ def cmd_show(a):
     t = next((x for x in tasks if x["id"] == a.id), None)
     if not t:
         sys.exit(f"error: no task #{a.id}")
+    if a.json:
+        t["subtasks"] = [s for s in tasks if s["parent_id"] == t["id"]]
+        print(json.dumps(t, indent=2))
+        return
     print(f"#{t['id']}  {t['title']}")
     print(f"  status={t['status']} priority={t['priority']} due={t['due_date'] or '-'}")
     if t["tags"]:
@@ -135,7 +150,9 @@ sub = p.add_subparsers(dest="cmd", required=True)
 
 s = sub.add_parser("list"); s.set_defaults(fn=cmd_list)
 s.add_argument("--all", action="store_true"); s.add_argument("--category", default=ROOT)
+s.add_argument("--json", action="store_true", help="machine-readable output")
 s = sub.add_parser("show"); s.set_defaults(fn=cmd_show); s.add_argument("id", type=int)
+s.add_argument("--json", action="store_true")
 s = sub.add_parser("done"); s.set_defaults(fn=cmd_done); s.add_argument("id", type=int)
 s = sub.add_parser("reopen"); s.set_defaults(fn=cmd_reopen); s.add_argument("id", type=int)
 s = sub.add_parser("note"); s.set_defaults(fn=cmd_note)
