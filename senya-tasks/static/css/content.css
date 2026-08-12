@@ -1,0 +1,164 @@
+/* ---------- Content ---------- */
+
+/* min-width: 0 because a grid item defaults to min-width: auto, so a wide row
+   would push the column past its track and overflow the page. The cap lifts
+   when the sidebar is collapsed — that space was reclaimed to be used. */
+.content { padding: 0; max-width: 1120px; width: 100%; min-width: 0; }
+.app.collapsed .content { max-width: none; }
+
+.bar {
+  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+  padding: 0; margin: 0;
+  border-bottom: 2px solid var(--border);
+}
+.bar h2 { margin: 0; padding: 10px 16px; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border-right: 1px solid var(--border-soft); }
+.count-chip {
+  font-size: var(--fs-sm); color: var(--muted); padding: 0 14px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.bar #search { margin-left: auto; width: 150px; border-radius: 0; border: none; border-left: 1px solid var(--border-soft); height: 100%; }
+.bar .sort select { padding: 3px 20px 3px 7px; font-size: var(--fs-sm); color: var(--dim); border: none; border-left: 1px solid var(--border-soft); border-radius: 0; }
+.bar-tools { display: flex; gap: 0; border-left: 1px solid var(--border-soft); }
+
+.filters, .viewswitch { display: flex; gap: 0; background: none; padding: 0; border-radius: 0; border-left: 1px solid var(--border-soft); }
+.filters button, .viewswitch button {
+  border: none; background: none; color: var(--muted);
+  padding: 10px 12px; border-radius: 0; cursor: pointer; font-size: var(--fs-sm);
+  white-space: nowrap; text-transform: uppercase; letter-spacing: .03em;
+  border-right: 1px solid var(--border-soft);
+}
+.filters button:hover, .viewswitch button:hover { color: var(--text); }
+.filters button.active, .viewswitch button.active { background: var(--panel-3); color: var(--text); font-weight: 700; }
+.viewswitch button { padding: 10px 11px; font-size: 12px; line-height: 1; }
+
+/* Compose bar: hard sections, not one soft pill */
+.add-task {
+  display: flex; align-items: stretch; gap: 0; margin: 0;
+  background: var(--panel-2); border: none;
+  border-bottom: 2px solid var(--border);
+  border-radius: 0; padding: 0;
+}
+.add-task:focus-within { border-bottom-color: var(--accent); }
+.add-task input[type="text"] { flex: 1; background: none; border: none; box-shadow: none; padding: 9px 14px; border-radius: 0; }
+.add-task input[type="text"]:focus { box-shadow: none; }
+.add-task select {
+  background: none; border: none; border-left: 1px solid var(--border-soft);
+  color: var(--dim); font-size: var(--fs-sm);
+  padding: 4px 18px 4px 10px; border-radius: 0;
+}
+.add-task input[type="date"] {
+  background: none; border: none; border-left: 1px solid var(--border-soft); color: var(--dim); font-size: var(--fs-sm);
+  width: 30px; padding: 4px 10px; transition: width .1s; border-radius: 0;
+}
+.add-task input[type="date"]:focus, .add-task input[type="date"].has-value { width: 116px; }
+.add-task button[type="submit"] {
+  background: var(--accent); color: #05060a; border: none;
+  padding: 0 18px; border-radius: 0; cursor: pointer; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; font-size: var(--fs-sm);
+}
+.add-task button[type="submit"]:hover { filter: brightness(1.12); }
+
+/* ---------- Groups + rows ---------- */
+
+.group { margin-bottom: 0; }
+.group-head {
+  display: flex; align-items: center; gap: var(--gap);
+  font-size: var(--fs-sm); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); padding: 6px 16px; position: sticky; top: 0;
+  background: var(--panel-3); z-index: 1; border-bottom: 1px solid var(--border-soft); border-top: 1px solid var(--border-soft);
+}
+.group-head .dot { width: 7px; height: 7px; border-radius: 0; flex: none; }
+.group-head .n { text-transform: none; letter-spacing: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.group-head .rule { flex: 1; height: 0; background: none; }
+
+.rows { display: flex; flex-direction: column; }
+
+.task {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  /* Two content-sized rows: the task, then its note. align-content centres the
+     pair inside the row's min-height instead of stretching the tracks, so a
+     task without a note keeps exactly the height it had. align-items then
+     centres each item within its own row, which is what puts the checkbox
+     level with the title rather than adrift between title and note. */
+  grid-template-rows: auto auto;
+  align-items: center; align-content: center; gap: 0 var(--gap);
+  min-height: var(--row); padding: 4px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+}
+.task:hover { background: var(--panel-2); }
+.task.done .title { color: var(--muted); text-decoration: line-through; }
+.task.done .prio { opacity: .35; }
+
+.task .main { display: flex; align-items: center; gap: var(--gap); min-width: 0; overflow: hidden; }
+
+/* The note is its own grid row, starting under the title and running to the end
+   of the row. Being a real row is what keeps the checkbox level with the title:
+   with the note inside .main, the cell was two lines tall and align-items:center
+   parked the checkbox between them. */
+.task .note-peek {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  font-size: .78em; color: var(--muted, #6b7280);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding-left: 14px;                 /* aligns under the title, past the LED */
+  line-height: 1.35;
+  margin-top: -2px;                   /* tucks it under the title, not adrift */
+}
+/* Hidden while the editor is open — the full note is right there. */
+.task.open .note-peek { display: none; }
+/* Priority reads as a square LED, not a soft dot */
+.task .prio { width: 8px; height: 8px; border-radius: 0; flex: none; background: var(--med); }
+.task .prio.high { background: var(--high); box-shadow: none; }
+.task .prio.medium { background: var(--med); }
+.task .prio.low { background: none; border: 1.5px solid var(--muted); }
+.task .title { cursor: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+.task .title-input { flex: 1; border-radius: 0; }
+.task .meta { display: flex; align-items: center; gap: 4px; flex: none; }
+
+.chip {
+  font-size: var(--fs-sm); padding: 1px 7px; border-radius: 0;
+  background: none; border: 1px solid var(--border-soft); color: var(--dim);
+  white-space: nowrap; display: inline-block; text-transform: uppercase; letter-spacing: .02em;
+}
+button.chip { cursor: pointer; }
+.chip.status-doing { color: var(--doing); border-color: var(--doing); }
+.chip.status-blocked { color: var(--blocked); border-color: var(--blocked); }
+.chip.status-todo, .chip.status-done { display: none; }
+.chip.tag { color: var(--muted); background: none; border: none; padding: 0 3px; }
+.chip.tag:hover { color: var(--dim); }
+.chip.tag.on { background: var(--accent); color: #05060a; border-color: var(--accent); }
+.chip.notes { color: var(--muted); background: none; border: none; padding: 0 2px; }
+
+.task .due {
+  font-size: var(--fs-sm); color: var(--muted); text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 50px;
+  text-transform: uppercase;
+}
+.task .due.soon { color: var(--med); font-weight: 700; }
+.task .due.overdue { color: var(--high); font-weight: 700; }
+
+/* Three buttons now (details · +subtask · delete), so the reserved width grew
+   with them. Faintly visible rather than fully hidden: an action you cannot see
+   is an action nobody finds. */
+.task .row-actions { display: flex; gap: 1px; opacity: .28; min-width: 66px; justify-content: flex-end; }
+.task:hover .row-actions, .task.open .row-actions { opacity: 1; }
+.row-actions button:hover { color: var(--text); }
+.row-actions .del:hover { color: var(--high); }
+
+/* ---------- Inline detail editor ---------- */
+
+.detail {
+  display: grid; grid-template-columns: auto 1fr; gap: 7px 10px;
+  padding: 12px 20px 14px 34px; margin: 0;
+  background: var(--panel-2); border-bottom: 1px solid var(--border-soft);
+  border-radius: 0; align-items: center;
+}
+.detail label { font-size: var(--fs-sm); color: var(--muted); text-align: right; text-transform: uppercase; letter-spacing: .04em; }
+.detail textarea { resize: vertical; min-height: 48px; font-size: var(--fs); width: 100%; border-radius: 0; }
+.detail .inline { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.detail select, .detail input { font-size: var(--fs-sm); border-radius: 0; }
+.detail .stamps { font-size: 10px; color: var(--muted); grid-column: 2; text-transform: uppercase; }
+
+.empty { color: var(--muted); padding: 40px 16px; text-align: left; font-size: var(--fs); text-transform: uppercase; letter-spacing: .03em; }

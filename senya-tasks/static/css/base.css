@@ -1,0 +1,132 @@
+/* Tokens, reset, shell and buttons — everything a page needs before any
+   component renders. */
+
+/* SenyaTasks — industrial/console reskin.
+   Same selectors and structure as the original dense list UI; this file only
+   changes the visual language: monospace type, square corners, thicker
+   section borders, LED-style status marks instead of soft dots/pills, and
+   ALL-CAPS labels. No HTML/JS structure required beyond this stylesheet. */
+:root {
+  --bg: #101216;
+  --panel: #15171c;
+  --panel-2: #0f1114;
+  --panel-3: #1a1c22;
+  --border: #3a3f4a;
+  --border-soft: #2a2d34;
+  --text: #d6d9de;
+  --dim: #9aa0ab;
+  --muted: #6b7280;
+  --accent: #8b8ff7;
+  --accent-soft: rgba(139, 143, 247, .16);
+  --high: #f0616a;
+  --med: #f0a03a;
+  --low: #4a4d55;
+  --doing: #5bd0e0;
+  --blocked: #e08a60;
+
+  --row: 30px;
+  --gap: 8px;
+  --fs: 13px;
+  --fs-sm: 11px;
+  --radius: 0;         /* no rounded corners anywhere */
+  --sidebar: 210px;
+  --mono: "Consolas", ui-monospace, "JetBrains Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--fs);
+  line-height: 1.4;
+  background: var(--bg);
+  color: var(--text);
+}
+
+input, select, button, textarea { font: inherit; color: inherit; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),
+select, textarea {
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 0;
+  outline: none;
+  min-width: 0;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+::placeholder { color: var(--muted); }
+select {
+  appearance: none;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  padding-right: 20px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 11px) 52%, calc(100% - 7px) 52%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+
+input[type="date"] { color-scheme: dark; }
+input[type="date"]:not(.has-value):not(:focus) { color: transparent; }
+input[type="date"]::-webkit-calendar-picker-indicator { opacity: .45; cursor: pointer; margin-left: 0; }
+input[type="date"]:hover::-webkit-calendar-picker-indicator { opacity: .9; }
+
+/* Square LED, not a rounded slab */
+input[type="checkbox"] {
+  appearance: none;
+  width: 14px; height: 14px; flex: none;
+  border: 1.5px solid var(--muted);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+}
+input[type="checkbox"]:hover { border-color: var(--dim); }
+input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+input[type="checkbox"]:checked::after {
+  content: ""; position: absolute; left: 3.5px; top: .5px;
+  width: 3.5px; height: 7.5px;
+  border: solid #05060a; border-width: 0 1.8px 1.8px 0;
+  transform: rotate(42deg);
+}
+
+.icon-btn {
+  border: none; background: none; color: var(--muted);
+  cursor: pointer; padding: 2px 5px; border-radius: 0; line-height: 1;
+}
+.icon-btn:hover { color: var(--text); background: var(--panel-3); }
+
+.app { display: grid; grid-template-columns: var(--sidebar) 1fr; min-height: 100vh; border: 2px solid var(--border); }
+.drawer-scrim { display: none; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .6); }
+/* One column, not `0 1fr`. The sidebar is display:none when collapsed, so it
+   stops being a grid item — with two tracks declared, .content auto-places into
+   the first one, which is 0 wide, and the whole page collapses to nothing.
+   Removing the track is the fix; shrinking it is not. */
+.app.collapsed { grid-template-columns: 1fr; }
+.app.collapsed .sidebar { display: none; }
+.app.collapsed #sidebar-show { display: inline-flex; }
+#sidebar-show { display: none; align-items: center; font-size: 14px; }
+
+/* ---------- Buttons ---------- */
+
+.ghost-btn {
+  background: none; border: 1px solid var(--border-soft); color: var(--dim);
+  padding: 4px 10px; border-radius: 0; cursor: pointer; font-size: var(--fs-sm);
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.ghost-btn:hover { color: var(--text); border-color: var(--muted); background: var(--panel-3); }
+.primary-btn {
+  background: var(--accent); color: #05060a; border: none;
+  padding: 7px 16px; border-radius: 0; cursor: pointer; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; font-size: var(--fs-sm);
+}
+.primary-btn:hover { filter: brightness(1.12); }
+.primary-btn:disabled { background: var(--panel-3); color: var(--muted); cursor: not-allowed; filter: none; }
