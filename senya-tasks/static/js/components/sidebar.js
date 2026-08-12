@@ -126,20 +126,29 @@ function renderTagCloud() {
 //
 // Pointer Events, because HTML5 drag never fires on touch. Two drop targets in
 // one gesture: releasing near a row's vertical middle nests inside it, nearer
-// an edge drops between rows. That is the whole interaction — a separate
-// "nest" mode would mean explaining a mode.
+// an edge drops between rows. That is the whole interaction — a separate "nest"
+// mode would mean explaining a mode.
+//
+// The feedback is deliberately explicit. A drag that only dims the source row
+// leaves you guessing what will happen on release, and the two outcomes here
+// are very different — so a chip follows the pointer saying what is moving, and
+// the target says which of the two it would do, in words.
 
 const NEST_BAND = 0.5;      // middle 50% of a row's height nests
+const SPRING_MS = 600;      // hover this long over a collapsed row to open it
+const EDGE_PX = 36;         // auto-scroll zone at the top/bottom of the list
 
-let drag = null;            // {row, id, from, moved, marker, target}
+let drag = null;
 
 function startCatDrag(e, row) {
   // The twisty and the delete button own their clicks.
   if (e.target.closest("button, .twisty")) return;
   if (e.pointerType === "mouse" && e.button !== 0) return;
-  drag = { row, id: Number(row.dataset.catId),
-           from: { x: e.clientX, y: e.clientY }, moved: false,
-           marker: null, target: null, mode: null };
+  drag = {
+    row, id: Number(row.dataset.catId), from: { x: e.clientX, y: e.clientY },
+    moved: false, marker: null, chip: null, target: null, mode: null,
+    springAt: 0, springId: null, raf: null, pointer: { x: 0, y: 0 },
+  };
   const h = e.currentTarget;
   h.setPointerCapture(e.pointerId);
   h.addEventListener("pointermove", onCatMove);
@@ -147,17 +156,37 @@ function startCatDrag(e, row) {
   h.addEventListener("pointercancel", endCatDrag);
 }
 
+function beginVisuals() {
+  const cat = getCategories().find((c) => c.id === drag.id);
+  drag.row.classList.add("dragging");
+  document.body.classList.add("cat-dragging");
+
+  // A chip under the pointer: at a glance you can see what you picked up, which
+  // a dimmed row on its own does not tell you once the pointer has moved away.
+  drag.chip = el("div", { class: "cat-drag-chip" },
+    el("span", { class: "dot", style: `background:${cat?.color || "#6366f1"}` }),
+    el("span", { text: cat?.name || "" }),
+    el("span", { class: "cat-drag-hint" }));
+  document.body.append(drag.chip);
+
+  drag.marker = el("div", { class: "cat-drop-line" }, el("span", { class: "knob" }));
+}
+
 function onCatMove(e) {
   if (!drag) return;
+  drag.pointer = { x: e.clientX, y: e.clientY };
   if (!drag.moved) {
     // A threshold, so selecting a category still works as a plain click.
     if (Math.hypot(e.clientX - drag.from.x, e.clientY - drag.from.y) < 5) return;
     drag.moved = true;
-    drag.row.classList.add("dragging");
-    document.body.classList.add("cat-dragging");
-    drag.marker = el("div", { class: "cat-drop-line" });
+    beginVisuals();
+    drag.raf = requestAnimationFrame(tick);
   }
   e.preventDefault();
+
+  if (drag.chip) {
+    drag.chip.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 14}px)`;
+  }
   clearHints();
 
   const rows = [...$("category-list").querySelectorAll(".cat[data-cat-id]")]
@@ -166,20 +195,65 @@ function onCatMove(e) {
     const b = r.getBoundingClientRect();
     return e.clientY >= b.top && e.clientY <= b.bottom;
   });
-  if (!over) { drag.target = null; drag.mode = null; return; }
+  if (!over) {
+    drag.target = null;
+    drag.mode = null;
+    drag.springId = null;
+    setHint("");
+    return;
+  }
 
   const b = over.getBoundingClientRect();
   const rel = (e.clientY - b.top) / b.height;
+  const name = over.querySelector(".name")?.textContent || "";
   drag.target = over;
+
   if (rel > (1 - NEST_BAND) / 2 && rel < 1 - (1 - NEST_BAND) / 2) {
     drag.mode = "nest";
     over.classList.add("drop-into");
+    setHint(`into ${name}`);
+    armSpring(Number(over.dataset.catId));
   } else {
     drag.mode = rel <= 0.5 ? "before" : "after";
+    drag.springId = null;
     drag.marker.style.marginLeft = `${6 + Number(over.dataset.depth) * 11}px`;
     over.parentNode.insertBefore(drag.marker,
       drag.mode === "before" ? over : over.nextSibling);
+    setHint(drag.mode === "before" ? `above ${name}` : `below ${name}`);
   }
+}
+
+const setHint = (text) => {
+  const n = drag?.chip?.querySelector(".cat-drag-hint");
+  if (n) n.textContent = text;
+};
+
+/** Spring-loaded folders: hover a collapsed category and it opens, so you can
+ *  drop into a subtree without abandoning the drag to click a twisty. */
+function armSpring(id) {
+  if (!prefs.collapsed.has(id)) { drag.springId = null; return; }
+  if (drag.springId !== id) {
+    drag.springId = id;
+    drag.springAt = performance.now();
+  } else if (performance.now() - drag.springAt > SPRING_MS) {
+    prefs.collapsed.delete(id);
+    setPref("collapsed", prefs.collapsed);
+    drag.springId = null;
+    renderSidebar();          // re-render mid-drag; the pointer keeps capture
+  }
+}
+
+/** Auto-scroll the list when dragging near its edges, so a long tree can be
+ *  crossed without letting go. */
+function tick() {
+  if (!drag?.moved) return;
+  const list = $("category-list");
+  const b = list.getBoundingClientRect();
+  const y = drag.pointer.y;
+  if (y < b.top + EDGE_PX) list.scrollTop -= Math.ceil((b.top + EDGE_PX - y) / 6);
+  else if (y > b.bottom - EDGE_PX) list.scrollTop += Math.ceil((y - b.bottom + EDGE_PX) / 6);
+  if (drag.springId) armSpring(drag.springId);
+  drag.raf = requestAnimationFrame(tick);
 }
 
 function clearHints() {
@@ -208,8 +282,10 @@ async function endCatDrag(e) {
   h.removeEventListener("pointerup", endCatDrag);
   h.removeEventListener("pointercancel", endCatDrag);
   if (!drag) return;
-  const { id, moved, target, mode } = drag;
+  const { id, moved, target, mode, raf, chip } = drag;
   clearHints();
+  if (raf) cancelAnimationFrame(raf);
+  chip?.remove();
   drag.row.classList.remove("dragging");
   document.body.classList.remove("cat-dragging");
   drag = null;
@@ -241,6 +317,11 @@ async function endCatDrag(e) {
     });
     if (mode === "nest") prefs.collapsed.delete(targetId);   // reveal the drop
     await reload();
+    // Briefly mark where it landed: after a re-render the row is a new element,
+    // and without this the eye has to re-find it.
+    const landed = $("category-list").querySelector(`.cat[data-cat-id="${id}"]`);
+    landed?.classList.add("just-moved");
+    setTimeout(() => landed?.classList.remove("just-moved"), 900);
   } catch (err) {
     alert(`Could not move that category: ${err.message}`);
     await reload();          // put the sidebar back the way the server sees it

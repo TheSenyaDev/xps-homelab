@@ -74,21 +74,71 @@
 .tag-cloud:empty { display: none; }
 
 /* ---------- Category drag (reorder + nest) ---------- */
-.cat[data-cat-id] { touch-action: none; }
-.cat.dragging { opacity: .45; }
-body.cat-dragging { cursor: grabbing; user-select: none; }
 
-/* Between two rows: reorder. Indented to the depth it would land at, so the
-   line shows which parent it joins, not just where it sits. */
+/* Draggable at all: without a cursor change nobody discovers the gesture. */
+.cat[data-cat-id] { touch-action: none; cursor: grab; }
+.cat[data-cat-id]:active { cursor: grabbing; }
+.cat.dragging { opacity: .35; }
+body.cat-dragging { user-select: none; cursor: grabbing; }
+
+/* What you picked up, following the pointer. A dimmed source row stops being
+   useful the moment the pointer moves away from it. */
+.cat-drag-chip {
+  position: fixed; top: 0; left: 0; z-index: 90; pointer-events: none;
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 9px; max-width: 260px;
+  background: var(--panel, #15171c);
+  border: 1px solid var(--accent, #6366f1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+  font-size: 12px; color: var(--text, #d6d9de); white-space: nowrap;
+}
+.cat-drag-chip .dot { width: 8px; height: 8px; flex: none; }
+/* Says which of the two outcomes will happen, in words — "into Homelab" versus
+   "above Buy". The line and the band differ, but only if you already know the
+   convention. */
+.cat-drag-hint {
+  color: var(--accent, #6366f1); font-size: 10px;
+  border-left: 1px solid var(--border, #3a3f4a); padding-left: 7px;
+}
+.cat-drag-hint:empty { display: none; }
+
+/* Between two rows: reorder. Indented to the depth it would land at, with a
+   knob on the leading edge so a 2px line is visible against a dark panel. */
 .cat-drop-line {
-  height: 0; border-top: 2px solid var(--accent, #6366f1);
+  position: relative; height: 0;
+  border-top: 2px solid var(--accent, #6366f1);
   margin-right: 6px; pointer-events: none;
 }
+.cat-drop-line .knob {
+  position: absolute; left: -3px; top: -3px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent, #6366f1);
+}
 
-/* Onto a row: nest inside it. A filled band rather than a line, because the
-   two outcomes must not look alike mid-drag. */
+/* Onto a row: nest inside it. A filled band, not a line — the two outcomes
+   must not look alike mid-drag. */
 .cat.drop-into {
-  outline: 1px solid var(--accent, #6366f1);
-  outline-offset: -1px;
-  background: color-mix(in srgb, var(--accent, #6366f1) 14%, transparent);
+  outline: 2px solid var(--accent, #6366f1);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 18%, transparent);
+}
+/* A chevron on the left edge, so the "goes inside this" reading survives even
+   where color-mix or the outline is hard to see. */
+.cat.drop-into::before {
+  content: "\21B3";                 /* ↳ */
+  position: absolute; left: 2px;
+  color: var(--accent, #6366f1); font-size: 11px;
+}
+.cat { position: relative; }
+
+/* Where it landed. After a re-render the row is a new element, so without a
+   moment's highlight the eye has to hunt for it. */
+@keyframes cat-landed {
+  from { background: color-mix(in srgb, var(--accent, #6366f1) 30%, transparent); }
+  to   { background: transparent; }
+}
+.cat.just-moved { animation: cat-landed .9s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cat.just-moved { animation: none; }
 }
