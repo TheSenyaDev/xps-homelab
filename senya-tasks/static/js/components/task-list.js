@@ -34,6 +34,38 @@ on("data:changed", syncMirrors);
 
 export { renderTasks };
 
+/**
+ * Sort, then place each subtask directly under its parent.
+ *
+ * The sort has to be applied to the roots and to each parent's children
+ * separately. Sorting the flat list scatters subtasks away from their parent —
+ * and because sortTasks sinks completed tasks, a finished subtask would end up
+ * at the bottom of the group rather than under the task it belongs to.
+ *
+ * A subtask whose parent is filtered out is treated as a root rather than
+ * dropped: hiding a task because of something you cannot see is worse than a
+ * row without its heading.
+ */
+function nest(items) {
+  const present = new Set(items.map((t) => t.id));
+  const kids = new Map();
+  const roots = [];
+  for (const t of items) {
+    if (t.parent_id != null && present.has(t.parent_id)) {
+      if (!kids.has(t.parent_id)) kids.set(t.parent_id, []);
+      kids.get(t.parent_id).push(t);
+    } else {
+      roots.push(t);
+    }
+  }
+  const out = [];
+  for (const t of sortTasks(roots)) {
+    out.push(t);
+    out.push(...sortTasks(kids.get(t.id) || []));
+  }
+  return out;
+}
+
 function renderTasks() {
   const container = document.getElementById("task-groups");
   const list = trimCompleted(visibleTasks());
@@ -53,28 +85,8 @@ function renderTasks() {
     return;
   }
 
-  // Subtasks belong under their parent, not beside it. A subtask whose parent
-  // is filtered out is shown at top level rather than dropped — hiding a task
-  // because of something you cannot see would be worse than a stray row.
-  const shown = new Set(list.map((t) => t.id));
-  const kids = new Map();
-  const roots = [];
-  for (const t of list) {
-    if (t.parent_id != null && shown.has(t.parent_id)) {
-      if (!kids.has(t.parent_id)) kids.set(t.parent_id, []);
-      kids.get(t.parent_id).push(t);
-    } else {
-      roots.push(t);
-    }
-  }
-  const ordered = [];
-  for (const t of roots) {
-    ordered.push(t);
-    for (const k of kids.get(t.id) || []) ordered.push(k);
-  }
-
   const byCat = new Map();
-  for (const t of ordered) {
+  for (const t of list) {
     // A subtask files under its parent's category, so the pair never splits
     // across two groups.
     const parent = t.parent_id != null ? list.find((x) => x.id === t.parent_id) : null;
@@ -108,7 +120,7 @@ function renderTasks() {
 
     const rows = document.createElement("div");
     rows.className = "rows";
-    for (const t of sortTasks(items)) {
+    for (const t of nest(items)) {
       rows.append(taskRow(t));
       if (expanded.has(t.id)) rows.append(taskDetail(t));
     }
