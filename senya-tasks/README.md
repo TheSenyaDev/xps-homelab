@@ -312,6 +312,18 @@ pip install -r requirements.txt
 DB_PATH=./data/tasks.db MARKDOWN_PATH=./data/Tasks.md python app.py   # http://localhost:8000
 ```
 
+## Tests
+
+A pytest suite in [`tests/`](tests) covers the API (tasks, categories, tags, settings), the
+migration runner, Obsidian markdown export/import, and the CalDAV iCalendar and sync-consistency
+logic (against an in-memory fake server, no real CalDAV needed). It runs against its own throwaway
+database — `./data` is never touched, and `tests/` isn't shipped in the Docker image.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
 ## API
 
 All bodies are JSON. Errors come back as `{"error": "..."}` with a 4xx status.
