@@ -7,6 +7,25 @@ volume for the database.
 Directory / image / container are `senya-tasks` (matching `senya-daily`, `senya-notes`, …); the
 app still presents itself as **SenyaTasks**.
 
+`app.py` is a thin entry point (`gunicorn app:app`); the app itself is the `tasks/` package,
+mirroring the `senya-finance` layout — one Blueprint per feature area under `tasks/api/`:
+
+```
+tasks/
+  __init__.py          app factory: wires blueprints, static routes, CalDAV worker
+  config.py             DB_PATH / MARKDOWN_PATH, STATUSES / PRIORITIES
+  db.py                  schema + migrations + connection handling
+  validation.py          field validators, ApiError
+  serialize.py            DB row -> API JSON
+  markdown_export.py      Tasks.md (Obsidian-flavoured) export
+  markdown_import.py      Obsidian markdown -> proposed tasks
+  api/                     tasks.py, categories.py, tags.py, settings.py, meta.py,
+                           export.py, imports.py, caldav.py — one Blueprint each
+```
+
+`caldav.py` (the sync engine) stays at the repo root — it has no Flask dependency and is imported
+the same way by the app and the test suite.
+
 | | |
 |---|---|
 | [Features](#features) · [UI notes](#ui-notes) | what it does |
@@ -101,7 +120,7 @@ Indexes: `tasks(category_id)`, `tasks(status)`, `tasks(due_date)`, `task_tags(ta
 
 ## Extending the schema
 
-Migrations live in [`app.py`](app.py) as a list of SQL scripts. `BASELINE` is the original v0
+Migrations live in [`tasks/db.py`](tasks/db.py) as a list of SQL scripts. `BASELINE` is the original v0
 schema; each entry in `MIGRATIONS` is one numbered step, applied in order and recorded in
 `PRAGMA user_version`. A brand-new database is created at the baseline and then migrated up, so the
 upgrade path is exercised on every fresh install rather than only against the one old database in
@@ -120,7 +139,7 @@ To add a field:
    SQLite can't add a CHECK constraint to an existing table; if you need one, rebuild the table
    the way `M1` does (create `tasks_new`, `INSERT … SELECT`, drop, rename).
 
-2. **Add one line** to `TASK_FIELDS`, mapping the field to a validator:
+2. **Add one line** to `TASK_FIELDS` in [`tasks/validation.py`](tasks/validation.py), mapping the field to a validator:
 
    ```python
    TASK_FIELDS = {
@@ -136,7 +155,7 @@ To add a field:
    frontend's `taskDetail()`. Skipping these is fine — the field just won't round-trip through
    markdown.
 
-New status or priority values go in the `STATUSES` / `PRIORITIES` tuples at the top of `app.py`
+New status or priority values go in the `STATUSES` / `PRIORITIES` tuples in [`tasks/config.py`](tasks/config.py)
 **and** in a migration that widens the CHECK constraint. `GET /api/meta` serves those vocabularies
 to the frontend, which builds its filter buttons and dropdowns from them — no hardcoded lists in
 the UI.

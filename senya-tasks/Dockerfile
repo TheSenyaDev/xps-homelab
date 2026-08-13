@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Every module, not a hand-listed one: naming app.py alone meant adding
 # caldav.py shipped an image that crash-looped on import.
 COPY *.py ./
+COPY tasks ./tasks
 COPY static ./static
 
 ENV DB_PATH=/data/tasks.db
