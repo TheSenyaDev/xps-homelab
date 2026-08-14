@@ -178,7 +178,11 @@ rest — each `init` runs in its own try/catch.
   (`https://<ext>.senya.ca`) — each opens in a new tab. Internal only.
 - **Bookmarks** — icon row under the top bar; the trailing **✎+** cell is edit
   and add at once (add form opens with edit mode; click a tile to edit it, ✕ to
-  delete). Saved in `localStorage` over the `BOOKMARKS` defaults.
+  delete; Enter submits). Only a URL is required — name defaults to the domain,
+  and the icon is fetched automatically from the domain's favicon via nginx's
+  cached `/favicon-proxy` (falls back to a letter avatar if that 404s). Saved
+  in `localStorage` over the `BOOKMARKS` defaults, which still use hand-picked
+  `icons/*.png` files.
 - **Market Map** — the S&P 500 as blocks, finviz-style: a squarified treemap
   where each company's area is its market cap and its colour is its performance
   over the selected period (1D · 1W · 1M · 3M · 1Y · YTD), grouped by sector.

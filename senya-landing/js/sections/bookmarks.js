@@ -4,7 +4,9 @@
 // AND opens a blank add form in one click. While it's on, clicking a bookmark
 // loads it into that same form to rename/re-url, and each tile shows a ✕ to
 // delete. Saving keeps edit mode on and resets the form back to "add", so you
-// can add several in a row; the cell (or Done, or Esc) exits.
+// can add several in a row; the cell (or Done, or Esc) exits. Only a URL is
+// required — name defaults to the domain, icon is looked up automatically
+// (see faviconSrc) — so adding one is paste-URL-then-Enter.
 // Persisted in localStorage over the BOOKMARKS defaults from config.js.
 
 import { BOOKMARKS } from "../config.js";
@@ -58,6 +60,30 @@ function avatarColor(name) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
+function withScheme(url) { return /^https?:\/\//.test(url) ? url : `https://${url}`; }
+
+function hostnameOf(url) {
+  try { return new URL(withScheme(url)).hostname; } catch { return null; }
+}
+
+function defaultNameFromUrl(url) {
+  const host = hostnameOf(url);
+  if (!host) return "";
+  const base = host.replace(/^www\./, "");
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+// Curated bookmarks (config.js defaults) carry a local icons/<slug>.png; anything
+// the user adds doesn't, so it's fetched live from the domain via the nginx
+// /favicon-proxy route (Google's favicon service — see nginx.conf) instead of
+// making them track down and save an icon file by hand. The <img error> handler
+// in tileFor() still falls back to the letter avatar if even that comes up empty.
+function faviconSrc(b) {
+  if (b.icon) return `icons/${b.icon}.png`;
+  const domain = hostnameOf(b.url);
+  return domain ? `/favicon-proxy?domain=${encodeURIComponent(domain)}` : null;
+}
+
 export function initBookmarks() {
   const row = document.getElementById("bookmarks")?.closest(".bookmarks-row") || document.querySelector(".bookmarks-row");
   const wrap = document.getElementById("bookmarks");
@@ -81,8 +107,9 @@ export function initBookmarks() {
 
   function tileFor(b) {
     const tile = el("div", { class: "bm-tile", title: b.name });
-    if (b.icon) {
-      const img = el("img", { alt: "", src: `icons/${b.icon}.png` });
+    const src = faviconSrc(b);
+    if (src) {
+      const img = el("img", { alt: "", src });
       img.addEventListener("load", () => img.classList.toggle("plate", isDarkIcon(img)));
       img.addEventListener("error", function onErr() { img.removeEventListener("error", onErr); img.remove(); tile.append(avatar(b)); });
       tile.append(img);
@@ -99,8 +126,6 @@ export function initBookmarks() {
   function avatar(b) {
     return el("span", { class: "bm-avatar", style: `background:${avatarColor(b.name)}` }, (b.name[0] || "?").toUpperCase());
   }
-
-  function withScheme(url) { return /^https?:\/\//.test(url) ? url : `https://${url}`; }
 
   // `existing` = null → the add half of the form; a bookmark → the edit half.
   function openForm(existing) {
@@ -123,9 +148,18 @@ export function initBookmarks() {
   editBtn.addEventListener("click", () => setEditMode(!editMode));
   cancelBtn.addEventListener("click", () => setEditMode(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && editMode) setEditMode(false); });
+  // Enter submits from either field — the plain text inputs aren't in a <form>,
+  // so nothing does this for free.
+  function submitOnEnter(e) { if (e.key === "Enter") { e.preventDefault(); saveBtn.click(); } }
+  nameInput.addEventListener("keydown", submitOnEnter);
+  urlInput.addEventListener("keydown", submitOnEnter);
   saveBtn.addEventListener("click", () => {
-    const name = nameInput.value.trim(), url = urlInput.value.trim();
-    if (!name || !url) return;
+    const url = urlInput.value.trim();
+    if (!url) return;
+    // Name is optional: fall back to the bare domain so a quick "paste URL,
+    // hit Enter" add doesn't get rejected for a field most sites make obvious.
+    const name = nameInput.value.trim() || defaultNameFromUrl(url);
+    if (!name) return;
     if (editingId) list = list.map((b) => (b.id === editingId ? { ...b, name, url } : b));
     else list = [...list, { id: "b" + Date.now(), name, url, icon: null }];
     persist(list);
