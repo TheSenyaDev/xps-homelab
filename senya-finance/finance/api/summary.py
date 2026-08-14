@@ -1,16 +1,12 @@
-"""Aggregations for dashboards. Spending = money out that isn't a transfer or
-already labeled income (uncategorized out counts as spending). Income = money in
-labeled with an income-kind category."""
+"""Aggregations for dashboards. See spending.py for what counts as spending."""
 from flask import Blueprint, jsonify, request
 
 from ..db import get_db
+from ..spending import IS_INCOME as _IS_INCOME
+from ..spending import IS_SPENDING as _IS_SPENDING
+from ..spending import JOIN as _JOIN
 
 bp = Blueprint("summary", __name__, url_prefix="/api")
-
-# Reusable SQL fragments.
-_IS_SPENDING = "t.direction = 'out' AND (t.category_id IS NULL OR c.kind = 'expense')"
-_IS_INCOME = "t.direction = 'in' AND c.kind = 'income'"
-_JOIN = "FROM transactions t LEFT JOIN categories c ON c.id = t.category_id"
 
 
 @bp.get("/summary/months")

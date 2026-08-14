@@ -49,6 +49,34 @@ def update_transaction(tid):
     return jsonify(dict(row))
 
 
+@bp.patch("/transactions/bulk")
+def bulk_update_transactions():
+    """Set one category on many transactions at once. `{ids: [...], category_id}`.
+
+    One statement rather than a PATCH per row: labelling a screenful of the same
+    merchant is the common case, and doing it as N requests means a half-applied
+    result if one of them fails.
+    """
+    data = request.get_json(force=True) or {}
+    ids = data.get("ids")
+    if not isinstance(ids, list) or not ids:
+        return jsonify({"error": "ids must be a non-empty list"}), 400
+    if "category_id" not in data:
+        return jsonify({"error": "category_id required (null to clear)"}), 400
+    try:
+        ids = [int(i) for i in ids]
+    except (TypeError, ValueError):
+        return jsonify({"error": "ids must be integers"}), 400
+
+    db = get_db()
+    cur = db.execute(
+        f"UPDATE transactions SET category_id = ? WHERE id IN ({', '.join('?' * len(ids))})",
+        [data["category_id"], *ids],
+    )
+    db.commit()
+    return jsonify({"updated": cur.rowcount})
+
+
 @bp.get("/accounts")
 def list_accounts():
     rows = get_db().execute("SELECT DISTINCT account FROM transactions ORDER BY account").fetchall()

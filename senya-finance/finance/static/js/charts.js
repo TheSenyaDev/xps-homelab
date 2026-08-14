@@ -22,6 +22,34 @@ export function barList(items) {
   return wrap;
 }
 
+// Two-series monthly bars: data = [{month, spending, prev_spending}].
+// Draws this year solid and last year as a faint bar behind it, so "worse than
+// last year" is visible without reading any numbers.
+export function comparisonTrend(data, onPick) {
+  if (!data.length) return el("div", { class: "empty", text: "No history yet." });
+  const max = Math.max(...data.flatMap((d) => [d.spending, d.prev_spending]), 1);
+  const chart = el("div", { class: "trend compare" });
+  for (const d of data) {
+    const cur = el("div", { class: "stack" });
+    cur.style.height = Math.max((d.spending / max) * 100, 1) + "%";
+    const prev = el("div", { class: "stack prev" });
+    prev.style.height = Math.max((d.prev_spending / max) * 100, 1) + "%";
+
+    const delta = d.prev_spending > 0 ? (d.spending - d.prev_spending) / d.prev_spending : null;
+    const col = el("div", {
+      class: "col",
+      title: `${monthLabel(d.month)}: ${money(d.spending)}`
+        + (d.prev_spending ? ` · last year ${money(d.prev_spending)}`
+          + (delta === null ? "" : ` (${delta >= 0 ? "+" : ""}${Math.round(delta * 100)}%)`) : ""),
+    },
+      el("div", { class: "pair" }, prev, cur),
+      el("div", { class: "ml", text: d.month.slice(5) }));
+    if (onPick) { col.style.cursor = "pointer"; col.addEventListener("click", () => onPick(d.month)); }
+    chart.append(col);
+  }
+  return chart;
+}
+
 // Monthly spending trend: data = [{month, spending}], optional active month + click.
 export function monthlyTrend(data, activeMonth, onPick) {
   if (!data.length) return el("div", { class: "empty", text: "No history yet." });

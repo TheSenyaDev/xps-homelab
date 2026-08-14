@@ -7,13 +7,19 @@ export async function renderTransactions(root, ctx = {}) {
   const f = {
     account: "",
     category: params.uncategorized ? "uncat" : (params.category_id ? String(params.category_id) : ""),
-    q: "",
-    allMonths: !!params.uncategorized, // reviewing uncategorized spans all months
+    q: params.q || "",
+    // Reviewing uncategorized (or following a link from another view) spans all
+    // months — the point is to find the rows, wherever they are.
+    allMonths: !!params.uncategorized || !!params.allMonths,
   };
   const accounts = await api.get("/api/accounts");
 
+  let rows = [];                 // what's currently displayed
+  const selected = new Set();    // transaction ids ticked for a bulk action
+
   const tableWrap = el("div");
-  root.replaceChildren(el("div", { class: "panel" }, buildFilters(), tableWrap));
+  const bulkBar = el("div", { class: "bulkbar hidden" });
+  root.replaceChildren(el("div", { class: "panel" }, buildFilters(), bulkBar, tableWrap));
   refresh();
 
   function buildFilters() {
@@ -51,27 +57,79 @@ export async function renderTransactions(root, ctx = {}) {
     else if (f.category) qs.set("category_id", f.category);
     if (f.q) qs.set("q", f.q);
     qs.set("limit", "500");
+    selected.clear();
+    syncBulkBar();
     tableWrap.replaceChildren(el("div", { class: "empty", text: "Loading…" }));
-    renderTable(await api.get("/api/transactions?" + qs.toString()));
+    rows = await api.get("/api/transactions?" + qs.toString());
+    renderTable();
   }
 
-  function renderTable(rows) {
+  // ---- bulk selection -----------------------------------------------------
+
+  function syncBulkBar() {
+    const n = selected.size;
+    bulkBar.classList.toggle("hidden", n === 0);
+    if (!n) return;
+
+    const total = rows.filter((r) => selected.has(r.id)).reduce((s, r) => s + r.amount, 0);
+    const cat = el("select", {},
+      el("option", { value: "", text: "Set category…" }),
+      el("option", { value: "clear", text: "— clear category —" }),
+      ...state.categories.map((c) => el("option", { value: String(c.id), text: c.name })));
+
+    cat.addEventListener("change", async () => {
+      if (!cat.value) return;
+      const categoryId = cat.value === "clear" ? null : Number(cat.value);
+      const ids = [...selected];
+      const res = await api.patch("/api/transactions/bulk", { ids, category_id: categoryId });
+      toast(`${res.updated} transaction(s) updated`);
+      refresh();
+    });
+
+    bulkBar.replaceChildren(
+      el("span", { text: `${n} selected · ${money(total)}` }),
+      el("span", { class: "spacer" }),
+      cat,
+      el("button", { class: "ghost", onclick: () => { selected.clear(); renderTable(); } }, "Clear"));
+  }
+
+  function renderTable() {
     if (!rows.length) {
       tableWrap.replaceChildren(el("div", { class: "empty", text: "No transactions match." }));
       return;
     }
+    const allTicked = rows.every((r) => selected.has(r.id));
+    const selectAll = el("input", { type: "checkbox", title: "Select all" });
+    selectAll.checked = allTicked;
+    selectAll.addEventListener("change", () => {
+      if (selectAll.checked) rows.forEach((r) => selected.add(r.id));
+      else selected.clear();
+      renderTable();
+    });
+
     const body = el("tbody");
     rows.forEach((r) => body.append(txRow(r)));
     tableWrap.replaceChildren(
-      el("div", { class: "muted", style: "margin-bottom:8px;font-size:13px", text: `${rows.length} transaction(s)` }),
+      el("div", { class: "muted", style: "margin-bottom:8px;font-size:13px",
+        text: `${rows.length} transaction(s)` }),
       el("table", {},
         el("thead", {}, el("tr", {},
+          el("th", { class: "tick" }, selectAll),
           el("th", { text: "Date" }), el("th", { text: "Merchant" }), el("th", { text: "Account" }),
           el("th", { text: "Category" }), el("th", { class: "amt", text: "Amount" }))),
         body));
+    syncBulkBar();
   }
 
   function txRow(r) {
+    const tick = el("input", { type: "checkbox" });
+    tick.checked = selected.has(r.id);
+    tick.addEventListener("change", () => {
+      if (tick.checked) selected.add(r.id); else selected.delete(r.id);
+      tr.classList.toggle("picked", tick.checked);
+      syncBulkBar();
+    });
+
     const sel = el("select", { class: "cat-select" },
       el("option", { value: "", text: "—" }),
       ...state.categories.map((c) => el("option", { value: String(c.id), text: c.name })));
@@ -83,7 +141,8 @@ export async function renderTransactions(root, ctx = {}) {
       onclick: () => makeRule(r, sel),
     }, "＋rule");
 
-    const tr = el("tr", { class: r.category_id ? "" : "uncat" },
+    const tr = el("tr", { class: (r.category_id ? "" : "uncat") + (tick.checked ? " picked" : "") },
+      el("td", { class: "tick" }, tick),
       el("td", { text: r.date }),
       el("td", { text: r.merchant }),
       el("td", {}, el("span", { class: "acct-pill", text: r.account })),
@@ -105,6 +164,14 @@ export async function renderTransactions(root, ctx = {}) {
     if (!cid) { toast("Pick a category first"); return; }
     const pattern = window.prompt("Auto-categorize transactions whose merchant contains:", r.merchant);
     if (!pattern || !pattern.trim()) return;
+
+    // Say what it will hit before it hits it — a pattern typed from one row can
+    // easily match far more than the person expects.
+    const pv = await api.post("/api/rules/preview", { pattern: pattern.trim(), is_regex: false });
+    const warn = pv.already_categorized
+      ? `\n\n${pv.already_categorized} of them already have a category and will NOT be changed.` : "";
+    if (!confirm(`"${pattern.trim()}" matches ${pv.count} transaction(s), ${money(pv.total_amount)} total.${warn}\n\nCreate this rule?`)) return;
+
     await api.post("/api/rules", { pattern: pattern.trim(), is_regex: false, category_id: cid });
     const res = await api.post("/api/rules/apply");
     toast(`Rule added · ${res.categorized} transaction(s) matched`);

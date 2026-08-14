@@ -5,12 +5,19 @@ import { loadCategories, loadMonths, state } from "./state.js";
 import { renderDashboard } from "./views/dashboard.js";
 import { renderTransactions } from "./views/transactions.js";
 import { renderManage } from "./views/categories.js";
+import { renderTrends } from "./views/trends.js";
+import { renderRecurring } from "./views/recurring.js";
 
 const VIEWS = {
   dashboard: renderDashboard,
+  trends: renderTrends,
+  recurring: renderRecurring,
   transactions: renderTransactions,
   categories: renderManage,
 };
+
+// Views that pick their own period; the global month selector doesn't apply.
+const MONTHLESS = new Set(["trends", "recurring"]);
 let current = "dashboard";
 const root = () => document.getElementById("content");
 
@@ -18,6 +25,9 @@ function goTo(view, params = {}) {
   if (!VIEWS[view]) return;
   current = view;
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
+  // Hide the month picker where it would do nothing, rather than leave a control
+  // that looks live but changes none of what's on screen.
+  document.querySelector(".month-pick")?.classList.toggle("hidden", MONTHLESS.has(view));
   Promise.resolve(VIEWS[view](root(), { goTo, params })).catch((e) => {
     console.error(e);
     root().replaceChildren(el("div", { class: "empty", text: "Something went wrong loading this view." }));
