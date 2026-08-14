@@ -33,6 +33,7 @@ Use the helper. Do not hand-roll `curl` for this:
 ```bash
 python3 tools/tasks.py list          # open tasks
 python3 tools/tasks.py list --all    # including done
+python3 tools/tasks.py search "caldav"  # title/notes match, any status with --all
 python3 tools/tasks.py show 27       # notes + subtasks
 python3 tools/tasks.py sub 27 "Migrate the old rows"
 python3 tools/tasks.py note 27 "Blocked on the CalDAV rename"

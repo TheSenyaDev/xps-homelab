@@ -11,6 +11,7 @@ and silently omits everything in Senya-Tasks, Senya-Landing and the rest. Every
 command here expands the subtree first.
 
   list [--all] [--category NAME] [--json]   open tasks (--all includes done)
+  search <query> [--all] [--category NAME] [--json]   title/notes match under --category
   show <id> [--json]                        one task with its notes and subtasks
   done <id>                        mark complete
   reopen <id>
@@ -18,7 +19,7 @@ command here expands the subtree first.
   add <title> [--category NAME] [--priority high|medium|low] [--due YYYY-MM-DD]
   sub <parent-id> <title>          add a subtask
 """
-import argparse, json, os, sys, urllib.error, urllib.request
+import argparse, json, os, sys, urllib.error, urllib.parse, urllib.request
 
 # Overridable so this works from another host, a container, or a tunnel —
 # anything running it does not have to be on the same box as SenyaTasks.
@@ -90,6 +91,31 @@ def cmd_list(a):
         print("  ".join(bits))
 
 
+def cmd_search(a):
+    cats = call("GET", "/api/categories")
+    ids = subtree(cats, a.category)
+    name = {c["id"]: c["name"] for c in cats}
+    tasks = call("GET", f"/api/tasks?q={urllib.parse.quote(a.query)}")
+    rows = [t for t in tasks if t["category_id"] in ids and (a.all or not t["done"])]
+    rows.sort(key=lambda t: (t["done"], RANK.get(t["priority"], 3), t["due_date"] or "9999"))
+    if a.json:
+        for t in rows:
+            t["category"] = name.get(t["category_id"])
+        print(json.dumps(rows, indent=2))
+        return
+    if not rows:
+        print(f"no {'' if a.all else 'open '}tasks matching {a.query!r} under {a.category}")
+        return
+    for t in rows:
+        bits = [f"#{t['id']}", "[x]" if t["done"] else "[ ]", f"{t['priority'][:1].upper()}",
+                f"{name.get(t['category_id'], '-'):<14}", t["title"]]
+        if t["parent_id"]:
+            bits.append(f"(subtask of #{t['parent_id']})")
+        if t["due_date"]:
+            bits.append(f"due {t['due_date']}")
+        print("  ".join(bits))
+
+
 def cmd_show(a):
     tasks = call("GET", "/api/tasks")
     t = next((x for x in tasks if x["id"] == a.id), None)
@@ -151,6 +177,9 @@ sub = p.add_subparsers(dest="cmd", required=True)
 s = sub.add_parser("list"); s.set_defaults(fn=cmd_list)
 s.add_argument("--all", action="store_true"); s.add_argument("--category", default=ROOT)
 s.add_argument("--json", action="store_true", help="machine-readable output")
+s = sub.add_parser("search"); s.set_defaults(fn=cmd_search); s.add_argument("query")
+s.add_argument("--all", action="store_true"); s.add_argument("--category", default=ROOT)
+s.add_argument("--json", action="store_true")
 s = sub.add_parser("show"); s.set_defaults(fn=cmd_show); s.add_argument("id", type=int)
 s.add_argument("--json", action="store_true")
 s = sub.add_parser("done"); s.set_defaults(fn=cmd_done); s.add_argument("id", type=int)
