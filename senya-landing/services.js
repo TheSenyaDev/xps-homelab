@@ -81,6 +81,9 @@ window.SENYA_INTERNAL = {
     { name: "Firefly Importer", port: 3006, icon: "firefly-iii", container: "firefly-importer" },
     { name: "Miniflux", port: 3007, icon: "miniflux", container: "miniflux" },
     { name: "Jellyfin", port: 30013, icon: "jellyfin", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
+    { name: "Navidrome", port: 30043, icon: "navidrome", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
+    { name: "Audiobookshelf", port: 30067, icon: "audiobookshelf", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
+    { name: "Kavita", port: 30069, icon: "kavita", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
     { name: "TrueNAS", icon: "truenas", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
   ],
 };

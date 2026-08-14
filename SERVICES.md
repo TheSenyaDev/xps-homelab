@@ -37,6 +37,9 @@
 | Vaultwarden        | http://192.168.2.100:8222             | http://100.121.230.17:8222              |
 | Forgejo (git)      | http://192.168.2.100:3030             | http://100.121.230.17:3030              |
 | Jellyfin           | http://192.168.2.82:30013             | http://100.112.73.95:30013              |
+| Navidrome (music)  | http://192.168.2.82:30043             | http://100.112.73.95:30043              |
+| Audiobookshelf     | http://192.168.2.82:30067             | http://100.112.73.95:30067              |
+| Kavita (comics)    | http://192.168.2.82:30069             | http://100.112.73.95:30069              |
 | TrueNAS            | http://192.168.2.82                   | http://100.112.73.95                    |
 
 ## APIs (internal / not user-facing)
