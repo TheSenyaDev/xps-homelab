@@ -125,6 +125,43 @@ say so plainly and name what the user should check.
   constraint discovered, why an obvious approach was rejected.
 - If the work revealed new work, `add` it rather than letting it evaporate.
 
+## Scaffolding a new senya-* app
+
+The six existing apps (`senya-tasks`, `senya-daily`, `senya-finance`,
+`senya-notes`, `senya-boox`, `senya-scraper`) all follow the same shape. A new
+one should too, rather than inventing a fresh pattern:
+
+- **Backend**: `python:3.12-slim`, Flask + gunicorn, `-w 1 --threads 4`
+  (1 worker keeps SQLite writes serialized — no app here needs more), SQLite
+  under `/data` (a Docker volume), `PYTHONDONTWRITEBYTECODE=1`. A single-file
+  `app.py` is fine to start; once it grows, split into a package the way
+  `senya-tasks/tasks/` and `senya-finance/finance/` did (`db.py`, `api/`, one
+  Blueprint per feature) — see either README's "Extending it" section.
+- **Frontend**: vanilla ES modules under `static/`, no build step, no
+  framework. `static/favicon.png` (every app has one — copy the pattern, don't
+  ship without).
+- **Dockerfile**: copy `senya-daily/Dockerfile` as the starting point for a
+  single-file app, `senya-tasks/Dockerfile` for a package layout. Both `EXPOSE`
+  the app's port and `VOLUME ["/data"]`.
+- **`docker-compose.yaml`** entry: `build: ./senya-<name>`,
+  `image: senya-<name>:latest`, `container_name: senya-<name>`, a host port
+  from `SERVICES.md` (pick the next free one, they're sequential per group),
+  `./senya-<name>/data:/data`, `restart: unless-stopped`. Follow an existing
+  senya-* entry, not a prebuilt-container one — those have different
+  concerns (pulled images, upstream env vars).
+- **`.gitignore`**: add `senya-<name>/data/` (or rely on the existing `*.db`
+  rule if there's nothing else under `data/` worth ignoring by name).
+- **README**: Features, Run (Docker Compose + locally without Docker), API
+  table, Config table — every existing senya-* README has this shape; match
+  it rather than freeform prose.
+- **Register it**: add rows to `SERVICES.md` and `senya-landing/services.js`
+  (`SENYA_APPS`, not `SERVICES` — that array is for prebuilt/third-party
+  containers) — see [senya-landing/README.md](senya-landing/README.md)'s
+  "Add a service to the launcher rail" for the exact fields.
+
+Then follow the normal build/verify/close-the-loop steps below like any other
+task.
+
 ## Rules
 
 - **Never mark a task done that you have not verified**, and never mark one done
