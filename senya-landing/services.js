@@ -74,6 +74,7 @@ window.SENYA_INTERNAL = {
     { name: "InfCloud", port: 5233, container: "infcloud" },
     { name: "Nextcloud", port: 8088, icon: "nextcloud", container: "nextcloud" },
     { name: "Vaultwarden", port: 8222, icon: "vaultwarden", container: "vaultwarden" },
+    { name: "Forgejo", port: 3030, icon: "forgejo", container: "forgejo" },
     { name: "Memos", port: 5230, icon: "memos", container: "memos" },
     { name: "Vikunja", port: 3456, icon: "vikunja", container: "vikunja" },
     { name: "Firefly III", port: 3005, icon: "firefly-iii", container: "firefly" },

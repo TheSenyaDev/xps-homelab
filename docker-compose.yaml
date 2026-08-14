@@ -450,6 +450,46 @@ services:
       - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
     restart: unless-stopped
 
+  # Forgejo — self-hosted git forge (the maintained Gitea fork). A local origin
+  # for this repo and anything else developed here, with a web UI, issues and
+  # PRs, so day-to-day work does not depend on GitHub being reachable.
+  # SQLite backend deliberately: one user, so a Postgres container would be a
+  # second thing to back up for no gain.
+  # FIRST RUN: open http://${SERVER_IP}:3030 and complete the installer. Every
+  # field is pre-filled from the environment below — you only pick the admin
+  # account. Do it now rather than later: until that form is submitted, anyone
+  # on the LAN can claim the instance.
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:16
+    container_name: forgejo
+    ports:
+      - "3030:3000"
+      # Git over SSH. 2222 on the host because 22 is the XPS's own sshd; clone
+      # URLs carry the port because of SSH_PORT below.
+      - "2222:22"
+    volumes:
+      - ./forgejo/data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=${TZ}
+      # Everything under /data is written as this uid/gid, so ./forgejo/data
+      # stays readable and backup-able from the host without sudo.
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=sqlite3
+      # ROOT_URL is baked into the clone URLs shown in the UI and into every
+      # link in a notification mail — a wrong value is only noticed later.
+      - FORGEJO__server__ROOT_URL=http://${SERVER_IP}:3030/
+      - FORGEJO__server__DOMAIN=${SERVER_IP}
+      - FORGEJO__server__SSH_DOMAIN=${SERVER_IP}
+      - FORGEJO__server__SSH_PORT=2222
+      # Single-user forge: no one else may create an account, and an
+      # unauthenticated visitor should not be able to read the repo list.
+      - FORGEJO__service__DISABLE_REGISTRATION=true
+      - FORGEJO__service__REQUIRE_SIGNIN_VIEW=true
+    restart: unless-stopped
+
   # Custom-built Senya apps (built from local source, not pulled images).
   senya-landing:
     build: ./senya-landing

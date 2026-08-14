@@ -86,6 +86,10 @@ senya-scraper/data/
 senya-scraper/secrets/*
 !senya-scraper/secrets/README.md
 
+# Forgejo — the git repositories themselves, the SQLite database, and the
+# generated app.ini, which holds SECRET_KEY and the instance's JWT secrets.
+forgejo/data/
+
 # SenyaTasks — the task list itself. Personal content, and the SQLite DB beside
 # it is already ignored by the *.db rule; the markdown export was not.
 senya-tasks/data/

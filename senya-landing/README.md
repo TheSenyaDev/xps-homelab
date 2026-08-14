@@ -123,6 +123,14 @@ In code:
 
 - **Bookmarks, weather locations, search engines** → [`js/config.js`](js/config.js)
 - **Internal** service list / IPs / SearXNG / stat hosts → [`services.js`](services.js)
+- **Add a service to the launcher rail**: one entry in `SERVICES` (or
+  `SENYA_APPS`) in [`services.js`](services.js) —
+  `{ name, port, icon, container, ext?, localIp?, tsIp? }`. `icon` is a filename
+  without `.png` in [`icons/`](icons) (drop the file in; a missing one falls back
+  to `_default.svg`), and `container` is the docker `container_name`, which is how
+  the rail draws the live up/down dot from the Glances containers list. Omit
+  `localIp`/`tsIp` for anything on the XPS. Example, added with the Forgejo
+  service: `{ name: "Forgejo", port: 3030, icon: "forgejo", container: "forgejo" }`.
 - **Add a section**: drop `js/sections/foo.js` exporting `initFoo()` (it populates
   an element by id), then add **one entry** to the `SECTIONS` array in
   [`js/registry.js`](js/registry.js) — `{ id, title, bodyId, bodyClass, init,
