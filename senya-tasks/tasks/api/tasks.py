@@ -4,7 +4,8 @@ from ..config import PRIORITIES, STATUSES
 from ..db import get_db
 from ..markdown_export import sync
 from ..serialize import read_task, tags_by_task, task_json
-from ..validation import ApiError, set_task_tags, task_columns, v_due_date, v_enum, v_tag_name
+from ..validation import (ApiError, set_task_tags, task_columns, v_due_date, v_enum,
+                          v_int, v_tag_name)
 
 bp = Blueprint("tasks", __name__, url_prefix="/api")
 
@@ -25,7 +26,10 @@ def task_filters(args):
         params.append(v_enum("priority", PRIORITIES)(args["priority"]))
     if "category_id" in args:
         where.append("category_id IS ?")
-        params.append(None if args["category_id"] in ("", "none") else int(args["category_id"]))
+        # A bad filter is the caller's mistake, so say so — letting int() raise
+        # here surfaced as a 500 with no indication of which parameter was wrong.
+        params.append(None if args["category_id"] in ("", "none")
+                      else v_int("category_id")(args["category_id"]))
     if "due_before" in args:
         where.append("(due_date IS NOT NULL AND due_date <= ?)")
         params.append(v_due_date(args["due_before"]))
@@ -41,7 +45,7 @@ def task_filters(args):
         # Lets the client export exactly what's on screen — its search box and
         # tag chips filter client-side, so no server-side filter can reproduce
         # that view. An empty list means "nothing", not "everything".
-        ids = [int(x) for x in args["ids"].split(",") if x.strip()]
+        ids = [v_int("ids")(x) for x in args["ids"].split(",") if x.strip()]
         where.append(f"id IN ({', '.join('?' * len(ids))})" if ids else "0")
         params += ids
 
@@ -131,7 +135,8 @@ def reorder_tasks():
         raise ApiError("ids must be a list of task ids")
     db = get_db()
     for pos, tid in enumerate(ids, start=1):
-        db.execute("UPDATE tasks SET position = ? WHERE id = ?", (pos, int(tid)))
+        db.execute("UPDATE tasks SET position = ? WHERE id = ?",
+                   (pos, v_int("ids")(tid)))
     db.commit()
     sync()
     return "", 204

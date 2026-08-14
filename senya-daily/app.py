@@ -372,8 +372,11 @@ def put_day(day):
 def calendar():
     """Per-day summary for a month: note flag + which trackers were logged.
 
-    Each day is {note: bool, trackers: [tracker_id, …], entries: count}, so the
-    calendar can show the icons of the trackers completed that day.
+    Returns {year, month, days: {"YYYY-MM-DD": day, …}}, where each day is
+    {note: bool, trackers: [{id, value}, …], entries: count} — the icons the
+    calendar draws, plus each value so it can show the number too. Only
+    trackers flagged `calendar = 1` are included, and `entries` counts those,
+    so a day never advertises a marker the calendar will not draw.
     Query: ?year=YYYY&month=M  (defaults to the current month).
     """
     today = date.today()
