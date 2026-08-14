@@ -2,7 +2,7 @@
 // what quietly went up in price. Detection lives in the backend (recurring.py);
 // this only presents it.
 import { api } from "../api.js";
-import { el, money } from "../dom.js";
+import { el, money, replace, skeleton } from "../dom.js";
 
 const CADENCE_LABEL = {
   weekly: "every week", biweekly: "every 2 weeks", monthly: "monthly",
@@ -26,7 +26,7 @@ function relativeDay(iso, asOf) {
 
 export async function renderRecurring(root, ctx = {}) {
   const goTo = ctx.goTo || (() => {});
-  root.replaceChildren(el("div", { class: "empty", text: "Finding recurring charges…" }));
+  root.replaceChildren(skeleton({ cards: 4, panels: 1 }));
 
   let showInactive = false;
   const data = await api.get("/api/recurring?years=3");
@@ -44,7 +44,7 @@ export async function renderRecurring(root, ctx = {}) {
   cb.addEventListener("change", () => { showInactive = cb.checked; drawList(); });
   toggle.append(cb, ` Show lapsed (${summary.inactive_count})`);
 
-  root.replaceChildren(
+  replace(root,
     el("div", { class: "cards" },
       tile("Active subscriptions", String(summary.active_count), "spend"),
       tile("Per month", money(summary.monthly_total), "spend", "recurring charges only"),

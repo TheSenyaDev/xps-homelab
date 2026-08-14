@@ -67,6 +67,138 @@ def _emit(date_iso, merchant, debit, credit):
     return None
 
 
+# Date formats seen across the exports we handle, tried in order. The bank CSVs
+# above pin their own format because they have no header to disambiguate with;
+# this list is for the header-driven parser, where the column is known but the
+# format still varies by institution (and sometimes carries a time).
+_DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d", "%b %d, %Y", "%d %b %Y")
+
+
+def _parse_date(raw):
+    s = _clean(raw)
+    if not s:
+        return None
+    # ISO timestamps ("2026-03-15T14:22:01Z", "2026-03-15 14:22") — keep the date.
+    s = re.split(r"[T ]", s)[0] if re.match(r"^\d{4}-\d{2}-\d{2}", s) else s
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _signed_amount(x):
+    """Amount keeping its sign: negative means money out. `None` if unparseable.
+
+    Exports write negatives as `-12.34`, `(12.34)` or `12.34 CR` depending on the
+    institution, so normalize all three rather than trusting a bare minus sign.
+    """
+    s = (x or "").strip().replace("$", "").replace(",", "").replace("−", "-")
+    if not s:
+        return None
+    neg = s.startswith("(") and s.endswith(")")
+    if neg:
+        s = s[1:-1]
+    s = re.sub(r"\s*(CAD|USD|CR|DR)\s*$", "", s, flags=re.I)
+    try:
+        v = float(s)
+    except ValueError:
+        return None
+    return -abs(v) if neg else v
+
+
+# Column aliases for the header-driven parser. Matched against the lowercased
+# header cell, longest-first, so "transaction date" beats a bare "date".
+_COLS = {
+    "date": ("transaction date", "process date", "settlement date", "posted date", "date"),
+    "description": ("description", "merchant", "payee", "details", "narrative",
+                    "transaction description", "name"),
+    "type": ("transaction type", "activity type", "transaction", "type", "activity"),
+    "amount": ("amount", "net amount", "value", "gross amount"),
+    "debit": ("debit", "withdrawal", "money out", "funds out"),
+    "credit": ("credit", "deposit", "money in", "funds in"),
+}
+
+
+# Activity types that move money between your own holdings rather than spend it.
+_INVESTMENT_ACTIVITIES = {
+    "buy", "sell", "dividend", "reinvestment", "dividend reinvestment",
+    "interest", "stock split", "stock dividend", "options purchase",
+    "options sale", "options expiry", "options exercise", "options assignment",
+}
+
+
+def _map_header(header):
+    """header row -> {field: column index}. Unmapped fields are simply absent."""
+    cells = [_clean(h).lower() for h in header]
+    found = {}
+    for field, aliases in _COLS.items():
+        for alias in aliases:
+            for i, cell in enumerate(cells):
+                if cell == alias and i not in found.values():
+                    found[field] = i
+                    break
+            if field in found:
+                break
+    return found
+
+
+def parse_by_header(path):
+    """Parse any CSV that names its own columns, instead of pinning a layout.
+
+    Institutions reorder and rename export columns between years — and one of
+    them (Wealthsimple) has no fixed public format at all — so the header is a
+    more durable contract than "column 0 is the date". Reads the first row that
+    maps to at least a date and an amount, then treats the rest as data.
+
+    Handles both shapes: a single signed `amount` column (negative = out) or
+    separate debit/credit columns.
+    """
+    rows = _rows(path)
+    cols = None
+    for row in rows:
+        cols = _map_header(row)
+        if "date" in cols and ("amount" in cols or "debit" in cols or "credit" in cols):
+            break
+        cols = None
+    if not cols:
+        return
+
+    def cell(row, field):
+        i = cols.get(field)
+        return row[i] if i is not None and i < len(row) else ""
+
+    for row in rows:
+        date_iso = _parse_date(cell(row, "date"))
+        if not date_iso:
+            continue  # footer/blank/subtotal line, not a transaction
+
+        # Prefer the description; fall back to the activity type so a row is
+        # never labelled with an empty string (Wealthsimple leaves the
+        # description blank on deposits and dividends).
+        kind = _clean(cell(row, "type"))
+        merchant = _clean(cell(row, "description")) or kind or "—"
+        # A security trade describes itself by ticker ("AAPL"), which on its own
+        # looks exactly like a merchant and would be counted as spending. Prefix
+        # those with the activity so the default rules can route them to
+        # Investments — but only those, so ordinary purchases keep clean
+        # merchant names for the recurring detector to group on.
+        if kind and kind.lower() in _INVESTMENT_ACTIVITIES and not merchant.lower().startswith(kind.lower()):
+            merchant = f"{kind} {merchant}"
+
+        if "amount" in cols:
+            amt = _signed_amount(cell(row, "amount"))
+            if amt is None or amt == 0:
+                continue
+            tx = _emit(date_iso, merchant, abs(amt) if amt < 0 else None,
+                       abs(amt) if amt > 0 else None)
+        else:
+            tx = _emit(date_iso, merchant, _amount(cell(row, "debit")), _amount(cell(row, "credit")))
+        if tx:
+            yield tx
+
+
 # ---- parsers ----
 
 def parse_cibc(path):
@@ -108,3 +240,27 @@ register(Source("CIBC Chequing", "CIBC", "CIBC Chequing",
                 lambda p: "cibc" in p and ("cheq" in p or "chequ" in p), parse_cibc))
 register(Source("TD Visa", "TD", "TD Visa",
                 lambda p: ("td bank" in p or "/td/" in p) and "visa" in p, parse_td_visa))
+
+# Wealthsimple has no public API and no fixed export layout — the activities CSV
+# is generated per account type and its columns have changed more than once — so
+# these go through the header-driven parser rather than a pinned column order.
+# Registered per account so a Cash card charge and an RRSP contribution don't
+# land in the same bucket; the generic entry last catches anything else.
+# Drop the exports anywhere under the import dir with the account in the
+# filename, e.g. `wealthsimple-cash-2026.csv`.
+def _ws(*keywords):
+    return lambda p: "wealthsimple" in p and any(k in p for k in keywords)
+
+
+register(Source("Wealthsimple Cash", "Wealthsimple", "Wealthsimple Cash",
+                _ws("cash", "spend"), parse_by_header))
+register(Source("Wealthsimple TFSA", "Wealthsimple", "Wealthsimple TFSA",
+                _ws("tfsa"), parse_by_header))
+register(Source("Wealthsimple RRSP", "Wealthsimple", "Wealthsimple RRSP",
+                _ws("rrsp"), parse_by_header))
+register(Source("Wealthsimple FHSA", "Wealthsimple", "Wealthsimple FHSA",
+                _ws("fhsa"), parse_by_header))
+register(Source("Wealthsimple Crypto", "Wealthsimple", "Wealthsimple Crypto",
+                _ws("crypto"), parse_by_header))
+register(Source("Wealthsimple Trade", "Wealthsimple", "Wealthsimple Trade",
+                lambda p: "wealthsimple" in p, parse_by_header))

@@ -1,11 +1,11 @@
 import { api } from "../api.js";
-import { el, money, toast } from "../dom.js";
+import { el, money, replace, skeleton, toast } from "../dom.js";
 import { loadCategories, state } from "../state.js";
 
 const KINDS = ["expense", "income", "transfer"];
 
 export async function renderManage(root, ctx = {}) {
-  root.replaceChildren(el("div", { class: "empty", text: "Loading…" }));
+  root.replaceChildren(skeleton({ panels: 2 }));
 
   async function reload() {
     const [cats, rules, suggestions] = await Promise.all([
@@ -14,7 +14,7 @@ export async function renderManage(root, ctx = {}) {
       api.get("/api/rules/suggestions"),
     ]);
     state.categories = cats;
-    root.replaceChildren(
+    replace(root,
       suggestions.length ? suggestionsPanel(suggestions, cats, reload) : null,
       categoriesPanel(cats, reload),
       rulesPanel(rules, cats, reload));

@@ -44,6 +44,16 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_tx_month ON transactions(month);
 CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_tx_account ON transactions(account);
+
+-- One recurring monthly budget per category. Keyed by category rather than by
+-- (category, month): a budget is a standing intention ("$600 of groceries a
+-- month"), and per-month overrides would mean re-entering every number every
+-- month to keep the comparison meaningful.
+CREATE TABLE IF NOT EXISTS budgets (
+    category_id INTEGER PRIMARY KEY REFERENCES categories(id) ON DELETE CASCADE,
+    amount      REAL NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 # (name, color, kind)
@@ -79,6 +89,15 @@ DEFAULT_RULES = [
      "Transfer", 5),
     (r"PAYMENT THANK YOU|PAIEMEN|INTERNET (BANKING )?TRANSFER|TRANSFER TO CARD|TO CARD \d", "Transfer", 10),
     (r"QUESTRADE|SHAREOWNER INVESTMENT|CIBC SECURITIES|CIBC-DISATF|COINBASE", "Investments", 12),
+    # Wealthsimple activity exports name the *activity* where a bank names a
+    # merchant: a trade reads "BUY AAPL", a funding row reads just "Deposit".
+    # Anchored to the start so they can only ever match those rows — an
+    # unanchored "BUY" or "INTEREST" would swallow real merchants.
+    (r"^(BUY|SELL|DIVIDEND|REINVESTMENT|STOCK (SPLIT|DIVIDEND)|OPTIONS? )", "Investments", 11),
+    # Money you moved into your own Wealthsimple account, not money earned or
+    # spent — the funding side is already recorded on the bank account it left,
+    # so counting it here too would double it.
+    (r"^(DEPOSIT|WITHDRAWAL|CONTRIBUTION|TRANSFER (IN|OUT)|INTERNAL TRANSFER|EFT)\b", "Transfer", 11),
     (r"ATM WITHDRAWAL|BRANCH TRANSACTION WITHDRAWAL", "Cash & ATM", 14),
     (r"VW CREDIT", "Car Loan", 16),
     (r"E-TRANSFER", "E-Transfers", 18),

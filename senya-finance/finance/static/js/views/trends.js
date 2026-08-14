@@ -2,7 +2,7 @@
 // category by category. The dashboard covers "this month" — this covers "is it
 // getting worse?", which needs something to compare against.
 import { api } from "../api.js";
-import { el, money } from "../dom.js";
+import { el, money, skeleton } from "../dom.js";
 import { comparisonTrend } from "../charts.js";
 
 const tile = (label, value, cls, sub) =>
@@ -20,7 +20,7 @@ function deltaTag(pct, upIsBad = true) {
 }
 
 export async function renderTrends(root, ctx = {}) {
-  root.replaceChildren(el("div", { class: "empty", text: "Loading…" }));
+  root.replaceChildren(skeleton({ cards: 4, panels: 2 }));
   const years = await api.get("/api/trends/years");
   if (!years.length) {
     root.replaceChildren(el("div", { class: "empty", text: "No transactions yet." }));
@@ -42,7 +42,7 @@ export async function renderTrends(root, ctx = {}) {
   await draw();
 
   async function draw() {
-    wrap.replaceChildren(el("div", { class: "empty", text: "Loading…" }));
+    wrap.replaceChildren(skeleton({ cards: 4, panels: 2 }));
     const [monthly, cats] = await Promise.all([
       api.get(`/api/trends/monthly?year=${year}`),
       api.get(`/api/trends/by-category?year=${year}`),

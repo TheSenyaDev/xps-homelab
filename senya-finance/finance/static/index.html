@@ -1,31 +1,63 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
   <title>SenyaFinance</title>
   <link rel="icon" type="image/png" href="/favicon.png" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>💰 SenyaFinance</h1>
-    <nav class="tabs" id="tabs">
-      <button class="tab active" data-view="dashboard">Dashboard</button>
-      <button class="tab" data-view="trends">Trends</button>
-      <button class="tab" data-view="recurring">Subscriptions</button>
-      <button class="tab" data-view="transactions">Transactions</button>
-      <button class="tab" data-view="categories">Categories &amp; Rules</button>
-    </nav>
-    <div class="topbar-right">
-      <label class="month-pick">Month
-        <select id="month-select"></select>
-      </label>
-      <button id="import-btn" class="ghost" title="Re-scan the SMB folder for new transactions">⟳ Import</button>
-    </div>
-  </header>
+  <div class="app">
+    <!-- Nav lives in a sidebar rather than a top strip: the view list grows as
+         features land, and a vertical rail has room for that without pushing the
+         month picker and actions off the row. Collapses to a top bar on mobile. -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-mark">₴</span>
+        <span class="brand-name">SenyaFinance</span>
+      </div>
 
-  <main id="content" class="content"></main>
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-view="dashboard"><span class="ico">◈</span>Dashboard</button>
+        <button class="nav-item" data-view="budgets"><span class="ico">◑</span>Budgets</button>
+        <button class="nav-item" data-view="trends"><span class="ico">◤</span>Trends</button>
+        <button class="nav-item" data-view="recurring"><span class="ico">↻</span>Subscriptions</button>
+        <button class="nav-item" data-view="merchants"><span class="ico">⌂</span>Merchants</button>
+        <button class="nav-item" data-view="transactions"><span class="ico">≡</span>Transactions</button>
+        <button class="nav-item" data-view="categories"><span class="ico">⚑</span>Rules</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <button id="import-btn" class="side-btn" title="Re-scan the import folder for new statements">
+          <span class="ico">⟳</span>Import
+        </button>
+        <button id="theme-btn" class="side-btn" title="Switch between dark and light">
+          <span class="ico" id="theme-ico">☾</span><span id="theme-label">Dark</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menu-btn" title="Menu" aria-label="Toggle navigation">☰</button>
+        <h1 class="view-title" id="view-title">Dashboard</h1>
+        <div class="topbar-right">
+          <label class="month-pick">
+            <span class="muted">Month</span>
+            <select id="month-select"></select>
+          </label>
+        </div>
+      </header>
+
+      <main id="content" class="content"></main>
+    </div>
+  </div>
+
+  <!-- Merchant drill-down slides in over the page from any chart or table row. -->
+  <div class="drawer-scrim hidden" id="drawer-scrim"></div>
+  <aside class="drawer hidden" id="drawer" aria-label="Merchant detail"></aside>
 
   <script type="module" src="/js/main.js"></script>
 </body>

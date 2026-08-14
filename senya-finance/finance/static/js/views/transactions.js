@@ -1,5 +1,6 @@
 import { api } from "../api.js";
 import { el, money, toast } from "../dom.js";
+import { openMerchant } from "../drawer.js";
 import { state } from "../state.js";
 
 export async function renderTransactions(root, ctx = {}) {
@@ -42,25 +43,38 @@ export async function renderTransactions(root, ctx = {}) {
     amCb.checked = f.allMonths;
     amCb.addEventListener("change", () => { f.allMonths = amCb.checked; refresh(); });
 
+    // Export hands back exactly the rows the filters produced — same query
+    // string, so the file matches the screen rather than re-deriving "current".
+    const exportBtn = el("button", {
+      class: "ghost", title: "Download these rows as CSV",
+      onclick: () => { window.location.href = "/api/export/transactions.csv?" + query(); },
+    }, "↓ CSV");
+
     return el("div", { class: "filters" }, acct, cat, q,
-      el("label", { class: "muted" }, amCb, " All months"));
+      el("label", { class: "muted" }, amCb, " All months"),
+      el("span", { class: "spacer", style: "margin-left:auto" }), exportBtn);
   }
 
-  let debTimer;
-  function debounce(fn) { clearTimeout(debTimer); debTimer = setTimeout(fn, 250); }
-
-  async function refresh() {
+  // One place builds the filter query, so the table and the export can't drift.
+  function query(extra = {}) {
     const qs = new URLSearchParams();
     if (!f.allMonths && state.month) qs.set("month", state.month);
     if (f.account) qs.set("account", f.account);
     if (f.category === "uncat") qs.set("uncategorized", "1");
     else if (f.category) qs.set("category_id", f.category);
     if (f.q) qs.set("q", f.q);
-    qs.set("limit", "500");
+    for (const [k, v] of Object.entries(extra)) qs.set(k, v);
+    return qs.toString();
+  }
+
+  let debTimer;
+  function debounce(fn) { clearTimeout(debTimer); debTimer = setTimeout(fn, 250); }
+
+  async function refresh() {
     selected.clear();
     syncBulkBar();
-    tableWrap.replaceChildren(el("div", { class: "empty", text: "Loading…" }));
-    rows = await api.get("/api/transactions?" + qs.toString());
+    tableWrap.replaceChildren(el("div", { class: "skel skel-panel" }));
+    rows = await api.get("/api/transactions?" + query({ limit: "500" }));
     renderTable();
   }
 
@@ -109,15 +123,17 @@ export async function renderTransactions(root, ctx = {}) {
 
     const body = el("tbody");
     rows.forEach((r) => body.append(txRow(r)));
+    const out = rows.filter((r) => r.direction === "out").reduce((s, r) => s + r.amount, 0);
     tableWrap.replaceChildren(
-      el("div", { class: "muted", style: "margin-bottom:8px;font-size:13px",
-        text: `${rows.length} transaction(s)` }),
-      el("table", {},
-        el("thead", {}, el("tr", {},
-          el("th", { class: "tick" }, selectAll),
-          el("th", { text: "Date" }), el("th", { text: "Merchant" }), el("th", { text: "Account" }),
-          el("th", { text: "Category" }), el("th", { class: "amt", text: "Amount" }))),
-        body));
+      el("div", { class: "muted small", style: "margin-bottom:10px" },
+        `${rows.length} transaction${rows.length === 1 ? "" : "s"} · ${money(out)} out`),
+      el("div", { class: "table-scroll" },
+        el("table", {},
+          el("thead", {}, el("tr", {},
+            el("th", { class: "tick" }, selectAll),
+            el("th", { text: "Date" }), el("th", { text: "Merchant" }), el("th", { text: "Account" }),
+            el("th", { text: "Category" }), el("th", { class: "amt", text: "Amount" }))),
+          body)));
     syncBulkBar();
   }
 
@@ -144,7 +160,8 @@ export async function renderTransactions(root, ctx = {}) {
     const tr = el("tr", { class: (r.category_id ? "" : "uncat") + (tick.checked ? " picked" : "") },
       el("td", { class: "tick" }, tick),
       el("td", { text: r.date }),
-      el("td", { text: r.merchant }),
+      el("td", { class: "merchant-link", text: r.merchant, title: "See everything from this merchant",
+        onclick: () => openMerchant(r.merchant) }),
       el("td", {}, el("span", { class: "acct-pill", text: r.account })),
       el("td", {}, sel, ruleBtn),
       el("td", { class: "amt " + r.direction, text: (r.direction === "out" ? "-" : "+") + money(r.amount) }));
