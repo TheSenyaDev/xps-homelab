@@ -125,12 +125,20 @@ In code:
 - **Internal** service list / IPs / SearXNG / stat hosts → [`services.js`](services.js)
 - **Add a service to the launcher rail**: one entry in `SERVICES` (or
   `SENYA_APPS`) in [`services.js`](services.js) —
-  `{ name, port, icon, container, ext?, localIp?, tsIp? }`. `icon` is a filename
-  without `.png` in [`icons/`](icons) (drop the file in; a missing one falls back
-  to `_default.svg`), and `container` is the docker `container_name`, which is how
-  the rail draws the live up/down dot from the Glances containers list. Omit
-  `localIp`/`tsIp` for anything on the XPS. Example, added with the Forgejo
-  service: `{ name: "Forgejo", port: 3030, icon: "forgejo", container: "forgejo" }`.
+  `{ name, port, icon, container, host?, ext?, localIp?, tsIp? }`. `icon` is a
+  filename without `.png` in [`icons/`](icons) (drop the file in; a missing one
+  falls back to `_default.svg`), and `container` is the docker `container_name`,
+  which is how the rail draws the live up/down dot from the Glances containers
+  list. Omit `localIp`/`tsIp` for anything on the XPS. Example, added with the
+  Forgejo service: `{ name: "Forgejo", port: 3030, icon: "forgejo", container: "forgejo" }`.
+- **A service on another host** (NAS, second PC): add `host: "<HOSTS key>"` next
+  to `container`, and the dot is read from that box's Glances instead
+  (`/stats/<key>/containers`) — the host needs a `/stats/<key>/` block in
+  [`nginx.conf`](nginx.conf) and a Glances that can see its Docker socket. Names
+  are matched per host, so two boxes may run containers with the same name. A
+  host that doesn't answer leaves its services grey ("unknown"), never red.
+  TrueNAS SCALE names containers `ix-<app>-<service>-1`; example:
+  `{ name: "Jellyfin", port: 30013, icon: "jellyfin", localIp: "192.168.2.82", tsIp: "100.112.73.95", host: "truenas", container: "ix-jellyfin-jellyfin-1" }`.
 - **Add a section**: drop `js/sections/foo.js` exporting `initFoo()` (it populates
   an element by id), then add **one entry** to the `SECTIONS` array in
   [`js/registry.js`](js/registry.js) — `{ id, title, bodyId, bodyClass, init,

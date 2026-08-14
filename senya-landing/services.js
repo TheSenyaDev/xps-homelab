@@ -47,9 +47,16 @@ window.SENYA_INTERNAL = {
   // SERVICES below. Icons here are hand-drawn (not from dashboardicons.com, since
   // these apps have no upstream brand) — see icons/senya-*.png.
   // `container` = docker container_name; the landing page shows a live up/down dot
-  // by matching it against the Glances containers list (/stats/xps/containers).
-  // Omit `container` for things that aren't a local container (remote host, etc.)
-  // → the dot shows neutral "unknown".
+  // by matching it against that host's Glances containers list
+  // (/stats/<host key>/containers). Omit `container` for things that aren't a
+  // container at all (a bare host, a public link) → the dot shows neutral
+  // "unknown".
+  // `host` = which HOSTS entry the container runs on, by `key`; omitted means the
+  // box serving this page ("xps"). A host whose Glances can't be reached leaves
+  // its services "unknown" rather than marking them down. For containers on
+  // another machine to be visible at all, that machine's Glances needs the Docker
+  // socket (TrueNAS SCALE: the Glances app's own container already has it) and a
+  // /stats/<key>/ block in nginx.conf.
   SENYA_APPS: [
     { name: "SenyaTasks", port: 8000, icon: "senya-tasks", container: "senya-tasks" },
     { name: "SenyaDaily", port: 8001, icon: "senya-daily", container: "senya-daily" },
@@ -80,10 +87,13 @@ window.SENYA_INTERNAL = {
     { name: "Firefly III", port: 3005, icon: "firefly-iii", container: "firefly" },
     { name: "Firefly Importer", port: 3006, icon: "firefly-iii", container: "firefly-importer" },
     { name: "Miniflux", port: 3007, icon: "miniflux", container: "miniflux" },
-    { name: "Jellyfin", port: 30013, icon: "jellyfin", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
-    { name: "Navidrome", port: 30043, icon: "navidrome", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
-    { name: "Audiobookshelf", port: 30067, icon: "audiobookshelf", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
-    { name: "Kavita", port: 30069, icon: "kavita", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
+    // On the NAS. TrueNAS SCALE names an app's container
+    // ix-<app>-<service>-1, which is what Glances reports and what the dot
+    // matches — not the app name shown in its own UI.
+    { name: "Jellyfin", port: 30013, icon: "jellyfin", localIp: "192.168.2.82", tsIp: "100.112.73.95", host: "truenas", container: "ix-jellyfin-jellyfin-1" },
+    { name: "Navidrome", port: 30043, icon: "navidrome", localIp: "192.168.2.82", tsIp: "100.112.73.95", host: "truenas", container: "ix-navidrome-navidrome-1" },
+    { name: "Audiobookshelf", port: 30067, icon: "audiobookshelf", localIp: "192.168.2.82", tsIp: "100.112.73.95", host: "truenas", container: "ix-audiobookshelf-audiobookshelf-1" },
+    { name: "Kavita", port: 30069, icon: "kavita", localIp: "192.168.2.82", tsIp: "100.112.73.95", host: "truenas", container: "ix-kavita-kavita-1" },
     { name: "TrueNAS", icon: "truenas", localIp: "192.168.2.82", tsIp: "100.112.73.95" },
   ],
 };

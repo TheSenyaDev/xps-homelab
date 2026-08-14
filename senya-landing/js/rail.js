@@ -11,9 +11,14 @@ const STATUS_REFRESH_MS = 15000;
 const EXPANDED_KEY = "senya.rail.expanded"; // remembered across reloads
 const FILTER_KEY = "senya.rail.filter";     // "all" or a section key, likewise
 const ALL = "all";
-const STATUS_SOURCES = ["/stats/xps/containers"];
+// Container status comes from each host's own Glances containers list, proxied
+// same-origin at /stats/<host key>/containers (see nginx.conf). A service says
+// which host it runs on with `host` in services.js; omitted means this box.
+const DEFAULT_HOST = "xps";
 const UP = new Set(["running", "healthy"]);
 const WARN = new Set(["starting", "restarting", "unhealthy", "created", "paused"]);
+
+const hostOf = (it) => it.host || DEFAULT_HOST;
 
 // Rows are sorted by name here rather than in services.js, so a service added
 // to that file lands in the right place on its own instead of depending on
@@ -47,7 +52,7 @@ export function initRail() {
   let expanded = store.get(EXPANDED_KEY, "false") === "true";
   let selected = null; // "<section>:<name>" of the row showing inline detail
   let lastMap = null;
-  const statusDots = new Map(); // container name -> dot element
+  const statusDots = []; // [item, dot element] for every row with a container
 
   // However you left it — chevron or a row click that expanded it — is how it
   // comes back next reload.
@@ -121,7 +126,7 @@ export function initRail() {
     // detail survives switching between "All" and that section.
     const id = `${section.key}:${it.name}`;
     const dot = el("span", { class: "rail-dot" });
-    if (it.container) statusDots.set(it.container, dot);
+    if (it.container) statusDots.push([it, dot]);
     const row = el("div", { class: "rail-row" + (selected === id ? " selected" : "") },
       iconImg(it.icon), el("span", { class: "rail-name", text: it.name }),
       el("span", { class: "rail-port", text: it.port ? String(it.port) : "—" }), dot);
@@ -142,7 +147,7 @@ export function initRail() {
   }
 
   function renderItems() {
-    statusDots.clear();
+    statusDots.length = 0;
     const shown = active === ALL ? sections : sections.filter((s) => s.key === active);
     const nodes = [];
     for (const section of shown) {
@@ -164,21 +169,34 @@ export function initRail() {
 
   // ---- container status polling (shared with health badge) ----
 
-  async function fetchStatuses() {
-    const results = await Promise.allSettled(STATUS_SOURCES.map((u) => fetchJSON(u)));
-    const map = new Map();
-    let anyOk = false;
-    for (const r of results) {
-      if (r.status !== "fulfilled" || !Array.isArray(r.value)) continue;
-      anyOk = true;
-      for (const c of r.value) if (c?.name) map.set(c.name, String(c.status || "").toLowerCase());
-    }
-    return anyOk ? map : null;
+  // Every service with a container, across all sections — the set the dots and
+  // the health badge both read from.
+  function withContainer() {
+    return [...(internal?.SENYA_APPS || []), ...(internal?.SERVICES || [])].filter((it) => it.container);
   }
 
-  function stateOf(name, map) {
-    if (map === null) return "unknown";
-    const status = map.get(name);
+  // One request per host that actually has containers listed, in parallel. A
+  // host that doesn't answer is left out of the map, so its services read
+  // "unknown" (grey) rather than down — the containers may well be running; it's
+  // Glances on that box we couldn't reach.
+  async function fetchStatuses() {
+    const hosts = [...new Set(withContainer().map(hostOf))];
+    const results = await Promise.allSettled(hosts.map((h) => fetchJSON(`/stats/${h}/containers`)));
+    const map = new Map();
+    hosts.forEach((h, i) => {
+      const r = results[i];
+      if (r.status !== "fulfilled" || !Array.isArray(r.value)) return;
+      map.set(h, new Map(r.value.filter((c) => c?.name).map((c) => [c.name, String(c.status || "").toLowerCase()])));
+    });
+    return map;
+  }
+
+  // Container names only have to be unique per host, so status is looked up in
+  // that host's own list.
+  function stateOf(it, map) {
+    const perHost = map?.get(hostOf(it));
+    if (!perHost) return "unknown";
+    const status = perHost.get(it.container);
     if (status === undefined) return "down";
     if (UP.has(status)) return "up";
     if (WARN.has(status)) return "warn";
@@ -186,15 +204,15 @@ export function initRail() {
   }
 
   function applyDots(map) {
-    for (const [name, dot] of statusDots) {
-      const st = stateOf(name, map);
+    for (const [it, dot] of statusDots) {
+      const st = stateOf(it, map);
       dot.style.background = st === "up" ? "#10b981" : st === "warn" ? "#f59e0b" : st === "down" ? "#ef4444" : "#4b515f";
     }
     const detail = itemsWrap.querySelector(".rail-detail .status");
     if (detail && selected) {
       const [key, name] = selected.split(":");
       const it = sections.find((s) => s.key === key)?.items.find((x) => x.name === name);
-      if (it?.container) { const st = stateOf(it.container, map); detail.textContent = st; detail.style.color = st === "up" ? "#10b981" : st === "warn" ? "#f59e0b" : st === "down" ? "#ef4444" : "#4b515f"; }
+      if (it?.container) { const st = stateOf(it, map); detail.textContent = st; detail.style.color = st === "up" ? "#10b981" : st === "warn" ? "#f59e0b" : st === "down" ? "#ef4444" : "#4b515f"; }
     }
     updateHealth(map);
   }
@@ -203,14 +221,14 @@ export function initRail() {
     const dotEl = document.getElementById("health-dot");
     const textEl = document.getElementById("health-text");
     if (!dotEl || !textEl) return;
-    const withContainer = [...(internal?.SENYA_APPS || []), ...(internal?.SERVICES || [])].filter((it) => it.container);
+    const items = withContainer();
     let down = 0, warn = 0;
-    for (const it of withContainer) {
-      const st = stateOf(it.container, map);
+    for (const it of items) {
+      const st = stateOf(it, map);
       if (st === "down") down++; else if (st === "warn") warn++;
     }
     dotEl.style.background = down ? "#ef4444" : warn ? "#f59e0b" : "#10b981";
-    textEl.textContent = down ? `${down} down · ${warn} warn` : `${withContainer.length} up`;
+    textEl.textContent = down ? `${down} down · ${warn} warn` : `${items.length} up`;
   }
 
   async function tick() { lastMap = await fetchStatuses(); applyDots(lastMap); }
