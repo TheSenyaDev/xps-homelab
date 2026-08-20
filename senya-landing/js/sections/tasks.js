@@ -3,10 +3,13 @@
 // Shows only what is open: the dashboard is a "what needs doing" surface, and
 // completed work belongs in the app itself.
 //
-// Which categories and how many are widget *settings*, configured in Customize
-// alongside size, not controls in the widget itself. A dashboard tile is for
-// reading at a glance; putting its configuration on its face costs the space
-// twice over — once for the controls, once for the header they need.
+// Which categories is a widget *setting*, configured in Customize alongside
+// size, not a control in the widget itself. A dashboard tile is for reading at
+// a glance; putting its configuration on its face costs the space twice over —
+// once for the controls, once for the header they need.
+//
+// How many rows is not a setting: the widget fills the height it is given, so
+// resizing it taller shows more. See fillRows().
 
 import { el, fetchJSON, link } from "../utils.js";
 import { configFor } from "../widget-config.js";
@@ -14,13 +17,16 @@ import { configFor } from "../widget-config.js";
 const REFRESH_MS = 2 * 60 * 1000;
 const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
 
+// Rows to show when the body cannot be measured — only reachable if the widget
+// is rendered while it has no laid-out height (display:none ancestor).
+const FALLBACK_ROWS = 8;
+
 // Defaults live here, beside the schema that declares them, and are read
 // through the leaf config module — importing layout.js would make the graph
 // circular (layout → registry → this file).
-const DEFAULTS = { categories: "", limit: 8 };
+const DEFAULTS = { categories: "" };
 const cfg = () => configFor("tasks", DEFAULTS);
 const getCats = () => String(cfg().categories || "").split(",").filter(Boolean);
-const getLimit = () => Number(cfg().limit) || 8;
 
 /**
  * The widget's settings, for the Customize drawer.
@@ -45,10 +51,6 @@ export async function tasksSettings() {
       choices: categories
         .filter((c) => c.parent_id == null)
         .map((c) => ({ value: c.id, label: c.name })),
-    },
-    {
-      key: "limit", label: "How many", type: "number", default: 8,
-      min: 1, max: 50, help: "rows shown",
     },
   ];
 }
@@ -93,13 +95,73 @@ function taskRow(task, categoryName) {
 }
 
 // A one-line summary of what is being shown, so the widget still says what it
-// is filtered to now that the controls live in Customize.
-function header(scopeNames, showing, total) {
+// is filtered to now that the controls live in Customize. The count is filled
+// in after the rows are laid out — how many are shown isn't known until then.
+function header(scopeNames) {
   const scope = scopeNames.length ? scopeNames.join(" · ") : "all categories";
   return el("div", { class: "tk-head" },
     el("span", { class: "tk-scope", text: scope, title: scope }),
-    el("span", { class: "tk-count", text: `${showing}/${total}` }),
+    el("span", { class: "tk-count" }),
     link("open", `http://${location.hostname}:8000`, "pill"));
+}
+
+function setCount(head, showing, total) {
+  head.querySelector(".tk-count").textContent = `${showing}/${total}`;
+}
+
+/** The body's own content height, less whatever the header takes. */
+function spaceForRows(wrap, head) {
+  const cs = getComputedStyle(wrap);
+  const inner = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  return inner - head.offsetHeight;
+}
+
+/**
+ * Append as many rows as fit the widget's height, and return how many that was.
+ *
+ * Rows are measured rather than assumed: their height moves with the UI scale
+ * (`--fs`), so a hardcoded number would be wrong on any setting but one. Two
+ * rows go in first because the distance between their tops is the true pitch,
+ * separator included — measuring a single row misses it, since the only row in
+ * the list is also the last one and `:last-child` drops the border.
+ *
+ * Floor, so a row that would be clipped is left out entirely: a half-visible
+ * task reads as a rendering fault, and the header's `showing/total` already
+ * says that there are more.
+ */
+function fillRows(wrap, head, list, byId) {
+  const rows = el("div", { class: "tk-rows" });
+  wrap.append(rows);
+  const build = (t) => rows.append(taskRow(t, byId.get(t.category_id)?.name));
+  list.slice(0, 2).forEach(build);
+
+  const avail = spaceForRows(wrap, head);
+  const pitch = rows.children.length > 1
+    ? rows.children[1].offsetTop - rows.children[0].offsetTop
+    : rows.children[0].offsetHeight;
+  // Unmeasurable only when the widget has no laid-out height at all.
+  const fits = avail > 0 && pitch > 0 ? Math.floor(avail / pitch) : FALLBACK_ROWS;
+  const capacity = Math.min(list.length, Math.max(1, fits));
+
+  list.slice(rows.children.length, capacity).forEach(build);
+  while (rows.children.length > capacity) rows.lastElementChild.remove();
+  return capacity;
+}
+
+// The last loaded data, so a resize can re-fit the rows without re-fetching.
+let latest = null;
+
+function render(wrap) {
+  if (!latest) return;
+  const { list, byId, scopeNames } = latest;
+  const head = header(scopeNames);
+  wrap.replaceChildren(head);
+  if (!list.length) {
+    wrap.append(el("div", { class: "tk-empty", text: "Nothing open." }));
+    setCount(head, 0, 0);
+    return;
+  }
+  setCount(head, fillRows(wrap, head, list, byId), list.length);
 }
 
 async function load(wrap) {
@@ -121,34 +183,44 @@ async function load(wrap) {
       (PRIORITY_RANK[a.priority] ?? 3) - (PRIORITY_RANK[b.priority] ?? 3) ||
       (a.due_date || "9999").localeCompare(b.due_date || "9999"));
 
-    const limit = getLimit();
-    const shown = list.slice(0, limit);
-
     const scopeNames = chosen
       .map((id) => byId.get(Number(id))?.name)
       .filter(Boolean);
-    wrap.replaceChildren(header(scopeNames, Math.min(shown.length, list.length), list.length));
-    if (!shown.length) {
-      wrap.append(el("div", { class: "tk-empty", text: "Nothing open." }));
-      return;
-    }
-    const rows = el("div", { class: "tk-rows" },
-      ...shown.map((t) => taskRow(t, byId.get(t.category_id)?.name)));
-    wrap.append(rows);
-    if (list.length > shown.length) {
-      wrap.append(el("div", { class: "tk-more", text: `+${list.length - shown.length} more` }));
-    }
+    latest = { list, byId, scopeNames };
+    render(wrap);
   } catch {
+    latest = null;
     wrap.replaceChildren(el("div", { class: "tk-empty", text: "SenyaTasks unavailable." }));
   }
 }
 
 let container = null;
 
+/**
+ * Re-fit the rows whenever the body's height changes — a drag on the resize
+ * grip, a column-count breakpoint, a sibling widget growing the grid row.
+ *
+ * Keyed on height alone: rows are single-line and ellipsised, so a width change
+ * cannot change how many fit, and re-rendering through a horizontal drag would
+ * be work with nothing to show for it. Re-rendering cannot itself change the
+ * height (the body is a fixed box — see the `[data-section="tasks"]` rule in
+ * styles/components.css), so this does not feed back into itself.
+ */
+function watchHeight(wrap) {
+  if (!window.ResizeObserver) return;
+  let height = wrap.clientHeight;
+  new ResizeObserver(() => {
+    if (wrap.clientHeight === height) return;
+    height = wrap.clientHeight;
+    render(wrap);
+  }).observe(wrap);
+}
+
 export function initTasks() {
   container = document.getElementById("tasks");
   if (!container) return;
   load(container);
+  watchHeight(container);
   setInterval(() => load(container), REFRESH_MS);
 }
 

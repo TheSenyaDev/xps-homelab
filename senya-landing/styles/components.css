@@ -436,7 +436,7 @@
 .tk-due { color: var(--muted); font-size: calc(9px * var(--fs)); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tk-due.overdue { color: #f0616a; }
 
-.tk-empty, .tk-more { color: var(--muted); font-size: calc(10px * var(--fs)); padding: 7px 8px; text-align: center; }
+.tk-empty { color: var(--muted); font-size: calc(10px * var(--fs)); padding: 7px 8px; text-align: center; }
 
 /* ---- resizable / movable widgets ---- */
 .dashboard {
@@ -449,6 +449,14 @@
 .dashboard > section { grid-column: span var(--w, 1); grid-row: span var(--h, 1); }
 .dashboard > section[data-tall="true"] { display: flex; flex-direction: column; min-height: 0; }
 .dashboard > section[data-tall="true"] > div { flex: 1; min-height: 0; overflow: auto; }
+
+/* The task list shows as many rows as fit (see js/sections/tasks.js), so its
+   body has to be a box of a known height at *every* widget height — not just
+   when tall. Without this, a one-row-high widget sizes to its own content and
+   "how many fit" would depend on how many are already rendered. Same
+   declarations as the rule above so the two agree wherever both apply. */
+.dashboard > section[data-section="tasks"] { display: flex; flex-direction: column; min-height: 0; }
+.dashboard > section[data-section="tasks"] > div { flex: 1; min-height: 0; overflow: auto; }
 
 .dashboard > section > h2 { cursor: grab; touch-action: none; user-select: none; }
 .dashboard > section.dragging { opacity: .55; outline: 1px dashed var(--accent); cursor: grabbing; }
