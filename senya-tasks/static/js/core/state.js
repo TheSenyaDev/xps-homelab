@@ -30,11 +30,16 @@ export const prefs = {
   sortBy: store.get("sort", "created"),
   tag: store.get("tag", null),
   view: store.get("view", "list"),          // "list" | "calendar"
+  // Two separate collapse sets, because they hide different things: `collapsed`
+  // folds a branch of the sidebar tree out of sight, `collapsedGroups` folds a
+  // category's tasks in the list. Sharing one would mean narrowing the sidebar
+  // silently emptied the list.
   collapsed: new Set(store.get("collapsed", [])),
+  collapsedGroups: new Set(store.get("collapsedGroups", [])),
 };
 
-/** Set a preference and persist it. `collapsed` is a Set, so it is stored as
- *  an array rather than through JSON's default (which would give {}). */
+/** Set a preference and persist it. The collapse prefs are Sets, so they are
+ *  stored as arrays rather than through JSON's default (which would give {}). */
 export function setPref(key, value) {
   prefs[key] = value;
   store.set(key === "sortBy" ? "sort" : key,
