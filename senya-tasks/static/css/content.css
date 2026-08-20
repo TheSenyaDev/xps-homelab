@@ -67,6 +67,12 @@
   color: var(--muted); padding: 6px 16px; position: sticky; top: 0;
   background: var(--panel-3); z-index: 1; border-bottom: 1px solid var(--border-soft); border-top: 1px solid var(--border-soft);
 }
+/* Collapsible only when there is no search running — see js/components/task-list.js. */
+.group-head.collapsible { cursor: pointer; user-select: none; }
+.group-head.collapsible:hover { color: var(--text); }
+.group-head .twisty {
+  width: 11px; flex: none; text-align: center; font-size: 8px;
+}
 .group-head .dot { width: 7px; height: 7px; border-radius: 0; flex: none; }
 .group-head .n { text-transform: none; letter-spacing: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
 .group-head .rule { flex: 1; height: 0; background: none; }

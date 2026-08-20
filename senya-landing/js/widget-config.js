@@ -1,6 +1,6 @@
 // Per-widget stored config: size, plus whatever settings a widget declares.
 //
-//   {"tasks": {"w": 2, "h": 2, "categories": "3,7", "limit": 12}}
+//   {"tasks": {"w": 2, "h": 2, "categories": "3,7"}}
 //
 // A leaf module on purpose. layout.js imports the registry, and a widget needs
 // to read its own config — so if this lived in layout.js the graph would be

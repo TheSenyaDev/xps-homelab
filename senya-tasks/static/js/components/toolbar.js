@@ -66,7 +66,7 @@ export function init() {
   };
 
   const search = $("search");
-  search.oninput = () => { query = search.value; renderView(); };
+  search.oninput = () => { setQuery(search.value); renderView(); };
 
   const sortSel = $("sort-by");
   sortSel.value = prefs.sortBy;

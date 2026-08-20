@@ -73,9 +73,15 @@ grid of tasks by due date; it shows exactly what the list would show (same categ
 and search filters), undated tasks get their own strip beneath it, and clicking a chip jumps back
 to the list with that task open.
 
+Each category heading in the list collapses when clicked, folding its tasks away but keeping its
+`N open` count — so a category you are not working on today still says how much is left in it.
+Collapsing is suspended while the search box has text in it, so a match can never hide inside a
+folded group.
+
 Keyboard: `/` search · `n` new task · `c` list ⇄ calendar · `←`/`→` change month · `\` toggle
 sidebar · `Esc` close a detail panel or dialog.
-Selected category, filter, sort, tag, view and collapsed subtrees persist in `localStorage`.
+Selected category, filter, sort, tag, view, collapsed subtrees and collapsed list groups persist
+in `localStorage`.
 
 ## Data model
 

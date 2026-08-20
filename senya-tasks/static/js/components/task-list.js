@@ -10,7 +10,7 @@ import { emit, on } from "../core/bus.js";
 import { $, el, watchDateInput } from "../core/dom.js";
 import { MONTHS, STATUS_LABEL, STATUS_RING, today } from "../core/format.js";
 import {
-  categoryById, expanded, getCategories, getMeta, getTags, getTasks, prefs, setPref,
+  categoryById, expanded, getCategories, getMeta, getTags, getTasks, prefs, query, setPref,
   sortTasks, subtasksOf, trimCompleted, visibleTasks,
 } from "../core/state.js";
 
@@ -66,6 +66,26 @@ function nest(items) {
   return out;
 }
 
+/**
+ * Groups fold down to their heading, which keeps its open count — a collapsed
+ * category still says how much is left in it, which is the point of collapsing
+ * the ones you are not working on today.
+ *
+ * Collapse is suspended while a search is running, and the twisty goes with it:
+ * a match hidden inside a collapsed group reads as "no results", and a twisty
+ * that cannot change what you see is a dead control. The state is only
+ * suspended, not cleared — the query is transient where the collapse persists,
+ * so clearing the box puts the groups back the way you left them.
+ */
+const searching = () => query.trim().length > 0;
+
+function toggleGroup(key) {
+  const set = prefs.collapsedGroups;
+  set.has(key) ? set.delete(key) : set.add(key);
+  setPref("collapsedGroups", set);
+  renderTasks();
+}
+
 function renderTasks() {
   const container = document.getElementById("task-groups");
   const list = trimCompleted(visibleTasks());
@@ -98,12 +118,14 @@ function renderTasks() {
   const group = (key, name, color, depth) => {
     const items = byCat.get(key);
     if (!items?.length) return;
+    const collapsible = !searching();
+    const collapsed = collapsible && prefs.collapsedGroups.has(key);
     const g = document.createElement("div");
     g.className = "group";
     g.style.marginLeft = `${depth * 12}px`;
 
     const head = document.createElement("div");
-    head.className = "group-head";
+    head.className = "group-head" + (collapsible ? " collapsible" : "");
     const dot = document.createElement("span");
     dot.className = "dot";
     dot.style.background = color;
@@ -118,13 +140,27 @@ function renderTasks() {
     rule.className = "rule";
     head.append(dot, label, n, rule);
 
-    const rows = document.createElement("div");
-    rows.className = "rows";
-    for (const t of nest(items)) {
-      rows.append(taskRow(t));
-      if (expanded.has(t.id)) rows.append(taskDetail(t));
+    if (collapsible) {
+      const twisty = document.createElement("span");
+      twisty.className = "twisty";
+      twisty.textContent = collapsed ? "▶" : "▼";
+      // The whole heading toggles, not just the twisty: it is a full-width bar
+      // with nothing else on it to click, and an 11px target is a poor one.
+      head.prepend(twisty);
+      head.title = collapsed ? `Show ${name}` : `Hide ${name}`;
+      head.onclick = () => toggleGroup(key);
     }
-    g.append(head, rows);
+
+    g.append(head);
+    if (!collapsed) {
+      const rows = document.createElement("div");
+      rows.className = "rows";
+      for (const t of nest(items)) {
+        rows.append(taskRow(t));
+        if (expanded.has(t.id)) rows.append(taskDetail(t));
+      }
+      g.append(rows);
+    }
     container.append(g);
   };
 
